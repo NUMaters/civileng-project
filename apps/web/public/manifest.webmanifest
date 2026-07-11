@@ -1,0 +1,9 @@
+{
+  "name": "PLATEAU 郡山市 3Dマップ",
+  "short_name": "郡山3Dマップ",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#071521",
+  "theme_color": "#071521",
+  "lang": "ja"
+}

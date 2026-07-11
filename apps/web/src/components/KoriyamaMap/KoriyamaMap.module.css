@@ -1,0 +1,202 @@
+.page {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  color: #f7fbff;
+  background: #071521;
+  touch-action: none;
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+}
+
+.map :global(.cesium-viewer),
+.map :global(.cesium-viewer-cesiumWidgetContainer),
+.map :global(.cesium-widget),
+.map :global(canvas) {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.header {
+  position: absolute;
+  top: max(14px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  z-index: 2;
+  max-width: calc(100% - 28px - env(safe-area-inset-left) - env(safe-area-inset-right));
+  pointer-events: none;
+}
+
+.header h1 {
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 12px;
+  font-size: clamp(1rem, 2.5vw, 1.25rem);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  background: rgb(7 21 33 / 84%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 22%);
+  backdrop-filter: blur(8px);
+}
+
+.resetButton {
+  position: absolute;
+  top: max(72px, calc(env(safe-area-inset-top) + 68px));
+  right: max(14px, env(safe-area-inset-right));
+  z-index: 3;
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid rgb(255 255 255 / 24%);
+  border-radius: 999px;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  background: rgb(9 37 52 / 90%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.resetButton:focus-visible {
+  outline: 3px solid #7dd3fc;
+  outline-offset: 3px;
+}
+
+.resetButton:active {
+  transform: scale(0.97);
+}
+
+.loading,
+.warning,
+.error {
+  position: absolute;
+  left: 50%;
+  z-index: 4;
+  transform: translateX(-50%);
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 12px;
+  background: rgb(7 21 33 / 92%);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 30%);
+  backdrop-filter: blur(10px);
+}
+
+.loading {
+  top: 50%;
+  display: flex;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  transform: translate(-50%, -50%);
+  font-size: 0.95rem;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border: 3px solid rgb(255 255 255 / 25%);
+  border-top-color: #7dd3fc;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.warning {
+  top: max(132px, calc(env(safe-area-inset-top) + 128px));
+  width: max-content;
+  max-width: calc(100% - 32px);
+  padding: 10px 14px;
+  color: #fff3bf;
+  font-size: 0.82rem;
+}
+
+.error {
+  top: 50%;
+  display: grid;
+  width: min(460px, calc(100% - 32px));
+  gap: 8px;
+  padding: 22px;
+  transform: translate(-50%, -50%);
+  border-color: rgb(255 153 153 / 35%);
+  text-align: center;
+}
+
+.error strong {
+  color: #ffb3b3;
+  font-size: 1.05rem;
+}
+
+.error span {
+  font-size: 0.9rem;
+  line-height: 1.65;
+}
+
+.attribution {
+  position: absolute;
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(42px, calc(env(safe-area-inset-bottom) + 34px));
+  z-index: 2;
+  display: grid;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: rgb(255 255 255 / 88%);
+  font-size: 10px;
+  line-height: 1.25;
+  text-align: right;
+  background: rgb(0 0 0 / 56%);
+  pointer-events: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 520px) {
+  .header h1 {
+    padding: 9px 11px;
+  }
+
+  .resetButton {
+    top: auto;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(108px, calc(env(safe-area-inset-bottom) + 102px));
+    min-width: 144px;
+    justify-content: center;
+  }
+
+  .warning {
+    top: max(70px, calc(env(safe-area-inset-top) + 64px));
+    font-size: 0.76rem;
+    text-align: center;
+  }
+
+  .attribution {
+    bottom: max(38px, calc(env(safe-area-inset-bottom) + 30px));
+    max-width: calc(100% - 16px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    font-size: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 1.8s;
+  }
+}
