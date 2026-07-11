@@ -23,7 +23,7 @@ simulation
 mapdata
 ```
 
-MVP 対象外の将来拡張用モジュール（導入方針は [アーキテクチャ概要](../architecture/overview.md) の TODO 参照）：
+MVP 対象外の将来拡張用モジュール（導入方針は [Issue #13](https://github.com/NUMaters/civileng-project/issues/13) 参照）：
 
 ```
 auth

@@ -43,10 +43,9 @@ MVP では単一のデフォルト降雨プロファイルを使用する。集�
 | 河岸の侵食 | ○ | 護岸未整備区間での崩壊 |
 | 堤防の損傷 | — | 越水・浸食による構造物の破損（将来） |
 
-### TODO：現象の詳細
+### 現象の詳細
 
-- [ ] 各現象（○ 項目）の詳細挙動と発生条件を決定する
-- [ ] 各現象と土木技術との相互作用を決定する
+関連 Issue: [#11](https://github.com/NUMaters/civileng-project/issues/11)
 
 ---
 
@@ -54,18 +53,13 @@ MVP では単一のデフォルト降雨プロファイルを使用する。集�
 
 MVP で実装する唯一の災害種別です。上記「現象」のうち ○ 付きの現象を組み合わせて進行します。
 
-### TODO：大雨パラメータ
+### 大雨パラメータ
 
-- [ ] 雨量（mm/h またはシナリオ単位での強度）
-- [ ] 継続時間（秒）
-- [ ] 水位上昇カーブ（線形・段階・S 字など）
-- [ ] 初期水位・ピーク水位
-- [ ] マップ・難易度ごとのバリエーション
+関連 Issue: [#12](https://github.com/NUMaters/civileng-project/issues/12)
 
-### TODO：被災度の定義
+### 被災度の定義
 
-- [ ] 被災度の算出式（浸水等の重み付け）を決定する
-- [ ] クリア閾値は `packages/game-data/` のマスターデータで管理する（算出式と合わせて [game-rules.md](../game-design/game-rules.md) 参照）
+関連 Issue: [#5](https://github.com/NUMaters/civileng-project/issues/5)（[game-rules.md](../game-design/game-rules.md) 参照）
 
 パラメータは `packages/game-data/` のマスターデータで管理する（[アーキテクチャ概要](../architecture/overview.md) 参照）。
 

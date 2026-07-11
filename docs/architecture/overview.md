@@ -30,10 +30,9 @@
 
 **ランキング機能は実装しない。** 過去のスキャフォールドが残っている場合は削除する。
 
-### TODO：auth モジュール
+### auth モジュール
 
-- [ ] `auth` モジュールを MVP で実装するか、スキャフォールドのみとするか決定する
-- [ ] MVP 対象外機能（ログイン等）との対応関係を [通信方針](./communication.md) と合わせて整理する
+関連 Issue: [#13](https://github.com/NUMaters/civileng-project/issues/13)
 
 ## ディレクトリ構成の役割分担
 

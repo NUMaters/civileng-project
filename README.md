@@ -77,11 +77,9 @@ civilcraft/
 └── README.md
 ```
 
-### TODO：開発環境
+### 開発環境
 
-- [ ] `Makefile` の実装（`make format` / `make lint` / `make test` / `make build`）
-- [ ] `docker-compose.yml` の実装
-- [ ] 開発環境構築手順ドキュメントの作成
+関連 Issue: [#3](https://github.com/NUMaters/civileng-project/issues/3)（`Makefile` / `docker-compose.yml` / 開発環境構築手順）
 
 ## ドキュメント
 

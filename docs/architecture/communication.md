@@ -12,11 +12,9 @@
 
 型定義は `packages/game-schema/` に集約し、散在させないこと。
 
-### TODO：REST API 詳細
+### REST API 詳細
 
-- [ ] エンドポイント一覧（ルーム作成、マップ取得、プレイ結果取得等）を確定する
-- [ ] 各エンドポイントのリクエスト/レスポンス形式を `packages/game-schema/` に定義する
-- [ ] MVP 対象外機能（ログイン等）の扱いを [アーキテクチャ概要](./overview.md) の auth TODO と合わせて整理する
+関連 Issue: [#9](https://github.com/NUMaters/civileng-project/issues/9)
 
 ## WebSocket
 
@@ -36,11 +34,9 @@
 
 型定義は `packages/game-schema/` に集約し、散在させないこと。
 
-### TODO：WebSocket イベント詳細
+### WebSocket イベント詳細
 
-- [ ] 上記用途ごとのイベント名を [websocket-naming.md](../api/websocket-naming.md) に定義する
-- [ ] Client → Server / Server → Client のイベント一覧を確定する
-- [ ] 各イベントのペイロード形式を `packages/game-schema/` に定義する
+関連 Issue: [#10](https://github.com/NUMaters/civileng-project/issues/10)
 
 ## 関連ドキュメント
 

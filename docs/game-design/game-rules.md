@@ -15,9 +15,9 @@
 
 クリア閾値（被災度 5% など）は **`packages/game-data/` のマスターデータ**で管理し、コードへの直書きは禁止とする（[アーキテクチャ概要](../architecture/overview.md) 参照）。
 
-### TODO：被災度の定義
+### 被災度の定義
 
-- [ ] 被災度の算出式（浸水等の重み付け）を決定する（[disasters.md](../civil-engineering/disasters.md) と合わせて詳細化）
+関連 Issue: [#5](https://github.com/NUMaters/civileng-project/issues/5)（[disasters.md](../civil-engineering/disasters.md) と合わせて詳細化）
 
 ---
 
@@ -44,10 +44,9 @@
 - **建設費用**（施設配置時）と **維持費**（ゲーム中に継続的に発生）をゲーム中の要素として含める
 - 維持費のパラメータは [techniques.md](../civil-engineering/techniques.md) のマスターデータで管理する
 
-### TODO：予算の詳細
+### 予算の詳細
 
-- [ ] 初期予算の具体値（マップ・難易度ごと）を決定する
-- [ ] 維持費の課金タイミング（毎秒・フェーズ切り替え時など）を決定する
+関連 Issue: [#6](https://github.com/NUMaters/civileng-project/issues/6)
 
 施設の撤去・返金はゲームに含めない。
 
@@ -97,10 +96,9 @@
 
 「調査」（ゲーム進行ステップ 2）は、マップ上を移動して地形や浸水リスクを把握する行為であり、情報解禁や専用 UI によるデータ開示ではない。
 
-### TODO：役割分担
+### 役割分担
 
-- [ ] 固定役割（現地調査担当・河川監視担当・施工担当など）の操作・権限を設計する
-- [ ] 固定役割を MVP / Phase 3 / Phase 4 のどのフェーズで導入するか決定する
+関連 Issue: [#7](https://github.com/NUMaters/civileng-project/issues/7)
 
 ---
 
@@ -120,10 +118,9 @@
 - 土木技術の組み合わせ
 - プレイヤー間の協力状況（マルチプレイ時。被災抑制の達成度）
 
-### TODO：スコアと多軸評価
+### スコアと多軸評価
 
-- [ ] 結果画面に表示する「スコア」を 1 数値に集約するか、複数指標を並列表示するか決定する
-- [ ] 各評価項目とスコア（または被災度）の換算式を決定する
+関連 Issue: [#8](https://github.com/NUMaters/civileng-project/issues/8)
 
 ---
 

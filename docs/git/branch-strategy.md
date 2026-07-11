@@ -433,7 +433,7 @@ Pull Request を作成する前に、以下を確認する。
 - `develop` の最新変更を取り込んでいる
 - コンフリクトが発生していない
 
-※ `Makefile` は未整備（[README.md](../../README.md) の「TODO：開発環境」参照）。以下は整備後の想定コマンド。
+※ `Makefile` は未整備（[Issue #3](https://github.com/NUMaters/civileng-project/issues/3) 参照）。以下は整備後の想定コマンド。
 
 ```bash
 make format

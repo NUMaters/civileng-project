@@ -19,12 +19,9 @@ DELETE /rooms/:id
 /getRoom
 ```
 
-## TODO：REST API エンドポイント一覧
+## REST API エンドポイント一覧
 
-[通信方針](../architecture/communication.md) の MVP 範囲に含まれるエンドポイントを定義する。
-
-- [ ] エンドポイントパスと HTTP メソッド
-- [ ] リクエスト/レスポンス形式（`packages/game-schema/`）
+関連 Issue: [#9](https://github.com/NUMaters/civileng-project/issues/9)
 
 ## 関連ドキュメント
 

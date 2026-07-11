@@ -10,17 +10,13 @@ player.move
 construction.placed
 ```
 
-## TODO：MVP イベント一覧
+## MVP イベント一覧
 
-[通信方針](../architecture/communication.md) の MVP 範囲に含まれるイベントを定義する。
+関連 Issue: [#10](https://github.com/NUMaters/civileng-project/issues/10)
 
-- [ ] Client → Server イベント名
-- [ ] Server → Client イベント名
-- [ ] 災害イベント通知・ゲーム状態同期・スコア更新に対応するイベント名
+## MVP 対象外イベント
 
-## TODO：MVP 対象外イベント
-
-- [ ] チャット（`chat.send` 等）のイベント名
+チャット等のイベント名も [Issue #10](https://github.com/NUMaters/civileng-project/issues/10) で定義する。
 
 ## 関連ドキュメント
 
