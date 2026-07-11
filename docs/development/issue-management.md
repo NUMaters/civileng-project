@@ -29,6 +29,38 @@ docs: 被災度の定義
 | [#14](https://github.com/NUMaters/civileng-project/issues/14) | 操作・UI | ui-controls.md |
 | [#15](https://github.com/NUMaters/civileng-project/issues/15) | MVP マップ構成 | setting.md |
 
+## ラベル
+
+GitHub Issue には以下のラベルを付与する。
+
+### 種別
+
+| ラベル | 用途 |
+|--------|------|
+| `documentation` | 仕様・設計ドキュメント |
+| `chore` | 開発基盤・CI・ツール整備 |
+| `enhancement` | 新機能の実装（将来の feature Issue 用） |
+| `bug` | 不具合修正 |
+
+### 領域
+
+| ラベル | 用途 |
+|--------|------|
+| `game-design` | ゲームルール・セッション・評価 |
+| `civil-engineering` | 土木技術・災害・マップ設定 |
+| `architecture` | アーキテクチャ・モジュール設計 |
+| `api` | REST / WebSocket 設計 |
+| `ui` | 操作・UI 設計 |
+| `devops` | 開発環境・インフラ |
+| `ai` | AI / NPC 要素 |
+
+### スコープ
+
+| ラベル | 用途 |
+|--------|------|
+| `mvp` | MVP で必要 |
+| `post-mvp` | MVP 以降の拡張 |
+
 ## 関連ドキュメント
 
 - [ブランチ運用規則](../git/branch-strategy.md)
