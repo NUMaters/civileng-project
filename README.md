@@ -95,6 +95,7 @@ civilcraft/
 | アーキテクチャ | [docs/architecture/](./docs/architecture/) |
 | API 命名 | [docs/api/](./docs/api/) |
 | Git 運用 | [docs/git/](./docs/git/) |
+| Copilot レビュー | [.github/instructions/code-review.instructions.md](./.github/instructions/code-review.instructions.md) |
 
 ルートの [AGENT.md](./AGENT.md) は `docs/agent/guide.md` への索引である。
 
