@@ -1,0 +1,21 @@
+{
+  "name": "civilcraft",
+  "private": true,
+  "packageManager": "pnpm@10.12.1",
+  "scripts": {
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "dev:web": "pnpm --filter @civilcraft/web dev"
+  },
+  "devDependencies": {
+    "prettier": "^3.5.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
