@@ -1,0 +1,16 @@
+{
+  "name": "@civilcraft/game-schema",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@civilcraft/config": "workspace:*",
+    "eslint": "^9.28.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

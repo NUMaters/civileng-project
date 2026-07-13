@@ -8,15 +8,15 @@
 
 ## 技術スタック
 
-| 領域 | 技術 |
-|------|------|
-| フロントエンド | TypeScript, Vite, React, Three.js, WebGL（PWA は Phase 5 以降） |
-| バックエンド | Go（モジュラーモノリス → API Server / Game Server 分離可能） |
-| データベース | PostgreSQL, Redis |
-| 通信 | REST API, WebSocket（サーバー権威型） |
-| マスターデータ | JSON（`packages/game-data/`） |
-| 型定義 | TypeScript（`packages/game-schema/`） |
-| インフラ | Docker, Docker Compose, AWS（ECS, RDS, ElastiCache, S3, CloudFront）, Terraform, GitHub Actions |
+| 領域           | 技術                                                                                            |
+| -------------- | ----------------------------------------------------------------------------------------------- |
+| フロントエンド | TypeScript, Vite, React, Three.js, WebGL（PWA は Phase 5 以降）                                 |
+| バックエンド   | Go（モジュラーモノリス → API Server / Game Server 分離可能）                                    |
+| データベース   | PostgreSQL, Redis                                                                               |
+| 通信           | REST API, WebSocket（サーバー権威型）                                                           |
+| マスターデータ | JSON（`packages/game-data/`）                                                                   |
+| 型定義         | TypeScript（`packages/game-schema/`）                                                           |
+| インフラ       | Docker, Docker Compose, AWS（ECS, RDS, ElastiCache, S3, CloudFront）, Terraform, GitHub Actions |
 
 詳細は [docs/architecture/tech-stack.md](./docs/architecture/tech-stack.md) を参照。
 
@@ -81,20 +81,65 @@ civilcraft/
 
 関連 Issue: [#3](https://github.com/NUMaters/civileng-project/issues/3)（`Makefile` / `docker-compose.yml` / 開発環境構築手順）
 
+#### 前提ツール
+
+| ツール                  | バージョン目安                        |
+| ----------------------- | ------------------------------------- |
+| Node.js                 | 20 以上                               |
+| pnpm                    | 10 以上（`corepack enable` で有効化） |
+| Go                      | 1.22 以上                             |
+| Docker / Docker Compose | 最新                                  |
+| golangci-lint           | v2 以上（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`） |
+
+#### 初回セットアップ
+
+```bash
+# リポジトリをクローン後
+cp .env.example .env
+make setup
+make up    # PostgreSQL / Redis を起動
+```
+
+#### 開発コマンド
+
+```bash
+make format   # gofmt + Prettier
+make lint     # golangci-lint + ESLint
+make test     # go test + Vitest
+make build    # server バイナリ + web ビルド
+make up       # docker compose up -d
+make down     # docker compose down
+```
+
+#### 個別起動
+
+```bash
+# フロントエンド開発サーバー（http://localhost:5173）
+pnpm dev:web
+
+# API サーバー（http://localhost:8080/health）
+./bin/api
+
+# ゲームサーバー（http://localhost:8081/health）
+./bin/game
+```
+
+ローカル DB・Redis の構成詳細は [Issue #21](https://github.com/NUMaters/civileng-project/issues/21) で設計予定。現時点では `docker-compose.yml` で PostgreSQL 16 と Redis 7 を提供する。
+
 ## ドキュメント
 
-| 用途 | ドキュメント |
-|------|-------------|
-| ゲーム概要・MVP | [docs/game-design/overview.md](./docs/game-design/overview.md) |
-| ゲームルール | [docs/game-design/game-rules.md](./docs/game-design/game-rules.md) |
-| セッションフロー | [docs/game-design/session-flow.md](./docs/game-design/session-flow.md) |
-| 操作・UI | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md) |
-| 土木技術・災害 | [docs/civil-engineering/](./docs/civil-engineering/) |
-| AI Agent 向け索引 | [docs/agent/guide.md](./docs/agent/guide.md) |
-| 開発原則・命名規則 | [docs/development/](./docs/development/) |
-| アーキテクチャ | [docs/architecture/](./docs/architecture/) |
-| API 命名 | [docs/api/](./docs/api/) |
-| Git 運用 | [docs/git/](./docs/git/) |
+| 用途               | ドキュメント                                                           |
+| ------------------ | ---------------------------------------------------------------------- |
+| ゲーム概要・MVP    | [docs/game-design/overview.md](./docs/game-design/overview.md)         |
+| ゲームルール       | [docs/game-design/game-rules.md](./docs/game-design/game-rules.md)     |
+| セッションフロー   | [docs/game-design/session-flow.md](./docs/game-design/session-flow.md) |
+| 操作・UI           | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)   |
+| 土木技術・災害     | [docs/civil-engineering/](./docs/civil-engineering/)                   |
+| AI Agent 向け索引  | [docs/agent/guide.md](./docs/agent/guide.md)                           |
+| 開発原則・命名規則 | [docs/development/](./docs/development/)                               |
+| アーキテクチャ     | [docs/architecture/](./docs/architecture/)                             |
+| API 命名           | [docs/api/](./docs/api/)                                               |
+| Git 運用           | [docs/git/](./docs/git/)                                               |
 
 ルートの [AGENT.md](./AGENT.md) は `docs/agent/guide.md` への索引である。
 

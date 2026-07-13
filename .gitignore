@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+bin/
+*.tsbuildinfo
+
+# Go
+apps/server/bin/
+
+# Environment
+.env
+.env.local
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+
+# Test / coverage
+coverage/
+
+# Docker volumes (local)
+.docker/
