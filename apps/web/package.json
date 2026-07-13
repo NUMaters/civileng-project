@@ -11,6 +11,10 @@
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
+    "@turf/buffer": "^7.3.5",
+    "@turf/helpers": "^7.3.5",
+    "@turf/line-offset": "^7.3.5",
+    "@turf/simplify": "^7.3.5",
     "cesium": "^1.143.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

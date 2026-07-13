@@ -1,0 +1,17 @@
+{
+  "riverName": "阿武隈川",
+  "sourceUrl": "https://cyberjapandata.gsi.go.jp/xyz/experimental_rvrcl/{z}/{x}/{y}.geojson",
+  "zoomLevel": 16,
+  "start": {
+    "longitude": 140.384702,
+    "latitude": 37.371227
+  },
+  "end": {
+    "longitude": 140.376369,
+    "latitude": 37.34183
+  },
+  "leftWidthMeters": 2000,
+  "rightWidthMeters": 2000,
+  "searchPaddingMeters": 1000,
+  "maximumConnectionGapMeters": 250
+}

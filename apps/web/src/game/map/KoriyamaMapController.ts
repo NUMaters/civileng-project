@@ -1,7 +1,11 @@
 import {
+  Cartesian2,
   Cartesian3,
+  Cartographic,
   Cesium3DTileset,
   CesiumTerrainProvider,
+  ClippingPolygon,
+  ClippingPolygonCollection,
   EllipsoidTerrainProvider,
   HeadingPitchRange,
   ImageryLayer,
@@ -11,11 +15,17 @@ import {
   Viewer,
 } from "cesium";
 import { getCesiumPerformanceSettings } from "./cesiumPerformance";
+import {
+  isCoordinateInPlayArea,
+  loadKoriyamaRiverPlayArea,
+  type GeographicCoordinate,
+  type RiverPlayArea,
+} from "./riverPlayArea";
 
 const BUILDINGS_URL: string =
   "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/07203-bldg-lod1-latest/tileset.json";
 const TERRAIN_URL: string = "https://tile.plateauview.mlit.go.jp/terrain";
-const GSI_IMAGERY_URL: string = "https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png";
+const GSI_IMAGERY_URL: string = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
 const KORIYAMA_LONGITUDE: number = 140.3597;
 const KORIYAMA_LATITUDE: number = 37.4003;
 const CAMERA_HEADING_DEGREES: number = 20;
@@ -25,6 +35,13 @@ const MAXIMUM_ZOOM_DISTANCE_METERS: number = 25_000;
 const MINIMUM_ZOOM_DISTANCE_METERS: number = 30;
 const GSI_MAXIMUM_LEVEL: number = 18;
 const MOBILE_QUERY: string = "(max-width: 767px), (pointer: coarse)";
+const CAMERA_CHANGE_PERCENTAGE: number = 0.03;
+
+type CameraState = {
+  readonly position: Cartesian3;
+  readonly direction: Cartesian3;
+  readonly up: Cartesian3;
+};
 
 export type KoriyamaMapCallbacks = {
   readonly onReady: () => void;
@@ -34,6 +51,11 @@ export type KoriyamaMapCallbacks = {
 
 export class KoriyamaMapController {
   private viewer: Viewer | undefined;
+  private playArea: RiverPlayArea | undefined;
+  private lastValidCameraState: CameraState | undefined;
+  private removeCameraConstraint: (() => void) | undefined;
+  private readonly abortController: AbortController = new AbortController();
+  private isRestoringCamera: boolean = false;
   private destroyed: boolean = false;
 
   public constructor(
@@ -50,9 +72,12 @@ export class KoriyamaMapController {
 
     try {
       this.viewer = this.createViewer();
-      this.resetCamera();
-
       const terrainPromise: Promise<void> = this.loadTerrain();
+      this.playArea = await loadKoriyamaRiverPlayArea(this.abortController.signal);
+      this.applyGlobeClipping(this.playArea);
+      this.resetCamera();
+      this.installCameraConstraint();
+
       const buildingsPromise: Promise<void> = this.loadBuildings();
       await Promise.all([terrainPromise, buildingsPromise]);
 
@@ -74,7 +99,11 @@ export class KoriyamaMapController {
       return;
     }
 
-    const target: Cartesian3 = Cartesian3.fromDegrees(KORIYAMA_LONGITUDE, KORIYAMA_LATITUDE);
+    const targetCoordinate: GeographicCoordinate = this.playArea?.cameraTarget ?? [
+      KORIYAMA_LONGITUDE,
+      KORIYAMA_LATITUDE,
+    ];
+    const target: Cartesian3 = Cartesian3.fromDegrees(targetCoordinate[0], targetCoordinate[1]);
     this.viewer.camera.lookAt(
       target,
       new HeadingPitchRange(
@@ -84,15 +113,21 @@ export class KoriyamaMapController {
       ),
     );
     this.viewer.camera.lookAtTransform(Matrix4.IDENTITY);
+    this.lastValidCameraState = this.getCameraState();
     this.viewer.scene.requestRender();
   }
 
   public destroy(): void {
     this.destroyed = true;
+    this.abortController.abort();
+    this.removeCameraConstraint?.();
+    this.removeCameraConstraint = undefined;
     if (this.viewer !== undefined && !this.viewer.isDestroyed()) {
       this.viewer.destroy();
     }
     this.viewer = undefined;
+    this.playArea = undefined;
+    this.lastValidCameraState = undefined;
   }
 
   private createViewer(): Viewer {
@@ -129,6 +164,7 @@ export class KoriyamaMapController {
     viewer.scene.screenSpaceCameraController.minimumZoomDistance = MINIMUM_ZOOM_DISTANCE_METERS;
     viewer.scene.screenSpaceCameraController.maximumZoomDistance = MAXIMUM_ZOOM_DISTANCE_METERS;
     viewer.scene.screenSpaceCameraController.enableCollisionDetection = true;
+    viewer.camera.percentageChanged = CAMERA_CHANGE_PERCENTAGE;
 
     return viewer;
   }
@@ -188,8 +224,121 @@ export class KoriyamaMapController {
       return;
     }
 
+    if (this.playArea !== undefined) {
+      tileset.clippingPolygons = this.createClippingPolygons(this.playArea);
+    }
     viewer.scene.primitives.add(tileset);
     await this.waitForInitialTiles(tileset);
+  }
+
+  private applyGlobeClipping(playArea: RiverPlayArea): void {
+    if (this.viewer === undefined) {
+      throw new Error("Cesium viewer has not been created");
+    }
+    if (!ClippingPolygonCollection.isSupported(this.viewer.scene)) {
+      throw new Error("WebGL 2 clipping polygons are not supported by this browser");
+    }
+    this.viewer.scene.globe.clippingPolygons = this.createClippingPolygons(playArea);
+    this.viewer.scene.requestRender();
+  }
+
+  private createClippingPolygons(playArea: RiverPlayArea): ClippingPolygonCollection {
+    const polygons: ClippingPolygon[] = playArea.polygons.flatMap(
+      (polygon: readonly (readonly GeographicCoordinate[])[]): ClippingPolygon[] => {
+        const exterior: readonly GeographicCoordinate[] | undefined = polygon[0];
+        if (exterior === undefined || exterior.length < 3) {
+          return [];
+        }
+        const lastCoordinate: GeographicCoordinate | undefined = exterior.at(-1);
+        const coordinates: readonly GeographicCoordinate[] =
+          lastCoordinate !== undefined &&
+          exterior[0][0] === lastCoordinate[0] &&
+          exterior[0][1] === lastCoordinate[1]
+            ? exterior.slice(0, -1)
+            : exterior;
+        const positions: Cartesian3[] = coordinates.map(
+          (coordinate: GeographicCoordinate): Cartesian3 =>
+            Cartesian3.fromDegrees(coordinate[0], coordinate[1]),
+        );
+        return [new ClippingPolygon({ positions })];
+      },
+    );
+    if (polygons.length === 0) {
+      throw new Error("River play area does not contain a valid clipping polygon");
+    }
+    return new ClippingPolygonCollection({ polygons, inverse: true });
+  }
+
+  private installCameraConstraint(): void {
+    if (this.viewer === undefined || this.playArea === undefined) {
+      return;
+    }
+    this.removeCameraConstraint?.();
+    this.lastValidCameraState = this.getCameraState();
+    this.removeCameraConstraint = this.viewer.camera.changed.addEventListener((): void => {
+      this.enforceCameraConstraint();
+    });
+  }
+
+  private enforceCameraConstraint(): void {
+    if (
+      this.viewer === undefined ||
+      this.viewer.isDestroyed() ||
+      this.playArea === undefined ||
+      this.isRestoringCamera
+    ) {
+      return;
+    }
+
+    const target: GeographicCoordinate | undefined = this.getCameraTargetCoordinate();
+    if (target === undefined || isCoordinateInPlayArea(target, this.playArea)) {
+      this.lastValidCameraState = this.getCameraState();
+      return;
+    }
+
+    const lastValidState: CameraState | undefined = this.lastValidCameraState;
+    if (lastValidState === undefined) {
+      this.resetCamera();
+      return;
+    }
+    this.isRestoringCamera = true;
+    this.viewer.camera.setView({
+      destination: Cartesian3.clone(lastValidState.position),
+      orientation: {
+        direction: Cartesian3.clone(lastValidState.direction),
+        up: Cartesian3.clone(lastValidState.up),
+      },
+    });
+    this.viewer.scene.requestRender();
+    this.isRestoringCamera = false;
+  }
+
+  private getCameraTargetCoordinate(): GeographicCoordinate | undefined {
+    if (this.viewer === undefined) {
+      return undefined;
+    }
+    const canvas: HTMLCanvasElement = this.viewer.scene.canvas;
+    const screenCenter: Cartesian2 = new Cartesian2(canvas.clientWidth / 2, canvas.clientHeight / 2);
+    const surfacePosition: Cartesian3 | undefined = this.viewer.camera.pickEllipsoid(
+      screenCenter,
+      this.viewer.scene.globe.ellipsoid,
+    );
+    if (surfacePosition === undefined) {
+      return undefined;
+    }
+    const cartographic: Cartographic = Cartographic.fromCartesian(surfacePosition);
+    return [CesiumMath.toDegrees(cartographic.longitude), CesiumMath.toDegrees(cartographic.latitude)];
+  }
+
+  private getCameraState(): CameraState | undefined {
+    if (this.viewer === undefined || this.viewer.isDestroyed()) {
+      return undefined;
+    }
+    return {
+      position: Cartesian3.clone(this.viewer.camera.positionWC),
+      direction: Cartesian3.clone(this.viewer.camera.directionWC),
+      up: Cartesian3.clone(this.viewer.camera.upWC),
+    };
   }
 
   private waitForInitialTiles(tileset: Cesium3DTileset): Promise<void> {
