@@ -10,6 +10,9 @@ on:
       - develop
       - main
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -17,7 +20,7 @@ concurrency:
 jobs:
   quality:
     name: Lint, Test, Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,14 +42,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
 
       - name: Add Go bin to PATH
-        run: echo "${HOME}/go/bin" >> "${GITHUB_PATH}"
+        run: echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
 
       - name: Setup dependencies
         run: make setup
