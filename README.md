@@ -109,6 +109,7 @@ make test     # go test + Vitest
 make build    # server バイナリ + web ビルド
 make up       # docker compose up -d
 make down     # docker compose down
+make migrate  # DB マイグレーション実行
 ```
 
 #### 個別起動
@@ -124,7 +125,7 @@ pnpm dev:web
 ./bin/game
 ```
 
-ローカル DB・Redis の構成詳細は [Issue #21](https://github.com/NUMaters/civileng-project/issues/21) で設計予定。現時点では `docker-compose.yml` で PostgreSQL 16 と Redis 7 を提供する。
+ローカル DB・Redis の構成詳細は [docs/development/local-database.md](./docs/development/local-database.md) を参照。
 
 ## ドキュメント
 
@@ -136,7 +137,7 @@ pnpm dev:web
 | 操作・UI           | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)   |
 | 土木技術・災害     | [docs/civil-engineering/](./docs/civil-engineering/)                   |
 | AI Agent 向け索引  | [docs/agent/guide.md](./docs/agent/guide.md)                           |
-| 開発原則・命名規則 | [docs/development/](./docs/development/)                               |
+| 開発原則・命名規則 | [docs/development/](./docs/development/)（[ローカル DB 構成](./docs/development/local-database.md) 含む） |
 | アーキテクチャ     | [docs/architecture/](./docs/architecture/)                             |
 | API 命名           | [docs/api/](./docs/api/)                                               |
 | Git 運用           | [docs/git/](./docs/git/)                                               |
