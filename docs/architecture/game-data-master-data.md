@@ -1,0 +1,152 @@
+# マスターデータ設計
+
+`packages/game-data/` に配置する土木技術・ゲームルールのマスターデータ設計を定義する。
+
+関連 Issue: [#17](https://github.com/NUMaters/civileng-project/issues/17), [#18](https://github.com/NUMaters/civileng-project/issues/18)
+
+---
+
+## 概要
+
+ゲームバランスに関わる数値は **コード直書き禁止** とし、JSON マスターデータで管理する（[アーキテクチャ概要](./overview.md) 参照）。
+
+| カテゴリ     | ディレクトリ  | 用途                           |
+| ------------ | ------------- | ------------------------------ |
+| 土木技術     | `structures/` | 建設費・建設時間・維持費・効果 |
+| ゲームルール | `rules/`      | 勝敗条件・予算・フェーズ時間   |
+| 災害         | `disasters/`  | 災害種別・降雨パターン（将来） |
+| マップ       | `maps/`       | 地形・オブジェクト             |
+| シナリオ     | `scenarios/`  | プレイ条件の組み合わせ         |
+
+---
+
+## 土木技術（structures/）
+
+### ファイル命名
+
+```
+packages/game-data/structures/<structure-id>.json
+```
+
+`<structure-id>` は kebab-case。MVP の 5 種類:
+
+| id                 | 表示名   |
+| ------------------ | -------- |
+| `levee`            | 堤防     |
+| `retention-basin`  | 遊水地   |
+| `drainage-pump`    | 排水機場 |
+| `revetment`        | 護岸     |
+| `channel-dredging` | 河道掘削 |
+
+### JSON スキーマ
+
+```json
+{
+  "id": "levee",
+  "displayName": "堤防",
+  "description": "短い説明文",
+  "constructionCost": 3500,
+  "constructionTimeSeconds": 18,
+  "maintenanceCostPerSecond": 3,
+  "allowedTerrains": ["riverBank", "leveeLine"],
+  "supportedDisasters": ["heavy-rain"],
+  "effects": {
+    "waterLevelReduction": 0,
+    "overflowPrevention": 0.85,
+    "drainageCapacity": 0,
+    "bankProtection": 0.2,
+    "channelCapacityIncrease": 0
+  }
+}
+```
+
+| フィールド                 | 型       | 説明                                  |
+| -------------------------- | -------- | ------------------------------------- |
+| `id`                       | string   | 技術識別子（ファイル名と一致）        |
+| `displayName`              | string   | UI 表示名                             |
+| `description`              | string   | 選択・配置時の短い解説                |
+| `constructionCost`         | number   | 建設費（予算から即時減算）            |
+| `constructionTimeSeconds`  | number   | 完成までの秒数（建設中は効果なし）    |
+| `maintenanceCostPerSecond` | number   | 維持費（ゲーム中に毎秒減算）          |
+| `allowedTerrains`          | string[] | 設置可能な地形タイプ                  |
+| `supportedDisasters`       | string[] | 対応災害種別                          |
+| `effects`                  | object   | 効果パラメータ（0.0〜1.0 の正規化値） |
+
+### 効果パラメータ
+
+| キー                      | 説明                     |
+| ------------------------- | ------------------------ |
+| `waterLevelReduction`     | 水位上昇の抑制率         |
+| `overflowPrevention`      | 越水防止効果             |
+| `drainageCapacity`        | 排水能力（内水氾濫対策） |
+| `bankProtection`          | 河岸保護（侵食防止）     |
+| `channelCapacityIncrease` | 河道容量増加             |
+
+数値の具体値はゲームバランス調整対象（[SPR-001 人間承認](../specs/SPR-001-alpha-m1.md) 参照）。
+
+---
+
+## ゲームルール（rules/）
+
+### victory-conditions.json
+
+勝敗判定の閾値を定義する。
+
+```json
+{
+  "clearThresholdPercent": 5,
+  "failureThresholdPercent": 5,
+  "description": "被災度が clearThresholdPercent 未満でクリア、以上で失敗"
+}
+```
+
+[game-rules.md](../game-design/game-rules.md) の MVP 既定値（被災度 5%）に準拠。
+
+### budget-rules.json
+
+初期予算を定義する。
+
+```json
+{
+  "initialBudgetSolo": 10000,
+  "initialBudgetMultiplayerPerPlayer": 8000,
+  "description": "ソロは initialBudgetSolo、マルチはプレイヤーごとに initialBudgetMultiplayerPerPlayer を付与"
+}
+```
+
+詳細な予算パラメータは [Issue #6](https://github.com/NUMaters/civileng-project/issues/6) で継続検討。
+
+### game-timing.json
+
+1 プレイ 3 分のフェーズ配分（既存）。
+
+```json
+{
+  "totalPlayTimeSeconds": 180,
+  "phases": {
+    "preparationSeconds": 60,
+    "disasterSeconds": 90,
+    "resultSeconds": 30
+  }
+}
+```
+
+---
+
+## 参照方法
+
+### server（Go）
+
+`apps/server` は起動時に `packages/game-data/` を読み込む。パスは環境変数 `GAME_DATA_DIR`（未設定時は相対パス `../../packages/game-data`）で指定する（実装は Phase 2 で追加）。
+
+### web（TypeScript）
+
+`packages/game-schema` の型定義と組み合わせて参照する。ビルド時に JSON を import するか、API 経由で取得する（実装方針は Phase 2 で決定）。
+
+---
+
+## 関連ドキュメント
+
+- [土木技術](../civil-engineering/techniques.md)
+- [ゲームルール](../game-design/game-rules.md)
+- [命名規則](../development/naming-conventions.md) — JSON は camelCase
