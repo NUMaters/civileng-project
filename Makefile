@@ -1,4 +1,4 @@
-.PHONY: setup format lint test build up down clean
+.PHONY: setup format lint test build migrate up down clean
 
 PNPM := pnpm
 SERVER_DIR := apps/server
@@ -25,7 +25,13 @@ build:
 	mkdir -p $(BIN_DIR)
 	cd $(SERVER_DIR) && go build -o ../../$(BIN_DIR)/api ./cmd/api
 	cd $(SERVER_DIR) && go build -o ../../$(BIN_DIR)/game ./cmd/game
+	cd $(SERVER_DIR) && go build -o ../../$(BIN_DIR)/migrate ./cmd/migrate
 	$(PNPM) run build
+
+migrate:
+	mkdir -p $(BIN_DIR)
+	cd $(SERVER_DIR) && go build -o ../../$(BIN_DIR)/migrate ./cmd/migrate
+	./$(BIN_DIR)/migrate
 
 up:
 	docker compose up -d
