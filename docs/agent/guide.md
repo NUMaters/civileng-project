@@ -8,6 +8,15 @@
 
 ## ドキュメント一覧
 
+### ハーネスエンジニアリング（自動開発）
+
+| ドキュメント | 内容 |
+|-------------|------|
+| [ハーネス概要](./harness.md) | Planner / Generator / Evaluator のワークフロー |
+| Planner Skill | `.cursor/skills/planner/SKILL.md` |
+| Generator Skill | `.cursor/skills/generator/SKILL.md` |
+| Evaluator Skill | `.cursor/skills/evaluator/SKILL.md` |
+
 ### ゲーム設計・土木工学
 
 | ドキュメント | 内容 |
