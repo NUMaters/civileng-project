@@ -1,0 +1,17 @@
+{
+  "id": "levee",
+  "displayName": "堤防",
+  "description": "河川から市街地への越水を防ぐ。防御力が高いが、設置費用が大きい。",
+  "constructionCost": 3500,
+  "constructionTimeSeconds": 18,
+  "maintenanceCostPerSecond": 3,
+  "allowedTerrains": ["riverBank", "leveeLine"],
+  "supportedDisasters": ["heavy-rain"],
+  "effects": {
+    "waterLevelReduction": 0,
+    "overflowPrevention": 0.85,
+    "drainageCapacity": 0,
+    "bankProtection": 0.2,
+    "channelCapacityIncrease": 0
+  }
+}

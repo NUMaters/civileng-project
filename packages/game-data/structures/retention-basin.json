@@ -1,0 +1,17 @@
+{
+  "id": "retention-basin",
+  "displayName": "遊水地",
+  "description": "一時的に水を貯める。広い土地が必要だが、水位上昇を抑えられる。",
+  "constructionCost": 2800,
+  "constructionTimeSeconds": 20,
+  "maintenanceCostPerSecond": 2,
+  "allowedTerrains": ["lowland", "floodPlain"],
+  "supportedDisasters": ["heavy-rain"],
+  "effects": {
+    "waterLevelReduction": 0.15,
+    "overflowPrevention": 0.1,
+    "drainageCapacity": 0,
+    "bankProtection": 0,
+    "channelCapacityIncrease": 0
+  }
+}

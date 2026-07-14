@@ -1,0 +1,17 @@
+{
+  "id": "channel-dredging",
+  "displayName": "河道掘削",
+  "description": "川を流れる水の量を増やす。広い範囲に効果があるが、施工費用が高い。",
+  "constructionCost": 4000,
+  "constructionTimeSeconds": 22,
+  "maintenanceCostPerSecond": 2,
+  "allowedTerrains": ["riverChannel"],
+  "supportedDisasters": ["heavy-rain"],
+  "effects": {
+    "waterLevelReduction": 0.2,
+    "overflowPrevention": 0.1,
+    "drainageCapacity": 0,
+    "bankProtection": 0,
+    "channelCapacityIncrease": 0.5
+  }
+}

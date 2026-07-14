@@ -1,0 +1,5 @@
+{
+  "initialBudgetSolo": 10000,
+  "initialBudgetMultiplayerPerPlayer": 8000,
+  "description": "ソロは initialBudgetSolo、マルチはプレイヤーごとに initialBudgetMultiplayerPerPlayer を付与"
+}

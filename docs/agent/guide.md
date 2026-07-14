@@ -10,64 +10,69 @@
 
 ### ゲーム設計・土木工学
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [ゲーム概要](../game-design/overview.md) | 概要、目的、ゲーム進行、MVP、開発フェーズ |
-| [ゲームルール](../game-design/game-rules.md) | 勝敗条件、時間、予算、フェーズ、マルチプレイ |
-| [セッションフロー](../game-design/session-flow.md) | ロビー → 準備 → 災害 → 結果 |
-| [操作・UI](../game-design/ui-controls.md) | タップ操作、カメラ、施設配置フロー |
-| [舞台設定](../civil-engineering/setting.md) | 阿武隈川をモデルとした地域設定 |
-| [土木技術](../civil-engineering/techniques.md) | ゲーム内の土木技術とパラメータ |
-| [災害システム](../civil-engineering/disasters.md) | 災害イベントとシミュレーション方針 |
+| ドキュメント                                       | 内容                                         |
+| -------------------------------------------------- | -------------------------------------------- |
+| [ゲーム概要](../game-design/overview.md)           | 概要、目的、ゲーム進行、MVP、開発フェーズ    |
+| [ゲームルール](../game-design/game-rules.md)       | 勝敗条件、時間、予算、フェーズ、マルチプレイ |
+| [セッションフロー](../game-design/session-flow.md) | ロビー → 準備 → 災害 → 結果                  |
+| [操作・UI](../game-design/ui-controls.md)          | タップ操作、カメラ、施設配置フロー           |
+| [舞台設定](../civil-engineering/setting.md)        | 阿武隈川をモデルとした地域設定               |
+| [土木技術](../civil-engineering/techniques.md)     | ゲーム内の土木技術とパラメータ               |
+| [災害システム](../civil-engineering/disasters.md)  | 災害イベントとシミュレーション方針           |
 
 ### 開発方針・規約
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [開発原則](../development/principles.md) | 基本方針、KISS / YAGNI / DRY / SOLID、最終目標 |
-| [命名規則](../development/naming-conventions.md) | Repository、ディレクトリ、ファイル、クラス、JSON 等 |
-| [開発ルール](../development/development-rules.md) | Push 禁止、Linter、テスト、コード品質 |
-| [AI 利用ルール](../development/ai-usage.md) | AI 生成コードの取り扱い |
-| [レビュー基準](../development/review-criteria.md) | レビュー時の確認項目 |
-| [Issue 運用](../development/issue-management.md) | Issue の作成・命名 |
-| [TODO ルール](../development/todo-rules.md) | TODO コメントの書き方 |
+| ドキュメント                                      | 内容                                                |
+| ------------------------------------------------- | --------------------------------------------------- |
+| [開発原則](../development/principles.md)          | 基本方針、KISS / YAGNI / DRY / SOLID、最終目標      |
+| [命名規則](../development/naming-conventions.md)  | Repository、ディレクトリ、ファイル、クラス、JSON 等 |
+| [開発ルール](../development/development-rules.md) | Push 禁止、Linter、テスト、コード品質               |
+| [AI 利用ルール](../development/ai-usage.md)       | AI 生成コードの取り扱い                             |
+| [レビュー基準](../development/review-criteria.md) | レビュー時の確認項目                                |
+| [Issue 運用](../development/issue-management.md)  | Issue の作成・命名                                  |
+| [TODO ルール](../development/todo-rules.md)       | TODO コメントの書き方                               |
 
 ### アーキテクチャ
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [アーキテクチャ概要](../architecture/overview.md) | モジュラーモノリス、ディレクトリ構成の役割分担 |
-| [技術スタック](../architecture/tech-stack.md) | フロントエンド・バックエンド・インフラ |
-| [通信方針](../architecture/communication.md) | REST API と WebSocket の使い分け |
-| [パッケージ構成](../architecture/package-structure.md) | 機能単位のパッケージ管理 |
-| [依存ルール](../architecture/dependency-rules.md) | モジュール間の依存方向 |
-| [ディレクトリ追加ルール](../architecture/directory-rules.md) | 新規ディレクトリ追加の判断基準 |
+| ドキュメント                                                   | 内容                                           |
+| -------------------------------------------------------------- | ---------------------------------------------- |
+| [アーキテクチャ概要](../architecture/overview.md)              | モジュラーモノリス、ディレクトリ構成の役割分担 |
+| [マスターデータ設計](../architecture/game-data-master-data.md) | game-data JSON の構成・スキーマ                |
+| [game-schema 設計](../architecture/game-schema-design.md)      | REST / WebSocket 型定義方針                    |
+| [ゲーム状態モデル](../architecture/game-state-model.md)        | サーバー側 session / tick / snapshot           |
+| [技術スタック](../architecture/tech-stack.md)                  | フロントエンド・バックエンド・インフラ         |
+| [通信方針](../architecture/communication.md)                   | REST API と WebSocket の使い分け               |
+| [パッケージ構成](../architecture/package-structure.md)         | 機能単位のパッケージ管理                       |
+| [依存ルール](../architecture/dependency-rules.md)              | モジュール間の依存方向                         |
+| [ディレクトリ追加ルール](../architecture/directory-rules.md)   | 新規ディレクトリ追加の判断基準                 |
 
 ### API・通信
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [REST API 命名](../api/rest-naming.md) | エンドポイントの命名規則 |
-| [WebSocket 命名](../api/websocket-naming.md) | イベント名の命名規則 |
+| ドキュメント                                 | 内容                     |
+| -------------------------------------------- | ------------------------ |
+| [REST API 命名](../api/rest-naming.md)       | エンドポイントの命名規則 |
+| [WebSocket 命名](../api/websocket-naming.md) | イベント名の命名規則     |
 
 ### コーディング規約
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [Go コーディング規約](../development/coding-standards-go.md) | gofmt、エラーハンドリング、Context |
-| [TypeScript コーディング規約](../development/coding-standards-typescript.md) | strict、any 禁止、型定義 |
-| [コメント規約](../development/comments.md) | コメントの書き方 |
-| [ログ規約](../development/logging.md) | Logger の使用 |
-| [エラーハンドリング](../development/error-handling.md) | エラーの Wrap |
-| [テスト規約](../development/testing.md) | Unit / Integration Test |
+| ドキュメント                                                                 | 内容                                  |
+| ---------------------------------------------------------------------------- | ------------------------------------- |
+| [Go コーディング規約](../development/coding-standards-go.md)                 | gofmt、エラーハンドリング、Context    |
+| [TypeScript コーディング規約](../development/coding-standards-typescript.md) | strict、any 禁止、型定義              |
+| [コメント規約](../development/comments.md)                                   | コメントの書き方                      |
+| [ログ規約](../development/logging.md)                                        | Logger の使用                         |
+| [エラーハンドリング](../development/error-handling.md)                       | エラーの Wrap                         |
+| [テスト規約](../development/testing.md)                                      | Unit / Integration Test               |
+| [ローカル DB 構成](../development/local-database.md)                         | PostgreSQL / Redis / マイグレーション |
 
 ### Git 運用
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [ブランチ運用規則](../git/branch-strategy.md) | ブランチ構成、命名、マージ、リリース |
-| [コミットメッセージ](../git/commit-message.md) | Conventional Commits |
-| [Pull Request](../git/pull-request.md) | PR タイトル、テンプレート |
+| ドキュメント                                          | 内容                                 |
+| ----------------------------------------------------- | ------------------------------------ |
+| [ブランチ運用規則](../git/branch-strategy.md)         | ブランチ構成、命名、マージ、リリース |
+| [コミットメッセージ](../git/commit-message.md)        | Conventional Commits                 |
+| [Pull Request](../git/pull-request.md)                | PR タイトル、テンプレート            |
+| [ブランチ保護設定](../git/branch-protection-setup.md) | main / develop の保護ルール手順      |
 
 ---
 

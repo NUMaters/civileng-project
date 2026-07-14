@@ -108,8 +108,8 @@ feature/42-mobile-controls
 feature/58-player-movement
 ```
 
-| 作成元 | マージ先 |
-|--------|----------|
+| 作成元    | マージ先  |
+| --------- | --------- |
 | `develop` | `develop` |
 
 1 つのブランチでは、原則として 1 つの Issue または 1 つの目的だけを扱う。
@@ -133,8 +133,8 @@ fix/51-duplicate-room-join
 fix/63-water-level-display
 ```
 
-| 作成元 | マージ先 |
-|--------|----------|
+| 作成元    | マージ先  |
+| --------- | --------- |
 | `develop` | `develop` |
 
 本番環境で発生している緊急障害には使用せず、`hotfix/*` を使用する。
@@ -166,8 +166,8 @@ hotfix/102-game-server-crash
 hotfix/103-invalid-room-access
 ```
 
-| 作成元 | マージ先 |
-|--------|----------|
+| 作成元 | マージ先          |
+| ------ | ----------------- |
 | `main` | `main`, `develop` |
 
 `main` へマージした後は、同じ修正を必ず `develop` にも反映する。
@@ -433,8 +433,6 @@ Pull Request を作成する前に、以下を確認する。
 - `develop` の最新変更を取り込んでいる
 - コンフリクトが発生していない
 
-※ `Makefile` は未整備（[Issue #3](https://github.com/NUMaters/civileng-project/issues/3) 参照）。以下は整備後の想定コマンド。
-
 ```bash
 make format
 make lint
@@ -543,7 +541,7 @@ Draft Pull Request には、未完了の内容を明記する。
 
 不明な場合は、対象コードの作成者へ確認する。
 
-コンフリクト解消後は、必ず以下を再実行する（`Makefile` 整備後）。
+コンフリクト解消後は、必ず以下を再実行する。
 
 ```bash
 make lint

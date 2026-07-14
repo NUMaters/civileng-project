@@ -83,12 +83,12 @@ civilcraft/
 
 #### 前提ツール
 
-| ツール                  | バージョン目安                        |
-| ----------------------- | ------------------------------------- |
-| Node.js                 | 20 以上                               |
-| pnpm                    | 10 以上（`corepack enable` で有効化） |
-| Go                      | 1.22 以上                             |
-| Docker / Docker Compose | 最新                                  |
+| ツール                  | バージョン目安                                                                        |
+| ----------------------- | ------------------------------------------------------------------------------------- |
+| Node.js                 | 20 以上                                                                               |
+| pnpm                    | 10 以上（`corepack enable` で有効化）                                                 |
+| Go                      | 1.22 以上                                                                             |
+| Docker / Docker Compose | 最新                                                                                  |
 | golangci-lint           | v2 以上（`go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest`） |
 
 #### 初回セットアップ
@@ -124,22 +124,26 @@ pnpm dev:web
 ./bin/game
 ```
 
-ローカル DB・Redis の構成詳細は [Issue #21](https://github.com/NUMaters/civileng-project/issues/21) で設計予定。現時点では `docker-compose.yml` で PostgreSQL 16 と Redis 7 を提供する。
+ローカル DB・Redis の構成詳細は [docs/development/local-database.md](./docs/development/local-database.md) を参照。`docker-compose.yml` で PostgreSQL 16 と Redis 7 を提供する。
 
 ## ドキュメント
 
-| 用途               | ドキュメント                                                           |
-| ------------------ | ---------------------------------------------------------------------- |
-| ゲーム概要・MVP    | [docs/game-design/overview.md](./docs/game-design/overview.md)         |
-| ゲームルール       | [docs/game-design/game-rules.md](./docs/game-design/game-rules.md)     |
-| セッションフロー   | [docs/game-design/session-flow.md](./docs/game-design/session-flow.md) |
-| 操作・UI           | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)   |
-| 土木技術・災害     | [docs/civil-engineering/](./docs/civil-engineering/)                   |
-| AI Agent 向け索引  | [docs/agent/guide.md](./docs/agent/guide.md)                           |
-| 開発原則・命名規則 | [docs/development/](./docs/development/)                               |
-| アーキテクチャ     | [docs/architecture/](./docs/architecture/)                             |
-| API 命名           | [docs/api/](./docs/api/)                                               |
-| Git 運用           | [docs/git/](./docs/git/)                                               |
+| 用途               | ドキュメント                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| ゲーム概要・MVP    | [docs/game-design/overview.md](./docs/game-design/overview.md)                             |
+| ゲームルール       | [docs/game-design/game-rules.md](./docs/game-design/game-rules.md)                         |
+| セッションフロー   | [docs/game-design/session-flow.md](./docs/game-design/session-flow.md)                     |
+| 操作・UI           | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)                       |
+| 土木技術・災害     | [docs/civil-engineering/](./docs/civil-engineering/)                                       |
+| AI Agent 向け索引  | [docs/agent/guide.md](./docs/agent/guide.md)                                               |
+| 開発原則・命名規則 | [docs/development/](./docs/development/)                                                   |
+| アーキテクチャ     | [docs/architecture/](./docs/architecture/)                                                 |
+| API 命名           | [docs/api/](./docs/api/)                                                                   |
+| Git 運用           | [docs/git/](./docs/git/)                                                                   |
+| マスターデータ設計 | [docs/architecture/game-data-master-data.md](./docs/architecture/game-data-master-data.md) |
+| game-schema 設計   | [docs/architecture/game-schema-design.md](./docs/architecture/game-schema-design.md)       |
+| ゲーム状態モデル   | [docs/architecture/game-state-model.md](./docs/architecture/game-state-model.md)           |
+| ローカル DB 構成   | [docs/development/local-database.md](./docs/development/local-database.md)                 |
 
 ルートの [AGENT.md](./AGENT.md) は `docs/agent/guide.md` への索引である。
 

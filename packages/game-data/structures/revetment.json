@@ -1,0 +1,17 @@
+{
+  "id": "revetment",
+  "displayName": "護岸",
+  "description": "河岸の侵食や崩壊を防ぐ。川岸や構造物付近の保護に有効。",
+  "constructionCost": 1800,
+  "constructionTimeSeconds": 10,
+  "maintenanceCostPerSecond": 1,
+  "allowedTerrains": ["riverBank", "riverChannel"],
+  "supportedDisasters": ["heavy-rain"],
+  "effects": {
+    "waterLevelReduction": 0,
+    "overflowPrevention": 0.05,
+    "drainageCapacity": 0,
+    "bankProtection": 0.75,
+    "channelCapacityIncrease": 0.05
+  }
+}
