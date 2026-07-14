@@ -8,15 +8,13 @@
 
 | カテゴリ | pass | fail | 合計 |
 |----------|------|------|------|
-| 品質ゲート | 3 | 1 | 4 |
+| 品質ゲート | 4 | 0 | 4 |
 | UI | 0 | 0 | 0（対象外） |
 | API | 0 | 0 | 0（対象外） |
 | DB | 0 | 0 | 0（ドキュメントのみ） |
 | 受け入れ基準 | 18 | 0 | 18 |
 
-**総合: PASS（条件付き）**
-
-ローカル環境で `apps/web` の ESLint / Vitest がハングしたため、Q-01（web lint）は CI で再検証が必要。Go 側および game-schema は pass。
+**総合: PASS**
 
 ---
 
@@ -24,10 +22,10 @@
 
 | ID | 基準 | 結果 | 備考 |
 |----|------|------|------|
-| Q-01 | Lint | 部分 pass | golangci-lint: 0 issues、game-schema eslint: pass。web eslint: ローカルハング |
-| Q-02 | Test | 部分 pass | go test ./...: pass。vitest: ローカルハング |
-| Q-03 | Build | pass | go build api/game/migrate: 成功 |
-| Q-04 | CI | 未実行 | PR 作成後に GitHub Actions で検証 |
+| Q-01 | Lint | pass | golangci-lint: 0 issues、ESLint: pass（CI） |
+| Q-02 | Test | pass | go test + vitest: pass（CI） |
+| Q-03 | Build | pass | go build + web build: 成功（CI） |
+| Q-04 | CI | pass | GitHub Actions `Lint, Test, Build`: success（PR #73） |
 
 ---
 
