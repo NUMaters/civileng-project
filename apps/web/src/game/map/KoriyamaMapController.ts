@@ -11,10 +11,17 @@ import {
   ImageryLayer,
   Math as CesiumMath,
   Matrix4,
+  Ray,
+  ScreenSpaceEventHandler,
+  ScreenSpaceEventType,
   UrlTemplateImageryProvider,
   Viewer,
 } from "cesium";
 import { getCesiumPerformanceSettings } from "./cesiumPerformance";
+import {
+  createGroundObjectEllipseOptions,
+  isGroundObjectPositionInPlayArea,
+} from "./groundObjectPlacement";
 import {
   isCoordinateInPlayArea,
   loadKoriyamaRiverPlayArea,
@@ -25,7 +32,8 @@ import {
 const BUILDINGS_URL: string =
   "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/07203-bldg-lod1-latest/tileset.json";
 const TERRAIN_URL: string = "https://tile.plateauview.mlit.go.jp/terrain";
-const GSI_IMAGERY_URL: string = "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
+const PLATEAU_ORTHO_URL: string =
+  "https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png";
 const KORIYAMA_LONGITUDE: number = 140.3597;
 const KORIYAMA_LATITUDE: number = 37.4003;
 const CAMERA_HEADING_DEGREES: number = 20;
@@ -33,7 +41,7 @@ const CAMERA_PITCH_DEGREES: number = -35;
 const CAMERA_RANGE_METERS: number = 3_200;
 const MAXIMUM_ZOOM_DISTANCE_METERS: number = 25_000;
 const MINIMUM_ZOOM_DISTANCE_METERS: number = 30;
-const GSI_MAXIMUM_LEVEL: number = 18;
+const PLATEAU_ORTHO_MAXIMUM_LEVEL: number = 19;
 const MOBILE_QUERY: string = "(max-width: 767px), (pointer: coarse)";
 const CAMERA_CHANGE_PERCENTAGE: number = 0.03;
 
@@ -54,6 +62,7 @@ export class KoriyamaMapController {
   private playArea: RiverPlayArea | undefined;
   private lastValidCameraState: CameraState | undefined;
   private removeCameraConstraint: (() => void) | undefined;
+  private groundObjectInputHandler: ScreenSpaceEventHandler | undefined;
   private readonly abortController: AbortController = new AbortController();
   private isRestoringCamera: boolean = false;
   private destroyed: boolean = false;
@@ -82,6 +91,7 @@ export class KoriyamaMapController {
       await Promise.all([terrainPromise, buildingsPromise]);
 
       if (!this.destroyed && !this.viewer.isDestroyed()) {
+        this.installGroundObjectPlacement();
         this.viewer.scene.requestRender();
         this.callbacks.onReady();
       }
@@ -122,6 +132,13 @@ export class KoriyamaMapController {
     this.abortController.abort();
     this.removeCameraConstraint?.();
     this.removeCameraConstraint = undefined;
+    if (
+      this.groundObjectInputHandler !== undefined &&
+      !this.groundObjectInputHandler.isDestroyed()
+    ) {
+      this.groundObjectInputHandler.destroy();
+    }
+    this.groundObjectInputHandler = undefined;
     if (this.viewer !== undefined && !this.viewer.isDestroyed()) {
       this.viewer.destroy();
     }
@@ -133,9 +150,9 @@ export class KoriyamaMapController {
   private createViewer(): Viewer {
     const baseLayer: ImageryLayer = new ImageryLayer(
       new UrlTemplateImageryProvider({
-        url: GSI_IMAGERY_URL,
-        maximumLevel: GSI_MAXIMUM_LEVEL,
-        credit: "国土地理院",
+        url: PLATEAU_ORTHO_URL,
+        maximumLevel: PLATEAU_ORTHO_MAXIMUM_LEVEL,
+        credit: "国土交通省 Project PLATEAU",
       }),
     );
     const viewer: Viewer = new Viewer(this.container, {
@@ -229,6 +246,63 @@ export class KoriyamaMapController {
     }
     viewer.scene.primitives.add(tileset);
     await this.waitForInitialTiles(tileset);
+  }
+
+  private installGroundObjectPlacement(): void {
+    if (this.viewer === undefined || this.playArea === undefined) {
+      return;
+    }
+
+    if (
+      this.groundObjectInputHandler !== undefined &&
+      !this.groundObjectInputHandler.isDestroyed()
+    ) {
+      this.groundObjectInputHandler.destroy();
+    }
+
+    this.groundObjectInputHandler = new ScreenSpaceEventHandler(this.viewer.scene.canvas);
+    this.groundObjectInputHandler.setInputAction(
+      (event: ScreenSpaceEventHandler.PositionedEvent): void => {
+        this.placeGroundObject(event.position);
+      },
+      ScreenSpaceEventType.LEFT_CLICK,
+    );
+  }
+
+  private placeGroundObject(screenPosition: Cartesian2): void {
+    if (
+      this.viewer === undefined ||
+      this.viewer.isDestroyed() ||
+      this.playArea === undefined
+    ) {
+      return;
+    }
+
+    const pickRay: Ray | undefined = this.viewer.camera.getPickRay(screenPosition);
+    if (pickRay === undefined) {
+      return;
+    }
+
+    const groundPosition: Cartesian3 | undefined = this.viewer.scene.globe.pick(
+      pickRay,
+      this.viewer.scene,
+    );
+    if (
+      groundPosition === undefined ||
+      !isGroundObjectPositionInPlayArea(
+        groundPosition,
+        this.playArea,
+        this.viewer.scene.globe.ellipsoid,
+      )
+    ) {
+      return;
+    }
+
+    this.viewer.entities.add({
+      position: Cartesian3.clone(groundPosition),
+      ellipse: createGroundObjectEllipseOptions(),
+    });
+    this.viewer.scene.requestRender();
   }
 
   private applyGlobeClipping(playArea: RiverPlayArea): void {

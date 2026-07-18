@@ -76,7 +76,7 @@ export function KoriyamaMap(): React.JSX.Element {
       <aside className={styles.attribution} aria-label="データ提供元">
         <span>3D都市モデル：Project PLATEAU</span>
         <span>地形：PLATEAU | Mapterhorn | 国土地理院</span>
-        <span>背景地図：国土地理院</span>
+        <span>背景航空写真：Project PLATEAU</span>
         <span>河川中心線：国土地理院</span>
       </aside>
     </main>

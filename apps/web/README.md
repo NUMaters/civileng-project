@@ -6,12 +6,13 @@ CivilCraft のブラウザ向けフロントエンドです。現段階では、
 
 - 郡山市の PLATEAU 建築物 LOD1（3D Tiles）表示
 - PLATEAU-Terrain の表示
-- 国土地理院の航空写真表示
+- PLATEAU-Ortho の航空写真表示
 - 国土地理院の河川中心線から、開始地点と終了地点の間の河川経路を抽出
 - 河川経路の左右へ指定距離を広げた帯状プレイエリアの生成
 - 地形・航空写真・PLATEAU 建築物のプレイエリア外をクリッピング
 - カメラの移動中心をプレイエリア内へ制限
 - マウス・タッチ・ピンチ操作による移動、回転、傾斜、ズーム
+- 地面のクリック・タップによる地形追従の円形オブジェクト配置
 - 河川区間中央へ視点を戻すボタン
 - 読み込み中、地形フォールバック、致命的エラーの画面表示
 - PC・スマートフォン向けレイアウトと Safe Area 対応
@@ -19,8 +20,7 @@ CivilCraft のブラウザ向けフロントエンドです。現段階では、
 次の機能はまだ実装していません。
 
 - 洪水・浸水シミュレーション
-- 治水工事オブジェクトの配置
-- タップ位置の取得と設置判定
+- 治水工事オブジェクトの配置と設置判定
 - ユーザーアカウント、ルーム、データ保存
 - ゲーム進行、予算、スコア、ステージ選択
 
@@ -76,7 +76,7 @@ npm run build
 |---|---|
 | PLATEAU 郡山市建築物 LOD1 | `https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/07203-bldg-lod1-latest/tileset.json` |
 | PLATEAU-Terrain | `https://tile.plateauview.mlit.go.jp/terrain` |
-| 国土地理院 航空写真 | `https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg` |
+| PLATEAU-Ortho（2023年度版） | `https://tile.plateauview.mlit.go.jp/tiles/plateau-ortho-2023/{z}/{x}/{y}.png` |
 | 国土地理院 河川中心線 | `https://cyberjapandata.gsi.go.jp/xyz/experimental_rvrcl/{z}/{x}/{y}.geojson` |
 
 画面には Cesium 標準のクレジット表示に加えて、PLATEAU、PLATEAU-Terrain、Mapterhorn、国土地理院の帰属を表示します。各データを利用・公開する場合は、それぞれの提供元の利用条件も確認してください。
@@ -164,7 +164,8 @@ apps/web/
 主要ファイル：
 
 - `src/components/KoriyamaMap/KoriyamaMap.tsx` — React UI と読み込み・エラー状態
-- `src/game/map/KoriyamaMapController.ts` — Cesium 初期化、データ読み込み、クリッピング、カメラ制約
+- `src/game/map/KoriyamaMapController.ts` — Cesium 初期化、データ読み込み、クリッピング、カメラ制約、円形オブジェクト配置
+- `src/game/map/groundObjectPlacement.ts` — 地形追従の円形オブジェクト定義と配置範囲判定
 - `src/game/map/riverPlayArea.ts` — 河川タイル取得、経路探索、帯状ポリゴン生成、範囲内判定
 - `src/game/map/cesiumPerformance.ts` — PC・モバイル別の描画設定
 - `vite.config.ts` — Cesium アセットを含む Vite 設定
