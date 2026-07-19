@@ -1,0 +1,5 @@
+{
+  "note": "計算グリッドの詳細は #80 で確定。現プロトタイプはクライアント側の河道ポリゴンで配置判定する。",
+  "placeableRegion": "abukuma-river-corridor",
+  "coordinateSystem": "EPSG:4326"
+}

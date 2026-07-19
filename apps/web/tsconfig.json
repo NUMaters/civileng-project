@@ -5,7 +5,10 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"],
-      "@civilcraft/game-schema/*": ["../../packages/game-schema/*"]
+      "@civilcraft/game-schema/*": ["../../packages/game-schema/*"],
+      "@civilcraft/game-data/*": ["../../packages/game-data/*"],
+      "@civilcraft/game-data/load": ["../../packages/game-data/src/load.ts"],
+      "@civilcraft/game-data/types": ["../../packages/game-data/src/types.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]

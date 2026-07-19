@@ -1,0 +1,6 @@
+{
+  "id": "typhoon",
+  "displayName": "台風",
+  "description": "post-MVP。MVP では使用しない。",
+  "mvp": false
+}

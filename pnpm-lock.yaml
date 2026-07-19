@@ -14,6 +14,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@civilcraft/game-data':
+        specifier: workspace:*
+        version: link:../../packages/game-data
       '@civilcraft/game-schema':
         specifier: workspace:*
         version: link:../../packages/game-schema
@@ -81,6 +84,21 @@ importers:
       typescript-eslint:
         specifier: ^8.33.1
         version: 8.63.0(eslint@9.39.5)(typescript@5.9.3)
+
+  packages/game-data:
+    devDependencies:
+      '@civilcraft/config':
+        specifier: workspace:*
+        version: link:../config
+      eslint:
+        specifier: ^9.28.0
+        version: 9.39.5
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.2.0
+        version: 3.2.7(@types/node@26.1.1)
 
   packages/game-schema:
     devDependencies:

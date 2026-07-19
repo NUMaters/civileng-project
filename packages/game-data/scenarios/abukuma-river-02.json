@@ -1,0 +1,7 @@
+{
+  "id": "abukuma-river-02",
+  "displayName": "阿武隈川 高難度（予備）",
+  "mapId": "koriyama-abukuma",
+  "disasterId": "heavy-rain",
+  "structureIds": ["levee", "retention-basin", "drainage-pump", "revetment", "channel-dredging"]
+}

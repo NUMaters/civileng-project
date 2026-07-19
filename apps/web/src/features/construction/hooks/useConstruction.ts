@@ -1,9 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import channelDredging from "../../../../../../packages/game-data/structures/channel-dredging.json";
-import drainagePump from "../../../../../../packages/game-data/structures/drainage-pump.json";
-import levee from "../../../../../../packages/game-data/structures/levee.json";
-import retentionBasin from "../../../../../../packages/game-data/structures/retention-basin.json";
-import revetment from "../../../../../../packages/game-data/structures/revetment.json";
+import { loadStructures } from "@civilcraft/game-data/load";
 import {
   INITIAL_BUDGET,
   normalizeHeadingDegrees,
@@ -11,13 +7,15 @@ import {
 } from "../services/constructionService";
 import type { GeoPosition, PlacedStructure, StructureDefinition } from "../types/construction";
 
-const structures: StructureDefinition[] = [
-  levee,
-  retentionBasin,
-  drainagePump,
-  revetment,
-  channelDredging,
-];
+const structures: StructureDefinition[] = loadStructures().map(
+  ({ id, displayName, description, constructionCost, constructionTimeSeconds }) => ({
+    id,
+    displayName,
+    description,
+    constructionCost,
+    constructionTimeSeconds,
+  }),
+);
 
 /** トーストメッセージの表示時間（ms）。 */
 const MESSAGE_AUTO_HIDE_MS = 3_500;
