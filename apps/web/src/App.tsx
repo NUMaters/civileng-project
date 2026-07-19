@@ -6,6 +6,8 @@ import {
 } from "./components/GameCanvas/CesiumGameMap";
 import { ConstructionMenu, useConstruction } from "./features/construction";
 import { formatBudget } from "./features/construction/services/constructionService";
+import type { GeoPosition } from "./features/construction/types/construction";
+import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
 type DockDragState = {
   structureId: string;
@@ -19,6 +21,8 @@ type DockDragState = {
 
 /** タップ選択とドラッグ配置を区別する最小移動量（CSS px）。 */
 const DOCK_DRAG_PLACE_THRESHOLD_PX = 28;
+/** カメラ移動の WS 送信スロットル（ms）。 */
+const MOVE_SEND_THROTTLE_MS = 400;
 
 const structureGlyphs: Record<string, string> = {
   levee: "堤",
@@ -28,10 +32,19 @@ const structureGlyphs: Record<string, string> = {
   "channel-dredging": "掘",
 };
 
+const statusLabel: Record<string, string> = {
+  connecting: "接続中",
+  connected: "オンライン",
+  disconnected: "オフライン",
+  error: "接続エラー",
+};
+
 export function App() {
   const construction = useConstruction();
+  const socket = useGameSocket(true);
   const mapRef = useRef<CesiumGameMapHandle>(null);
   const dragRef = useRef<DockDragState | null>(null);
+  const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
   const budgetRatio = Math.max(0, Math.min(1, construction.budget / 10_000));
 
@@ -60,6 +73,34 @@ export function App() {
     [construction],
   );
 
+  const handleDropPlace = useCallback(
+    (structureId: string, position: GeoPosition, headingDegrees: number) => {
+      const placement = construction.placeStructureAt(structureId, position, headingDegrees);
+      if (placement === null) {
+        return;
+      }
+      socket.sendPlaceStructure({
+        structureId: placement.structureId,
+        position: placement.position,
+        headingDegrees: placement.headingDegrees,
+        clientPlacementId: placement.id,
+      });
+    },
+    [construction, socket],
+  );
+
+  const handleCameraFocusChange = useCallback(
+    (position: GeoPosition) => {
+      const now = Date.now();
+      if (now - lastMoveSentAtRef.current < MOVE_SEND_THROTTLE_MS) {
+        return;
+      }
+      lastMoveSentAtRef.current = now;
+      socket.sendMove({ position });
+    },
+    [socket],
+  );
+
   useEffect(() => {
     if (drag === null) {
       return;
@@ -86,7 +127,6 @@ export function App() {
         event.clientX - current.startX,
         event.clientY - current.startY,
       );
-      // カード上の短タップは選択のみ。十分ドラッグしてから配置する。
       if (moved < DOCK_DRAG_PLACE_THRESHOLD_PX) {
         return;
       }
@@ -113,20 +153,31 @@ export function App() {
         placements={construction.placements}
         structures={construction.structures}
         selectedPlacementId={construction.selectedPlacementId}
-        onDropPlace={construction.placeStructureAt}
+        onDropPlace={handleDropPlace}
         onRotatePlacement={construction.rotatePlacement}
         onSelectPlacement={construction.setSelectedPlacementId}
         onInvalidPosition={construction.setMessage}
+        onCameraFocusChange={handleCameraFocusChange}
       />
 
       <header className="game-header game-header--budget-only">
-        <div className="budget-panel" aria-label="残り予算">
-          <div className="budget-panel__meta">
-            <span>BUDGET</span>
-            <strong key={construction.budget}>{formatBudget(construction.budget)}</strong>
+        <div className="game-header__row">
+          <div className="budget-panel" aria-label="残り予算">
+            <div className="budget-panel__meta">
+              <span>BUDGET</span>
+              <strong key={construction.budget}>{formatBudget(construction.budget)}</strong>
+            </div>
+            <div className="budget-panel__track" aria-hidden="true">
+              <div className="budget-panel__fill" style={{ width: `${budgetRatio * 100}%` }} />
+            </div>
           </div>
-          <div className="budget-panel__track" aria-hidden="true">
-            <div className="budget-panel__fill" style={{ width: `${budgetRatio * 100}%` }} />
+          <div
+            className={`socket-status socket-status--${socket.status}`}
+            role="status"
+            title={socket.playerId ?? undefined}
+          >
+            <span className="socket-status__dot" aria-hidden="true" />
+            <span>{statusLabel[socket.status] ?? socket.status}</span>
           </div>
         </div>
       </header>

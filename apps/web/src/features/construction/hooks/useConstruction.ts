@@ -80,11 +80,15 @@ export function useConstruction() {
   );
 
   const placeStructureAt = useCallback(
-    (structureId: string, position: GeoPosition, headingDegrees: number) => {
+    (
+      structureId: string,
+      position: GeoPosition,
+      headingDegrees: number,
+    ): PlacedStructure | null => {
       const structure = structures.find(({ id }) => id === structureId);
       if (structure === undefined) {
         setMessage("配置する施設を選択してください");
-        return;
+        return null;
       }
 
       try {
@@ -99,7 +103,7 @@ export function useConstruction() {
 
         if (!result.ok) {
           setMessage(result.reason);
-          return;
+          return null;
         }
 
         budgetRef.current = result.remainingBudget;
@@ -110,9 +114,11 @@ export function useConstruction() {
         setMessage(
           `${structure.displayName}を配置 — 施設をドラッグして向きを調整できます`,
         );
+        return result.placement;
       } catch (error: unknown) {
         const reason = error instanceof Error ? error.message : "配置に失敗しました";
         setMessage(reason);
+        return null;
       }
     },
     [setMessage],

@@ -14,6 +14,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@civilcraft/game-schema':
+        specifier: workspace:*
+        version: link:../../packages/game-schema
       cesium:
         specifier: ^1.143.0
         version: 1.143.0

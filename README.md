@@ -120,9 +120,11 @@ pnpm dev:web
 # API サーバー（http://localhost:8080/health）
 ./bin/api
 
-# ゲームサーバー（http://localhost:8081/health）
+# ゲームサーバー（http://localhost:8081/health 、WebSocket: ws://localhost:8081/ws）
 ./bin/game
 ```
+
+ゲーム中のリアルタイム通信は **WebSocket**（`cmd/game` の `GET /ws`）。開発時フロントは Vite の `/ws` プロキシ経由で接続し、ヘッダーに接続状態（オンライン／オフライン）を表示する。イベント型は `@civilcraft/game-schema`（`packages/game-schema/websocket/`）。Phase 1 ではカメラ注視点移動（`player.move`）と施設配置（`construction.place` / `construction.placed`）を薄く同期する。
 
 Cesium の Worker / Assets は `apps/web/vite.config.ts` で `/cesiumStatic` として配信する（開発時は専用ミドルウェア、ビルド時は `dist/cesiumStatic` へコピー）。`CESIUM_BASE_URL` はサイトルート絶対パス（`/cesiumStatic`）である必要がある。`optimizeDeps.include` に `cesium` と `mersenne-twister` を入れ、CJS 依存の default export エラーで白画面になるのを防ぐ。地図が「Loading…」のまま止まる／真っ白な場合は、ポート 5173 の古い Vite を終了してから `pnpm --filter @civilcraft/web exec vite --force` で依存を再バンドルする。
 

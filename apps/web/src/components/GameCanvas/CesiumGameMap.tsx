@@ -130,6 +130,8 @@ type CesiumGameMapProps = {
   onRotatePlacement: (placementId: string, headingDegrees: number) => void;
   onSelectPlacement: (placementId: string | null) => void;
   onInvalidPosition: (message: string) => void;
+  /** カメラ操作終了時の画面中央注視点（プレイヤー移動の Phase 1 同期用）。 */
+  onCameraFocusChange?: (position: GeoPosition) => void;
 };
 
 export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>(
@@ -142,6 +144,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       onRotatePlacement,
       onSelectPlacement,
       onInvalidPosition,
+      onCameraFocusChange,
     },
     ref,
   ) {
@@ -154,6 +157,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
   const onRotatePlacementRef = useRef(onRotatePlacement);
   const onSelectPlacementRef = useRef(onSelectPlacement);
   const onInvalidPositionRef = useRef(onInvalidPosition);
+  const onCameraFocusChangeRef = useRef(onCameraFocusChange);
   const selectedPlacementIdRef = useRef(selectedPlacementId);
   const [mapError, setMapError] = useState<string | null>(null);
   const [isMapReady, setIsMapReady] = useState(false);
@@ -165,8 +169,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     onRotatePlacementRef.current = onRotatePlacement;
     onSelectPlacementRef.current = onSelectPlacement;
     onInvalidPositionRef.current = onInvalidPosition;
+    onCameraFocusChangeRef.current = onCameraFocusChange;
     selectedPlacementIdRef.current = selectedPlacementId;
   }, [
+    onCameraFocusChange,
     onDropPlace,
     onInvalidPosition,
     onRotatePlacement,
@@ -323,6 +329,16 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           return;
         }
         constrainCameraFocusNearRiver(mapViewer);
+        const focus = pickGroundFocus(mapViewer);
+        if (focus === undefined) {
+          return;
+        }
+        const cartographic = Cartographic.fromCartesian(focus);
+        onCameraFocusChangeRef.current?.({
+          longitude: CesiumMath.toDegrees(cartographic.longitude),
+          latitude: CesiumMath.toDegrees(cartographic.latitude),
+          height: cartographic.height,
+        });
       };
       removeCameraMoveEnd = mapViewer.camera.moveEnd.addEventListener(settleCamera);
 

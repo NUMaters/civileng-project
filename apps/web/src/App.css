@@ -141,6 +141,58 @@ a {
   display: none !important;
 }
 
+.game-header__row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.socket-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 999px;
+  background: rgb(6 22 18 / 72%);
+  color: var(--ink-muted);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  backdrop-filter: blur(12px);
+}
+
+.socket-status__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7a8a84;
+}
+
+.socket-status--connecting .socket-status__dot {
+  background: var(--accent-hot);
+  animation: brand-wave 1.2s ease-in-out infinite;
+}
+
+.socket-status--connected {
+  color: #b7f0d4;
+}
+
+.socket-status--connected .socket-status__dot {
+  background: var(--accent);
+}
+
+.socket-status--error {
+  color: #ffb4a4;
+}
+
+.socket-status--error .socket-status__dot {
+  background: var(--danger);
+}
+
 .game-header {
   position: absolute;
   z-index: 5;

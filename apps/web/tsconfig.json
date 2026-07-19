@@ -4,7 +4,8 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@civilcraft/game-schema/*": ["../../packages/game-schema/*"]
     }
   },
   "include": ["src", "vite.config.ts"]
