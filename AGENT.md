@@ -22,6 +22,7 @@ docs/
 ├── architecture/
 │   ├── overview.md           # モジュラーモノリス、ディレクトリ役割
 │   ├── tech-stack.md         # 技術スタック
+│   ├── geospatial.md         # CesiumJS・地理院データ・座標方針
 │   ├── communication.md      # REST / WebSocket 使い分け
 │   ├── package-structure.md  # パッケージ構成
 │   ├── dependency-rules.md   # 依存ルール

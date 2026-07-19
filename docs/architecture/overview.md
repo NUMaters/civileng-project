@@ -38,7 +38,7 @@
 
 | 領域 | 役割 |
 |------|------|
-| `apps/web/src/game/` | Three.js などに依存するゲーム処理 |
+| `apps/web/src/game/` | CesiumJS に依存する地図表示・カメラ・地表入力とゲーム処理 |
 | `apps/web/src/features/` | 建設・災害・ルーム・チュートリアルなど、ユーザー機能単位の処理 |
 | `apps/web/src/components/` | アイテムバー・水位計などの表示コンポーネント |
 | `apps/admin/` | 管理画面・マップ編集・シナリオ作成 |
@@ -60,3 +60,4 @@
 - [依存ルール](./dependency-rules.md)
 - [ディレクトリ追加ルール](./directory-rules.md)
 - [ゲーム概要](../game-design/overview.md)
+- [地理空間アーキテクチャ](./geospatial.md)
