@@ -11,9 +11,9 @@ const (
 	ClientPlaceStructure = "construction.place"
 	ClientPing           = "session.ping"
 
-	ServerSessionState     = "session.state"
-	ServerPlayerJoined     = "player.joined"
-	ServerPlayerLeft       = "player.left"
-	ServerStructurePlaced  = "construction.placed"
-	ServerPong             = "session.pong"
+	ServerSessionState    = "session.state"
+	ServerPlayerJoined    = "player.joined"
+	ServerPlayerLeft      = "player.left"
+	ServerStructurePlaced = "construction.placed"
+	ServerPong            = "session.pong"
 )
