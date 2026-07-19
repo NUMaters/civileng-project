@@ -40,6 +40,7 @@
 | [マスターデータ設計](../architecture/game-data-master-data.md) | game-data JSON の構成・スキーマ                |
 | [game-schema 設計](../architecture/game-schema-design.md)      | REST / WebSocket 型定義方針                    |
 | [ゲーム状態モデル](../architecture/game-state-model.md)        | サーバー側 session / tick / snapshot           |
+| [地理空間アーキテクチャ](../architecture/geospatial.md)        | CesiumJS・地理院データ・座標・責務分離          |
 | [技術スタック](../architecture/tech-stack.md)                  | フロントエンド・バックエンド・インフラ         |
 | [通信方針](../architecture/communication.md)                   | REST API と WebSocket の使い分け               |
 | [パッケージ構成](../architecture/package-structure.md)         | 機能単位のパッケージ管理                       |
@@ -64,6 +65,7 @@
 | [エラーハンドリング](../development/error-handling.md)                       | エラーの Wrap                         |
 | [テスト規約](../development/testing.md)                                      | Unit / Integration Test               |
 | [ローカル DB 構成](../development/local-database.md)                         | PostgreSQL / Redis / マイグレーション |
+| [CesiumJS 導入ロードマップ](../development/cesium-roadmap.md)                | 導入順序・必要作業・完了条件          |
 
 ### Git 運用
 

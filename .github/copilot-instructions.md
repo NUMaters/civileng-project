@@ -4,7 +4,7 @@
 
 ## プロジェクト概要
 
-CivilCraft は土木工学を題材としたブラウザ向けボクセルゲーム（Go + TypeScript モノレポ）。
+CivilCraft は土木工学を題材とし、CesiumJS と国土地理院データで実在地域を表示するブラウザゲーム（Go + TypeScript モノレポ）。
 
 - エントリーポイント: [AGENT.md](../AGENT.md) → [docs/agent/guide.md](../docs/agent/guide.md)
 - MVP 範囲: [docs/game-design/overview.md](../docs/game-design/overview.md#mvp)

@@ -7,6 +7,11 @@ dist/
 bin/
 *.tsbuildinfo
 
+# Generated Cesium static assets (copied by apps/web/scripts/copy-cesium-assets.mjs)
+apps/web/public/cesiumStatic/
+apps/web/public/plateau/
+apps/web/.cache/
+
 # Go
 apps/server/bin/
 

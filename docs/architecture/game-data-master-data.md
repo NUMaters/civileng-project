@@ -15,7 +15,7 @@
 | 土木技術     | `structures/` | 建設費・建設時間・維持費・効果 |
 | ゲームルール | `rules/`      | 勝敗条件・予算・フェーズ時間   |
 | 災害         | `disasters/`  | 災害種別・降雨パターン（将来） |
-| マップ       | `maps/`       | 地形・オブジェクト             |
+| マップ       | `maps/`       | 対象範囲・初期カメラ・地形分類・計算グリッド参照 |
 | シナリオ     | `scenarios/`  | プレイ条件の組み合わせ         |
 
 ---
@@ -84,6 +84,20 @@ packages/game-data/structures/<structure-id>.json
 
 数値の具体値はゲームバランス調整対象（[SPR-001 人間承認](../specs/SPR-001-alpha-m1.md) 参照）。
 
+## マップ（maps/）
+
+`maps/koriyama/`は日本大学工学部周辺の阿武隈川を対象とし、次の情報を管理する。
+
+| ファイル | 用途 |
+| -------- | ---- |
+| `metadata.json` | マップID、対象範囲、初期カメラ、使用データと出典 |
+| `terrain.json` | ゲーム用地形分類または計算グリッドへの参照 |
+| `objects.json` | 保護対象、河川、道路、既設施設などのゲーム用オブジェクト |
+
+国土地理院の背景タイルそのものをリポジトリへ複製しない。加工済み標高や計算グリッドを保存する場合は、元データ、取得日、加工方法、座標系、解像度、利用条件をmetadataへ記録する。
+
+表示用データとシミュレーション用データを分離し、CesiumJS上で見えている地形からクライアントだけで配置可否や浸水を判定しない。
+
 ---
 
 ## ゲームルール（rules/）
@@ -150,3 +164,4 @@ packages/game-data/structures/<structure-id>.json
 - [土木技術](../civil-engineering/techniques.md)
 - [ゲームルール](../game-design/game-rules.md)
 - [命名規則](../development/naming-conventions.md) — JSON は camelCase
+- [地理空間アーキテクチャ](./geospatial.md)
