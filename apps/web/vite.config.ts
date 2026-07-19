@@ -154,6 +154,14 @@ export default defineConfig({
     port: 5173,
     host: true,
     strictPort: true,
+    proxy: {
+      // ゲームサーバー WebSocket（cmd/game GET /ws）
+      "/ws": {
+        target: "ws://127.0.0.1:8081",
+        ws: true,
+        changeOrigin: true,
+      },
+    },
     watch: {
       ignored: ["**/node_modules/cesium/**", "**/dist/**"],
     },

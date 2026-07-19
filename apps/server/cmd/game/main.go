@@ -4,13 +4,22 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/NUMaters/civileng-project/apps/server/internal/game/realtime"
 )
 
 func main() {
+	session := realtime.NewSessionStore()
+	hub := realtime.NewHub(session)
+	go hub.Run()
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
+	})
+	mux.HandleFunc("GET /ws", func(w http.ResponseWriter, r *http.Request) {
+		realtime.ServeWS(hub, w, r)
 	})
 
 	addr := envOrDefault("GAME_ADDR", ":8081")
@@ -19,7 +28,7 @@ func main() {
 		Handler: mux,
 	}
 
-	log.Printf("game server listening on %s", addr)
+	log.Printf("game server listening on %s (ws: /ws)", addr)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("game server failed: %v", err)
 	}

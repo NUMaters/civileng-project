@@ -50,7 +50,7 @@ CesiumJSと国土地理院データを用いたクライアント実装に必要
 ## 3. スキーマとマスターデータの移行
 
 - [ ] `Position { x, y, z }`を用途別に地理座標型とローカル計算座標型へ分ける
-- [ ] 施設配置WebSocket payloadを地理座標対応にする
+- [x] 施設配置WebSocket payloadを地理座標対応にする
 - [ ] `maps/koriyama/metadata.json`へ境界、カメラ、データ出典を定義する
 - [ ] 河川、地形分類、配置可能領域の形式を決める
 - [ ] JSON SchemaまたはTypeScript型とデータ検証を追加する
