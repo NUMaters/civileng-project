@@ -99,8 +99,14 @@ const PLATEAU_BUILDINGS_LOD1_URL =
   "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/07203-bldg-lod1-latest/tileset.json";
 /** ジオイド補正済み楕円体高の quantized-mesh（PLATEAU 建物と高さが揃う）。 */
 const PLATEAU_TERRAIN_URL = "https://tile.plateauview.mlit.go.jp/terrain/";
-/** 開発時は Vite の /gsi-tiles ミドルウェア経由（同一オリジン）。 */
-const GSI_SEAMLESS_PHOTO_URL = "/gsi-tiles/seamlessphoto/{z}/{x}/{y}.jpg";
+/**
+ * 航空写真 URL。
+ * 開発／preview は Vite の /gsi-tiles プロキシ（SPA フォールバック混入防止）。
+ * 本番ビルドは地理院へ直接取得する。
+ */
+const GSI_SEAMLESS_PHOTO_URL = import.meta.env.DEV
+  ? "/gsi-tiles/seamlessphoto/{z}/{x}/{y}.jpg"
+  : "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
 /** 配置帯の見た目用コリドー幅（m）。判定はポリゴン包含のまま。 */
 const RIVER_CORRIDOR_DISPLAY_WIDTH_M = 96;
 /** ドロップずれを許容する中心線からの半幅（m）。 */

@@ -37,6 +37,9 @@ export function useConstruction() {
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
   const [message, setMessageState] = useState("");
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 連続ドロップで同じ予算を二重に読まないための同期ソース。 */
+  const budgetRef = useRef(budget);
+  budgetRef.current = budget;
 
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current !== null) {
@@ -89,7 +92,7 @@ export function useConstruction() {
         const result = placeStructure(
           structure,
           position,
-          budget,
+          budgetRef.current,
           placementId,
           headingDegrees,
         );
@@ -99,6 +102,7 @@ export function useConstruction() {
           return;
         }
 
+        budgetRef.current = result.remainingBudget;
         setBudget(result.remainingBudget);
         setPlacements((current) => [...current, result.placement]);
         setSelectedStructureId(structure.id);
@@ -111,7 +115,7 @@ export function useConstruction() {
         setMessage(reason);
       }
     },
-    [budget, setMessage],
+    [setMessage],
   );
 
   const rotatePlacement = useCallback((placementId: string, headingDegrees: number) => {

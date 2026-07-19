@@ -82,48 +82,57 @@ function serveCesiumAssets(): Plugin {
   };
 }
 
+function attachGsiTileProxy(
+  middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void },
+): void {
+  middlewares.use((req: IncomingMessage, res: ServerResponse, next) => {
+    const url = req.url ?? "";
+    if (!url.startsWith("/gsi-tiles/")) {
+      next();
+      return;
+    }
+
+    const relativePath = decodeURIComponent(url.slice("/gsi-tiles".length).split("?")[0] ?? "");
+    if (relativePath === "" || relativePath.includes("..")) {
+      res.statusCode = 400;
+      res.end("bad path");
+      return;
+    }
+
+    const target = `https://cyberjapandata.gsi.go.jp/xyz${relativePath}`;
+    void fetch(target)
+      .then(async (upstream) => {
+        if (!upstream.ok) {
+          res.statusCode = upstream.status;
+          res.end(`gsi upstream ${upstream.status}`);
+          return;
+        }
+        const buffer = Buffer.from(await upstream.arrayBuffer());
+        res.statusCode = 200;
+        res.setHeader(
+          "Content-Type",
+          upstream.headers.get("content-type") ?? "image/jpeg",
+        );
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        res.end(buffer);
+      })
+      .catch((error: unknown) => {
+        res.statusCode = 502;
+        res.end(error instanceof Error ? error.message : "gsi proxy failed");
+      });
+  });
+}
+
 /** 地理院タイルを同一オリジンで返す（SPA フォールバックで HTML が混入するのを防ぐ）。 */
 function proxyGsiTiles(): Plugin {
   return {
     name: "civilcraft-proxy-gsi",
     enforce: "pre",
     configureServer(server) {
-      server.middlewares.use((req: IncomingMessage, res: ServerResponse, next) => {
-        const url = req.url ?? "";
-        if (!url.startsWith("/gsi-tiles/")) {
-          next();
-          return;
-        }
-
-        const relativePath = decodeURIComponent(url.slice("/gsi-tiles".length).split("?")[0] ?? "");
-        if (relativePath === "" || relativePath.includes("..")) {
-          res.statusCode = 400;
-          res.end("bad path");
-          return;
-        }
-
-        const target = `https://cyberjapandata.gsi.go.jp/xyz${relativePath}`;
-        void fetch(target)
-          .then(async (upstream) => {
-            if (!upstream.ok) {
-              res.statusCode = upstream.status;
-              res.end(`gsi upstream ${upstream.status}`);
-              return;
-            }
-            const buffer = Buffer.from(await upstream.arrayBuffer());
-            res.statusCode = 200;
-            res.setHeader(
-              "Content-Type",
-              upstream.headers.get("content-type") ?? "image/jpeg",
-            );
-            res.setHeader("Cache-Control", "public, max-age=86400");
-            res.end(buffer);
-          })
-          .catch((error: unknown) => {
-            res.statusCode = 502;
-            res.end(error instanceof Error ? error.message : "gsi proxy failed");
-          });
-      });
+      attachGsiTileProxy(server.middlewares);
+    },
+    configurePreviewServer(server) {
+      attachGsiTileProxy(server.middlewares);
     },
   };
 }

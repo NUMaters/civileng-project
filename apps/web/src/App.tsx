@@ -11,9 +11,14 @@ type DockDragState = {
   structureId: string;
   displayName: string;
   glyph: string;
+  startX: number;
+  startY: number;
   x: number;
   y: number;
 };
+
+/** タップ選択とドラッグ配置を区別する最小移動量（CSS px）。 */
+const DOCK_DRAG_PLACE_THRESHOLD_PX = 28;
 
 const structureGlyphs: Record<string, string> = {
   levee: "堤",
@@ -44,6 +49,8 @@ export function App() {
         structureId,
         displayName: structure.displayName,
         glyph: structureGlyphs[structureId] ?? "工",
+        startX: clientX,
+        startY: clientY,
         x: clientX,
         y: clientY,
       };
@@ -73,6 +80,14 @@ export function App() {
       dragRef.current = null;
       setDrag(null);
       if (current === null) {
+        return;
+      }
+      const moved = Math.hypot(
+        event.clientX - current.startX,
+        event.clientY - current.startY,
+      );
+      // カード上の短タップは選択のみ。十分ドラッグしてから配置する。
+      if (moved < DOCK_DRAG_PLACE_THRESHOLD_PX) {
         return;
       }
       mapRef.current?.tryDropStructure(current.structureId, event.clientX, event.clientY);
