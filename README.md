@@ -117,12 +117,14 @@ make down     # docker compose down
 # フロントエンド開発サーバー（http://localhost:5173）
 pnpm dev:web
 
-# API サーバー（http://localhost:8080/health）
+# API サーバー（http://localhost:8080/health 、マスターデータ: /v1/game-data）
 ./bin/api
 
 # ゲームサーバー（http://localhost:8081/health 、WebSocket: ws://localhost:8081/ws）
 ./bin/game
 ```
+
+マスターデータは `packages/game-data/`（土木技術・ルール・災害・マップ・シナリオ）。web は `@civilcraft/game-data`、server は `GAME_DATA_DIR`（既定で同ディレクトリを探索）経由で読み込む。
 
 ゲーム中のリアルタイム通信は **WebSocket**（`cmd/game` の `GET /ws`）。開発時フロントは Vite の `/ws` プロキシ経由で接続し、ヘッダーに接続状態（オンライン／オフライン）を表示する。イベント型は `@civilcraft/game-schema`（`packages/game-schema/websocket/`）。Phase 1 ではカメラ注視点移動（`player.move`）と施設配置（`construction.place` / `construction.placed`）を薄く同期する。
 

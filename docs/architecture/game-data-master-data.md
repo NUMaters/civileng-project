@@ -151,11 +151,15 @@ packages/game-data/structures/<structure-id>.json
 
 ### server（Go）
 
-`apps/server` は起動時に `packages/game-data/` を読み込む。パスは環境変数 `GAME_DATA_DIR`（未設定時は相対パス `../../packages/game-data`）で指定する（実装は Phase 2 で追加）。
+`apps/server/internal/gamedata` が起動時に `packages/game-data/` を読み込む。パスは環境変数 `GAME_DATA_DIR`（未設定時はリポジトリ相対パスを探索）。REST では次を公開する。
+
+- `GET /v1/game-data`
+- `GET /v1/game-data/structures`
+- `GET /v1/game-data/rules`
 
 ### web（TypeScript）
 
-`packages/game-schema` の型定義と組み合わせて参照する。ビルド時に JSON を import するか、API 経由で取得する（実装方針は Phase 2 で決定）。
+`@civilcraft/game-data`（`loadStructures` / `loadRules` / `loadGameData`）でビルド時に JSON を参照する。将来は API 経由取得にも切り替え可能。
 
 ---
 

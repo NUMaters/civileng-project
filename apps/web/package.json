@@ -12,6 +12,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@civilcraft/game-data": "workspace:*",
     "@civilcraft/game-schema": "workspace:*",
     "cesium": "^1.143.0",
     "mersenne-twister": "1.1.0",

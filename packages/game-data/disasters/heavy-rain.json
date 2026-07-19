@@ -1,0 +1,6 @@
+{
+  "id": "heavy-rain",
+  "displayName": "大雨",
+  "description": "MVP の主災害。短時間の強い降雨で水位が上昇する。",
+  "mvp": true
+}

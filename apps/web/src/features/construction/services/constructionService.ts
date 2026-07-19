@@ -1,6 +1,9 @@
+import { loadRules } from "@civilcraft/game-data/load";
 import type { GeoPosition, PlacementResult, StructureDefinition } from "../types/construction";
 
-export const INITIAL_BUDGET = 10_000;
+const rules = loadRules();
+
+export const INITIAL_BUDGET = rules.budget.initialBudgetSolo;
 
 export function placeStructure(
   structure: StructureDefinition,
