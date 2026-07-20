@@ -6,6 +6,10 @@
 
 詳細は [docs/game-design/overview.md](./docs/game-design/overview.md) を参照。
 
+## ライセンス
+
+[MIT License](./LICENSE)（Copyright 2026 NUMaters / CivilCraft contributors）
+
 ## 技術スタック
 
 | 領域           | 技術                                                                                            |
@@ -100,6 +104,8 @@ make setup
 make up    # PostgreSQL / Redis を起動
 ```
 
+環境変数の一覧は [docs/development/environment-variables.md](./docs/development/environment-variables.md)。DB 詳細は [docs/development/local-database.md](./docs/development/local-database.md)。
+
 #### 開発コマンド
 
 ```bash
@@ -136,7 +142,7 @@ Cesium の Worker / Assets は `apps/web/vite.config.ts` で `/cesiumStatic` と
 pnpm --filter @civilcraft/web fetch:plateau
 ```
 
-カメラ移動は日本大学工学部周辺の阿武隈川プレイ範囲内に制限し、施設は建設ドックから河道（青い帯）上へドラッグ＆ドロップで配置する。設置向きはカメラの向きに合わせ、設置後は施設をドラッグして自由に回転できる。ドロップずれは中心線付近へスナップする。マップ検証中はブランドヘッダーとミッションカードを非表示。詳細は [docs/architecture/geospatial.md](./docs/architecture/geospatial.md) と [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)。
+カメラ移動は日本大学工学部周辺の阿武隈川プレイ範囲内に制限し、施設は建設ドックから河道・河岸（薄い青い帯、中心線片岸約 75 m）上へドラッグ＆ドロップでのみ配置する（市街地不可。地図タップでは配置しない。誤設置防止）。ドラッグ中はドックのアイコンではなく、地図上に**設置予定の立体モデル**がカーソルに追従する（配置可能域は青系、不可域は赤系）。ドロップ直後は仮配置（プレビュー）となり、施設上の小さな ✓／× で確定・キャンセルできる（Enter／Esc 対応。大きな確定バーは使わない）。ドックの各施設カードには `apps/web/public/icons/structures/` のシーン風 SVG イラスト（堤防断面・遊水地・排水機場・護岸・河道掘削）を大きく表示する。地図上の施設は単色ボックスではなく、土・芝・コンクリート・護岸石・水面などの手続きテクスチャ付き多層パーツ（`structureModels` / `structureMaterials`）で表現する。施設モデルは Cesium の ImageMaterial 相性問題を避けるため単色マテリアルで描画し、ドラッグ中は多パーツ再生成による白画面を防ぐため施設外形の簡易シルエットで追従する。モデル生成失敗時は簡易ボックスへフォールバックする。設置向きはカメラの向きに合わせ、仮配置中のみ**施設手前の向きスライダー**と地図の左右ドラッグで回転できる（確定後は向き固定。角度表示・左右ボタンなし。向き矢印は仮配置中のみ）。配置可能域（薄い青い帯）内ならドロップ位置をそのまま使い、中心線などへの強制スナップはしない。阿武隈川の水面は Cesium `Water` マテリアル（法線マップ＋波アニメ）と、**下流（北→南）へ進む**流向ストリークで表現し、水位・雨量に応じて流速／色／立体の水量帯を**補間して**滑らかに変える（GroundPrimitive の再生成によるチラつきを避ける）。平常時の本川幅はそのままに、水位が約 3.6 m を超えると氾濫寸前の河道沿い氾濫原（片岸約 200 m、越水時は最大約 320 m）を別レイヤで徐々に広げて表示する。計画高水位を超えると決壊地点（オレンジの「決壊」ラベル）から市街地方向へ浸水が広がる。浸水範囲は決壊地点起点のみとし、無関係な固定エリアへの浸水表示はしない。低い河岸ほど決壊しやすく、近傍の堤防・護岸（河岸配置・川沿い向き・標高）で抑えられる。施設確定時は緑の影響圏と HUD の治水効果・配置効率で川への効きを示す。施設名などの地図ラベルは Cesium LabelGraphics ではなく HTML/CSS オーバーレイで描画し、日本語のギザつきを避ける。マップ検証中はブランドヘッダーとミッションカードを非表示。詳細は [docs/architecture/geospatial.md](./docs/architecture/geospatial.md) と [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)。
 
 ローカル DB・Redis の構成詳細は [docs/development/local-database.md](./docs/development/local-database.md) を参照。`docker-compose.yml` で PostgreSQL 16 と Redis 7 を提供する。
 
@@ -155,9 +161,13 @@ pnpm --filter @civilcraft/web fetch:plateau
 | API 命名           | [docs/api/](./docs/api/)                                                                   |
 | Git 運用           | [docs/git/](./docs/git/)                                                                   |
 | マスターデータ設計 | [docs/architecture/game-data-master-data.md](./docs/architecture/game-data-master-data.md) |
+| マップデータ形式 | [docs/architecture/map-data-format.md](./docs/architecture/map-data-format.md) |
+| DB スキーマ（ルーム等） | [docs/architecture/db-schema.md](./docs/architecture/db-schema.md) |
 | game-schema 設計   | [docs/architecture/game-schema-design.md](./docs/architecture/game-schema-design.md)       |
 | ゲーム状態モデル   | [docs/architecture/game-state-model.md](./docs/architecture/game-state-model.md)           |
 | ローカル DB 構成   | [docs/development/local-database.md](./docs/development/local-database.md)                 |
+| 環境変数一覧 | [docs/development/environment-variables.md](./docs/development/environment-variables.md) |
+| MVP 外データ方針 | [docs/development/mvp-scope-data.md](./docs/development/mvp-scope-data.md) |
 | 地理空間アーキテクチャ | [docs/architecture/geospatial.md](./docs/architecture/geospatial.md)                    |
 | CesiumJS 導入作業 | [docs/development/cesium-roadmap.md](./docs/development/cesium-roadmap.md)                  |
 

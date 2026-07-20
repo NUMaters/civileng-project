@@ -1,4 +1,5 @@
 import { formatBudget } from "../services/constructionService";
+import { getStructureVisual } from "../structureVisuals";
 import type { StructureDefinition } from "../types/construction";
 
 type StructureCardProps = {
@@ -9,14 +10,6 @@ type StructureCardProps = {
   onDragStart: (structureId: string, clientX: number, clientY: number) => void;
 };
 
-const structureMeta: Record<string, { glyph: string; tone: string }> = {
-  levee: { glyph: "堤", tone: "amber" },
-  "retention-basin": { glyph: "遊", tone: "river" },
-  "drainage-pump": { glyph: "排", tone: "ember" },
-  revetment: { glyph: "護", tone: "slate" },
-  "channel-dredging": { glyph: "掘", tone: "moss" },
-};
-
 export function StructureCard({
   structure,
   selected,
@@ -24,11 +17,11 @@ export function StructureCard({
   onSelect,
   onDragStart,
 }: StructureCardProps) {
-  const meta = structureMeta[structure.id] ?? { glyph: "工", tone: "moss" };
+  const visual = getStructureVisual(structure.id);
 
   return (
     <button
-      className={`structure-card structure-card--${meta.tone}${selected ? " is-selected" : ""}`}
+      className={`structure-card structure-card--${visual.tone}${selected ? " is-selected" : ""}`}
       disabled={disabled}
       onClick={() => onSelect(structure.id)}
       onPointerDown={(event) => {
@@ -43,8 +36,15 @@ export function StructureCard({
       aria-pressed={selected}
       aria-grabbed={selected}
     >
-      <span className="structure-card__icon" aria-hidden="true">
-        {meta.glyph}
+      <span className="structure-card__thumb" aria-hidden="true">
+        <img
+          className="structure-card__image"
+          src={visual.imageSrc}
+          alt=""
+          draggable={false}
+          width={72}
+          height={72}
+        />
       </span>
       <span className="structure-card__body">
         <strong>{structure.displayName}</strong>

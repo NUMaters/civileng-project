@@ -23,14 +23,14 @@ export function ConstructionMenu({
       <div className="construction-menu__heading">
         <div>
           <span className="construction-menu__heading-label">建設ドック</span>
-          <strong>施設をドラッグして地図へ配置</strong>
+          <strong>カードを河道・河岸（薄い青い帯）へドラッグして配置</strong>
         </div>
         {selected !== undefined ? (
           <p className="construction-menu__hint" key={selected.id}>
             {selected.description}
           </p>
         ) : (
-          <small>カードを長押しして地図へドラッグ</small>
+          <small>タップでは配置されません。ドックからドラッグしてください</small>
         )}
       </div>
       <div className="construction-menu__list">

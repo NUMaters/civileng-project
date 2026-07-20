@@ -1,0 +1,24 @@
+name: Chore
+description: 開発基盤・CI・ツール・リポジトリ整備
+title: "chore: "
+labels: ["chore", "devops", "mvp"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: 作業内容
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: 関連 Issue / PR

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="dp-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f0d0b8"/>
+      <stop offset="1" stop-color="#f7e8dc"/>
+    </linearGradient>
+    <linearGradient id="dp-water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5ec0ea"/>
+      <stop offset="1" stop-color="#1f7eb4"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="20" fill="url(#dp-sky)"/>
+  <!-- 地盤・水路 -->
+  <path d="M0 86 H128 V122 H0 Z" fill="#7d8a70"/>
+  <path d="M0 98 H48 V122 H0 Z" fill="url(#dp-water)"/>
+  <path d="M8 108c10-3 18-3 28 0" stroke="#d7f4ff" stroke-width="2" opacity=".7"/>
+  <!-- 建屋 -->
+  <rect x="46" y="40" width="48" height="48" rx="3" fill="#d0d6d8"/>
+  <rect x="42" y="36" width="56" height="10" rx="2" fill="#6f777c"/>
+  <rect x="54" y="52" width="14" height="20" rx="1" fill="#3d4a52"/>
+  <rect x="74" y="54" width="12" height="10" rx="1" fill="#8ec8e8" opacity=".85"/>
+  <!-- 煙突 -->
+  <rect x="86" y="22" width="8" height="28" rx="1" fill="#b0b7bb"/>
+  <rect x="84" y="18" width="12" height="6" rx="1" fill="#8a9296"/>
+  <!-- 取水管 -->
+  <path d="M46 78 H28 c-6 0-10 4-10 10 v8" stroke="#5a6268" stroke-width="7" stroke-linecap="round" fill="none"/>
+  <path d="M46 78 H28 c-6 0-10 4-10 10 v8" stroke="#9aa3a8" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <circle cx="18" cy="98" r="5" fill="#3aa0d8"/>
+  <!-- 吐出 -->
+  <path d="M94 78 H114" stroke="#5a6268" stroke-width="6" stroke-linecap="round"/>
+  <path d="M110 78c6 4 8 10 8 16" stroke="#3aa0d8" stroke-width="3" stroke-linecap="round"/>
+  <rect x="0" y="0" width="128" height="24" rx="20" fill="#000" opacity=".2"/>
+  <rect x="0" y="12" width="128" height="12" fill="#000" opacity=".12"/>
+  <text x="12" y="16" fill="#ffffff" font-family="Hiragino Sans, Noto Sans JP, sans-serif" font-size="12" font-weight="700">排水機場</text>
+</svg>
