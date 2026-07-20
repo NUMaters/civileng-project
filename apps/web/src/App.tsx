@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
+import { CesiumGameMap, type CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
 import {
-  CesiumGameMap,
-  type CesiumGameMapHandle,
-} from "./components/GameCanvas/CesiumGameMap";
-import { ConstructionMenu, useConstruction } from "./features/construction";
-import { formatBudget } from "./features/construction/services/constructionService";
+  ConstructionMenu,
+  getStructureVisual,
+  useConstruction,
+} from "./features/construction";
+import { formatBudget, INITIAL_BUDGET } from "./features/construction/services/constructionService";
 import type { GeoPosition } from "./features/construction/types/construction";
+import { FloodHud, FloodResultPanel, useFloodSimulation } from "./features/disaster";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
 type DockDragState = {
   structureId: string;
   displayName: string;
-  glyph: string;
+  imageSrc: string;
   startX: number;
   startY: number;
   x: number;
@@ -23,14 +25,8 @@ type DockDragState = {
 const DOCK_DRAG_PLACE_THRESHOLD_PX = 28;
 /** カメラ移動の WS 送信スロットル（ms）。 */
 const MOVE_SEND_THROTTLE_MS = 400;
-
-const structureGlyphs: Record<string, string> = {
-  levee: "堤",
-  "retention-basin": "遊",
-  "drainage-pump": "排",
-  revetment: "護",
-  "channel-dredging": "掘",
-};
+/** ローカル単独プレイではWS再接続を止め、開発サーバーのプロキシ負荷を避ける。 */
+const REALTIME_ENABLED = import.meta.env.VITE_REALTIME_ENABLED === "true";
 
 const statusLabel: Record<string, string> = {
   connecting: "接続中",
@@ -41,12 +37,13 @@ const statusLabel: Record<string, string> = {
 
 export function App() {
   const construction = useConstruction();
-  const socket = useGameSocket(true);
+  const flood = useFloodSimulation(construction.placements);
+  const socket = useGameSocket(REALTIME_ENABLED);
   const mapRef = useRef<CesiumGameMapHandle>(null);
   const dragRef = useRef<DockDragState | null>(null);
   const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
-  const budgetRatio = Math.max(0, Math.min(1, construction.budget / 10_000));
+  const budgetRatio = Math.max(0, Math.min(1, construction.budget / INITIAL_BUDGET));
 
   const beginDockDrag = useCallback(
     (structureId: string, clientX: number, clientY: number) => {
@@ -61,7 +58,7 @@ export function App() {
       const next: DockDragState = {
         structureId,
         displayName: structure.displayName,
-        glyph: structureGlyphs[structureId] ?? "工",
+        imageSrc: getStructureVisual(structureId).imageSrc,
         startX: clientX,
         startY: clientY,
         x: clientX,
@@ -123,10 +120,7 @@ export function App() {
       if (current === null) {
         return;
       }
-      const moved = Math.hypot(
-        event.clientX - current.startX,
-        event.clientY - current.startY,
-      );
+      const moved = Math.hypot(event.clientX - current.startX, event.clientY - current.startY);
       if (moved < DOCK_DRAG_PLACE_THRESHOLD_PX) {
         return;
       }
@@ -158,7 +152,18 @@ export function App() {
         onSelectPlacement={construction.setSelectedPlacementId}
         onInvalidPosition={construction.setMessage}
         onCameraFocusChange={handleCameraFocusChange}
+        floodState={{
+          active: flood.phase === "disaster" || flood.phase === "result",
+          rainfallIntensity: flood.rainfallIntensity,
+          riverLevelMeters: flood.riverLevelMeters,
+          overflowMeters: flood.overflowMeters,
+          floodDepthMeters: flood.floodDepthMeters,
+          floodedAreaPercent: flood.floodedAreaPercent,
+          overflowSites: flood.overflowSites,
+        }}
       />
+
+      <FloodHud {...flood} onStartGame={flood.startGame} onStartRainNow={flood.startRainNow} />
 
       <header className="game-header game-header--budget-only">
         <div className="game-header__row">
@@ -197,15 +202,20 @@ export function App() {
       />
 
       {drag !== null ? (
-        <div
-          className="dock-drag-ghost"
-          style={{ left: drag.x, top: drag.y }}
-          aria-hidden="true"
-        >
-          <span className="dock-drag-ghost__icon">{drag.glyph}</span>
+        <div className="dock-drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
+          <span className="dock-drag-ghost__icon">
+            <img src={drag.imageSrc} alt="" draggable={false} width={34} height={34} />
+          </span>
           <span>{drag.displayName}</span>
         </div>
       ) : null}
+
+      <FloodResultPanel
+        {...flood}
+        usedBudget={INITIAL_BUDGET - construction.budget}
+        placementCount={construction.placements.length}
+        onRestart={flood.restart}
+      />
     </main>
   );
 }

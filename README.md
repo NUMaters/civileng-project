@@ -136,7 +136,7 @@ Cesium の Worker / Assets は `apps/web/vite.config.ts` で `/cesiumStatic` と
 pnpm --filter @civilcraft/web fetch:plateau
 ```
 
-カメラ移動は日本大学工学部周辺の阿武隈川プレイ範囲内に制限し、施設は建設ドックから河道（青い帯）上へドラッグ＆ドロップで配置する。設置向きはカメラの向きに合わせ、設置後は施設をドラッグして自由に回転できる。ドロップずれは中心線付近へスナップする。マップ検証中はブランドヘッダーとミッションカードを非表示。詳細は [docs/architecture/geospatial.md](./docs/architecture/geospatial.md) と [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)。
+カメラ移動は日本大学工学部周辺の阿武隈川プレイ範囲内に制限し、施設は建設ドックから河道（青い帯）上へドラッグ＆ドロップでのみ配置する（地図タップでは配置しない。誤設置防止）。ドックの各施設カードには `apps/web/public/icons/structures/` の SVG イメージを表示する。設置向きはカメラの向きに合わせ、設置後は施設をドラッグして自由に回転できる。ドロップずれは中心線付近へスナップする。阿武隈川の水面は Cesium `Water` マテリアル（法線マップ＋波アニメ）と流向ストリークで表現し、水位・雨量に応じて流速／幅／色／立体の水量帯を変える。計画高水位を超えると `overflowSites` に基づく局所越水（岸からのプルームと流出ストリーク）を表示し、近傍の堤防・護岸で抑えられる。施設名などの地図ラベルは Cesium LabelGraphics ではなく HTML/CSS オーバーレイで描画し、日本語のギザつきを避ける。マップ検証中はブランドヘッダーとミッションカードを非表示。詳細は [docs/architecture/geospatial.md](./docs/architecture/geospatial.md) と [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)。
 
 ローカル DB・Redis の構成詳細は [docs/development/local-database.md](./docs/development/local-database.md) を参照。`docker-compose.yml` で PostgreSQL 16 と Redis 7 を提供する。
 

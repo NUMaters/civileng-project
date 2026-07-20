@@ -15,10 +15,8 @@ import {
   HeadingPitchRange,
   HeadingPitchRoll,
   HeightReference,
-  HorizontalOrigin,
   ImageryLayer,
   Ion,
-  LabelStyle,
   LightingModel,
   Math as CesiumMath,
   Matrix4,
@@ -27,26 +25,22 @@ import {
   ShadowMode,
   Transforms,
   UrlTemplateImageryProvider,
-  VerticalOrigin,
   Viewer,
   WebMercatorTilingScheme,
 } from "cesium";
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-} from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import type {
   GeoPosition,
   PlacedStructure,
   StructureDefinition,
 } from "../../features/construction";
+import { ABUKUMA_PLACEABLE_POLYGON, ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
+import { syncOverflowVisualization } from "./overflowVisualization";
 import {
-  ABUKUMA_PLACEABLE_POLYGON,
-  ABUKUMA_RIVER_CENTERLINE,
-} from "./abukumaRiverGeometry";
+  createRiverWaterSurface,
+  type RiverWaterSurfaceController,
+} from "./riverWaterSurface";
+import type { OverflowSite } from "../../features/disaster/services/floodSimulation";
 
 // Avoid Cesium Ion default basemap requests (we use GSI / PLATEAU tiles).
 Ion.defaultAccessToken = "";
@@ -97,18 +91,14 @@ const PLATEAU_BUILDINGS_TEXTURE_URL = "/plateau/koriyama-bldg-texture/tileset.js
 /** API フォールバック（テクスチャ無し LOD1）。 */
 const PLATEAU_BUILDINGS_LOD1_URL =
   "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/07203-bldg-lod1-latest/tileset.json";
+/** 写真付き建物は高負荷なため明示指定時のみ使用。LOD1でも実際の建物形状・高さは維持する。 */
+const HIGH_DETAIL_BUILDINGS = import.meta.env.VITE_HIGH_DETAIL_BUILDINGS === "true";
 /** ジオイド補正済み楕円体高の quantized-mesh（PLATEAU 建物と高さが揃う）。 */
 const PLATEAU_TERRAIN_URL = "https://tile.plateauview.mlit.go.jp/terrain/";
-/**
- * 航空写真 URL。
- * 開発／preview は Vite の /gsi-tiles プロキシ（SPA フォールバック混入防止）。
- * 本番ビルドは地理院へ直接取得する。
- */
+/** 開発時はWebGLの同一オリジン制約を満たす地理院タイルプロキシを使う。 */
 const GSI_SEAMLESS_PHOTO_URL = import.meta.env.DEV
   ? "/gsi-tiles/seamlessphoto/{z}/{x}/{y}.jpg"
   : "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
-/** 配置帯の見た目用コリドー幅（m）。判定はポリゴン包含のまま。 */
-const RIVER_CORRIDOR_DISPLAY_WIDTH_M = 96;
 /** ドロップずれを許容する中心線からの半幅（m）。 */
 const RIVER_TAP_SNAP_HALF_WIDTH_M = 70;
 /** 施設回転ドラッグを開始する画面移動量（CSS px）。 */
@@ -122,16 +112,21 @@ type CesiumGameMapProps = {
   placements: PlacedStructure[];
   structures: StructureDefinition[];
   selectedPlacementId: string | null;
-  onDropPlace: (
-    structureId: string,
-    position: GeoPosition,
-    headingDegrees: number,
-  ) => void;
+  onDropPlace: (structureId: string, position: GeoPosition, headingDegrees: number) => void;
   onRotatePlacement: (placementId: string, headingDegrees: number) => void;
   onSelectPlacement: (placementId: string | null) => void;
   onInvalidPosition: (message: string) => void;
   /** カメラ操作終了時の画面中央注視点（プレイヤー移動の Phase 1 同期用）。 */
   onCameraFocusChange?: (position: GeoPosition) => void;
+  floodState?: {
+    active: boolean;
+    rainfallIntensity: number;
+    riverLevelMeters: number;
+    overflowMeters: number;
+    floodDepthMeters: number;
+    floodedAreaPercent: number;
+    overflowSites: OverflowSite[];
+  };
 };
 
 export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>(
@@ -145,384 +140,609 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       onSelectPlacement,
       onInvalidPosition,
       onCameraFocusChange,
+      floodState,
     },
     ref,
   ) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<Viewer | null>(null);
-  const buildingTilesetRef = useRef<Cesium3DTileset | null>(null);
-  const placementsRef = useRef(placements);
-  const structuresRef = useRef(structures);
-  const onDropPlaceRef = useRef(onDropPlace);
-  const onRotatePlacementRef = useRef(onRotatePlacement);
-  const onSelectPlacementRef = useRef(onSelectPlacement);
-  const onInvalidPositionRef = useRef(onInvalidPosition);
-  const onCameraFocusChangeRef = useRef(onCameraFocusChange);
-  const selectedPlacementIdRef = useRef(selectedPlacementId);
-  const [mapError, setMapError] = useState<string | null>(null);
-  const [isMapReady, setIsMapReady] = useState(false);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const viewerRef = useRef<Viewer | null>(null);
+    const buildingTilesetRef = useRef<Cesium3DTileset | null>(null);
+    const riverWaterRef = useRef<RiverWaterSurfaceController | null>(null);
+    const floodStateRef = useRef(floodState);
+    const labelElementRefs = useRef(new Map<string, HTMLDivElement>());
+    const placementsRef = useRef(placements);
+    const structuresRef = useRef(structures);
+    const onDropPlaceRef = useRef(onDropPlace);
+    const onRotatePlacementRef = useRef(onRotatePlacement);
+    const onSelectPlacementRef = useRef(onSelectPlacement);
+    const onInvalidPositionRef = useRef(onInvalidPosition);
+    const onCameraFocusChangeRef = useRef(onCameraFocusChange);
+    const selectedPlacementIdRef = useRef(selectedPlacementId);
+    const [mapError, setMapError] = useState<string | null>(null);
+    const [isMapReady, setIsMapReady] = useState(false);
+    const [visibilityEpoch, setVisibilityEpoch] = useState(0);
 
-  useEffect(() => {
-    placementsRef.current = placements;
-    structuresRef.current = structures;
-    onDropPlaceRef.current = onDropPlace;
-    onRotatePlacementRef.current = onRotatePlacement;
-    onSelectPlacementRef.current = onSelectPlacement;
-    onInvalidPositionRef.current = onInvalidPosition;
-    onCameraFocusChangeRef.current = onCameraFocusChange;
-    selectedPlacementIdRef.current = selectedPlacementId;
-  }, [
-    onCameraFocusChange,
-    onDropPlace,
-    onInvalidPosition,
-    onRotatePlacement,
-    onSelectPlacement,
-    placements,
-    selectedPlacementId,
-    structures,
-  ]);
+    const facilityLabels = useMemo(
+      () =>
+        placements.map((placement) => ({
+          id: placement.id,
+          text:
+            structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設",
+          selected: placement.id === selectedPlacementId,
+          longitude: placement.position.longitude,
+          latitude: placement.position.latitude,
+          height: placement.position.height,
+        })),
+      [placements, selectedPlacementId, structures],
+    );
 
-  useImperativeHandle(ref, () => ({
-    tryDropStructure: (structureId: string, clientX: number, clientY: number) => {
+    useEffect(() => {
+      placementsRef.current = placements;
+      structuresRef.current = structures;
+      onDropPlaceRef.current = onDropPlace;
+      onRotatePlacementRef.current = onRotatePlacement;
+      onSelectPlacementRef.current = onSelectPlacement;
+      onInvalidPositionRef.current = onInvalidPosition;
+      onCameraFocusChangeRef.current = onCameraFocusChange;
+      selectedPlacementIdRef.current = selectedPlacementId;
+      floodStateRef.current = floodState;
+    }, [
+      floodState,
+      onCameraFocusChange,
+      onDropPlace,
+      onInvalidPosition,
+      onRotatePlacement,
+      onSelectPlacement,
+      placements,
+      selectedPlacementId,
+      structures,
+    ]);
+
+    useImperativeHandle(ref, () => ({
+      tryDropStructure: (structureId: string, clientX: number, clientY: number) => {
+        const viewer = viewerRef.current;
+        if (viewer === null || viewer.isDestroyed()) {
+          return false;
+        }
+        const canvas = viewer.scene.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const screen = new Cartesian2(clientX - rect.left, clientY - rect.top);
+        if (screen.x < 0 || screen.y < 0 || screen.x > rect.width || screen.y > rect.height) {
+          onInvalidPositionRef.current("地図の上にドロップしてください");
+          return false;
+        }
+
+        const picked = pickPlacementPosition(viewer, screen);
+        if (picked === undefined) {
+          onInvalidPositionRef.current("地表を取得できませんでした");
+          return false;
+        }
+        if (!isInsidePlayArea(picked)) {
+          onInvalidPositionRef.current("プレイ範囲外です。阿武隈川周辺に戻してください");
+          return false;
+        }
+        const placeable = resolvePlaceablePosition(picked);
+        if (placeable === undefined) {
+          onInvalidPositionRef.current("阿武隈川の河道（青い帯）の上に置いてください");
+          return false;
+        }
+
+        const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
+        onDropPlaceRef.current(structureId, placeable, headingDegrees);
+        return true;
+      },
+    }));
+
+    useEffect(() => {
+      const container = containerRef.current;
+      if (container === null) {
+        return;
+      }
+      if (document.hidden) {
+        const activateWhenVisible = () => {
+          if (!document.hidden) {
+            setVisibilityEpoch((current) => current + 1);
+          }
+        };
+        document.addEventListener("visibilitychange", activateWhenVisible);
+        return () => {
+          document.removeEventListener("visibilitychange", activateWhenVisible);
+        };
+      }
+
+      let disposed = false;
+      let eventHandler: ScreenSpaceEventHandler | null = null;
+      let viewer: Viewer | null = null;
+      let removeCameraMoveEnd: (() => void) | undefined;
+      let handleVisibilityChange: (() => void) | undefined;
+      let waterRenderFrame = 0;
+
+      try {
+        // React StrictMode remounts effects; clear leftover Cesium DOM first.
+        container.replaceChildren();
+
+        const gsiBaseLayer = createGsiPhotoImageryLayer();
+        viewer = new Viewer(container, {
+          animation: false,
+          baseLayer: gsiBaseLayer,
+          baseLayerPicker: false,
+          fullscreenButton: false,
+          geocoder: false,
+          homeButton: false,
+          infoBox: false,
+          navigationHelpButton: false,
+          maximumRenderTimeChange: Number.POSITIVE_INFINITY,
+          requestRenderMode: true,
+          scene3DOnly: true,
+          sceneModePicker: false,
+          selectionIndicator: false,
+          timeline: false,
+          // Sun lighting + shadows make the aerial photo look like night.
+          shadows: false,
+          // Temporary flat terrain until PLATEAU-Terrain (or GSI+geoid fallback) loads.
+          terrainProvider: new EllipsoidTerrainProvider(),
+          // Skip Cesium Ion credit / default world imagery path.
+          creditContainer: document.createElement("div"),
+        });
+
+        if (disposed) {
+          viewer.destroy();
+          return;
+        }
+
+        viewerRef.current = viewer;
+        const mapViewer = viewer;
+
+        const groundTint = Color.fromCssColorString("#c5d4c4");
+        mapViewer.scene.backgroundColor = Color.fromCssColorString("#9ec6e0");
+        mapViewer.scene.globe.baseColor = groundTint;
+        mapViewer.scene.globe.undergroundColor = groundTint;
+        mapViewer.scene.globe.enableLighting = false;
+        mapViewer.scene.globe.dynamicAtmosphereLighting = false;
+        mapViewer.scene.globe.translucency.enabled = false;
+        mapViewer.scene.globe.depthTestAgainstTerrain = false;
+        mapViewer.scene.globe.show = true;
+        mapViewer.scene.globe.maximumScreenSpaceError = 4;
+        mapViewer.scene.fog.enabled = false;
+        mapViewer.scene.highDynamicRange = false;
+        mapViewer.resolutionScale = window.devicePixelRatio > 1.5 ? 0.85 : 1;
+        if (mapViewer.scene.skyAtmosphere !== undefined) {
+          mapViewer.scene.skyAtmosphere.show = true;
+        }
+        handleVisibilityChange = () => {
+          const visible = !document.hidden;
+          mapViewer.scene.globe.show = visible;
+          if (buildingTilesetRef.current !== null) {
+            buildingTilesetRef.current.show = visible;
+          }
+          if (visible) {
+            mapViewer.scene.requestRender();
+          }
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        // 真上寄りの光＋強めの照度（影は Viewer.shadows=false）
+        mapViewer.scene.light = new DirectionalLight({
+          direction: new Cartesian3(0.15, 0.35, -0.92),
+          intensity: 2.2,
+        });
+        tuneImageryLayer(gsiBaseLayer);
+        mapViewer.scene.screenSpaceCameraController.enableTilt = true;
+        mapViewer.scene.screenSpaceCameraController.enableLook = false;
+        mapViewer.scene.screenSpaceCameraController.minimumZoomDistance =
+          CAMERA_MIN_ZOOM_DISTANCE_M;
+        mapViewer.scene.screenSpaceCameraController.maximumZoomDistance =
+          CAMERA_MAX_ZOOM_DISTANCE_M;
+        // 境界で入力とクランプが喧嘩してガクガクしないよう、慣性が残らない程度に抑える
+        mapViewer.scene.screenSpaceCameraController.inertiaSpin = 0.5;
+        mapViewer.scene.screenSpaceCameraController.inertiaTranslate = 0.5;
+        mapViewer.scene.screenSpaceCameraController.inertiaZoom = 0.4;
+        mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
+          if (queuedTileCount === 0) {
+            setIsMapReady(true);
+            // 地形詳細が揃った時点で施設高度を再評価し、地中への埋没を防ぐ。
+            for (const placement of placementsRef.current) {
+              applyPlacementHeading(
+                mapViewer,
+                placement,
+                placement.id === selectedPlacementIdRef.current,
+              );
+            }
+            mapViewer.scene.requestRender();
+          }
+        });
+
+        void loadAlignedTerrain(mapViewer, () => disposed).catch((error: unknown) => {
+          console.warn("Terrain failed to load", error);
+        });
+
+        void loadPlateauBuildings(
+          mapViewer,
+          () => disposed,
+          (tileset) => {
+            buildingTilesetRef.current = tileset;
+            tileset.show = !document.hidden;
+          },
+        ).catch((error: unknown) => {
+          console.warn("PLATEAU buildings failed to load", error);
+        });
+
+        mapViewer.camera.lookAt(
+          Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
+          new HeadingPitchRange(
+            CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
+            CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
+            INITIAL_VIEW.range,
+          ),
+        );
+        // lookAt のロックを解除し、以降は自由にパン／ズームできるようにする。
+        mapViewer.camera.lookAtTransform(Matrix4.IDENTITY);
+
+        // 水面の Water マテリアル／流向ストリークは毎フレーム更新が必要なので描画を継続する。
+        const keepWaterAnimating = () => {
+          if (disposed || mapViewer.isDestroyed()) {
+            return;
+          }
+          if (!document.hidden) {
+            mapViewer.scene.requestRender();
+          }
+          waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
+        };
+        waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
+
+        void createRiverWaterSurface(mapViewer)
+          .then((controller) => {
+            if (disposed || mapViewer.isDestroyed()) {
+              controller.destroy();
+              return;
+            }
+            riverWaterRef.current?.destroy();
+            riverWaterRef.current = controller;
+            const currentFlood = floodStateRef.current;
+            controller.setHydraulics({
+              riverLevelMeters: currentFlood?.riverLevelMeters ?? 2.2,
+              rainfallIntensity: currentFlood?.rainfallIntensity ?? 0,
+              overflowMeters: currentFlood?.overflowMeters ?? 0,
+              activeFlood: currentFlood?.active === true,
+            });
+          })
+          .catch((error: unknown) => {
+            console.warn("River water surface failed to load", error);
+          });
+
+        // カメラ「位置」ではなく「見ている地点」を川周辺に制限する（俯瞰時のガクガク防止）
+        const settleCamera = () => {
+          if (mapViewer.isDestroyed()) {
+            return;
+          }
+          constrainCameraFocusNearRiver(mapViewer);
+          const focus = pickGroundFocus(mapViewer);
+          if (focus === undefined) {
+            return;
+          }
+          const cartographic = Cartographic.fromCartesian(focus);
+          onCameraFocusChangeRef.current?.({
+            longitude: CesiumMath.toDegrees(cartographic.longitude),
+            latitude: CesiumMath.toDegrees(cartographic.latitude),
+            height: cartographic.height,
+          });
+        };
+        removeCameraMoveEnd = mapViewer.camera.moveEnd.addEventListener(settleCamera);
+
+        // 設置済み施設の選択・ドラッグ回転（配置自体はドックからのドロップ）
+        const canvas = mapViewer.scene.canvas;
+        eventHandler = new ScreenSpaceEventHandler(canvas);
+        type RotateSession = {
+          placementId: string;
+          centerX: number;
+          centerY: number;
+          startPointerAngle: number;
+          startHeadingDegrees: number;
+          active: boolean;
+        };
+        let pointerDown: Cartesian2 | undefined;
+        let rotateSession: RotateSession | undefined;
+
+        const screenAngle = (centerX: number, centerY: number, point: Cartesian2) =>
+          Math.atan2(point.y - centerY, point.x - centerX);
+
+        const placementCenterScreen = (placement: PlacedStructure): Cartesian2 | undefined => {
+          const cartesian = Cartesian3.fromDegrees(
+            placement.position.longitude,
+            placement.position.latitude,
+          );
+          return mapViewer.scene.cartesianToCanvasCoordinates(cartesian) ?? undefined;
+        };
+
+        const liveRotate = (headingDegrees: number, placementId: string) => {
+          const placement = placementsRef.current.find(({ id }) => id === placementId);
+          if (placement === undefined) {
+            return;
+          }
+          applyPlacementHeading(
+            mapViewer,
+            { ...placement, headingDegrees },
+            placementId === selectedPlacementIdRef.current,
+          );
+          mapViewer.scene.requestRender();
+        };
+
+        eventHandler.setInputAction((event: { position: Cartesian2 }) => {
+          pointerDown = Cartesian2.clone(event.position);
+          const pickedId = pickPlacementIdAtScreen(
+            mapViewer,
+            event.position,
+            placementsRef.current,
+          );
+          if (pickedId === undefined) {
+            rotateSession = undefined;
+            return;
+          }
+          const placement = placementsRef.current.find(({ id }) => id === pickedId);
+          const center = placement !== undefined ? placementCenterScreen(placement) : undefined;
+          if (placement === undefined || center === undefined) {
+            rotateSession = undefined;
+            return;
+          }
+          onSelectPlacementRef.current(pickedId);
+          rotateSession = {
+            placementId: pickedId,
+            centerX: center.x,
+            centerY: center.y,
+            startPointerAngle: screenAngle(center.x, center.y, event.position),
+            startHeadingDegrees: placement.headingDegrees,
+            active: false,
+          };
+        }, ScreenSpaceEventType.LEFT_DOWN);
+
+        eventHandler.setInputAction((event: { endPosition: Cartesian2 }) => {
+          if (pointerDown === undefined || rotateSession === undefined) {
+            return;
+          }
+          const distance = Cartesian2.distance(pointerDown, event.endPosition);
+          if (!rotateSession.active && distance > ROTATE_START_MOVE_PX) {
+            rotateSession.active = true;
+            mapViewer.scene.screenSpaceCameraController.enableInputs = false;
+          }
+          if (!rotateSession.active) {
+            return;
+          }
+          const angle = screenAngle(
+            rotateSession.centerX,
+            rotateSession.centerY,
+            event.endPosition,
+          );
+          const deltaDegrees = CesiumMath.toDegrees(angle - rotateSession.startPointerAngle);
+          const nextHeading = rotateSession.startHeadingDegrees + deltaDegrees;
+          liveRotate(nextHeading, rotateSession.placementId);
+        }, ScreenSpaceEventType.MOUSE_MOVE);
+
+        eventHandler.setInputAction((event: { position: Cartesian2 }) => {
+          const session = rotateSession;
+          const down = pointerDown;
+          pointerDown = undefined;
+          rotateSession = undefined;
+          mapViewer.scene.screenSpaceCameraController.enableInputs = true;
+
+          if (session?.active === true) {
+            const angle = screenAngle(session.centerX, session.centerY, event.position);
+            const deltaDegrees = CesiumMath.toDegrees(angle - session.startPointerAngle);
+            onRotatePlacementRef.current(
+              session.placementId,
+              session.startHeadingDegrees + deltaDegrees,
+            );
+            return;
+          }
+
+          if (down === undefined) {
+            return;
+          }
+          if (Cartesian2.distance(down, event.position) > ROTATE_START_MOVE_PX) {
+            return;
+          }
+          const pickedId = pickPlacementIdAtScreen(
+            mapViewer,
+            event.position,
+            placementsRef.current,
+          );
+          // 短タップは選択／解除のみ。配置はドックからのドラッグ＆ドロップに限定し誤設置を防ぐ。
+          if (pickedId !== undefined) {
+            onSelectPlacementRef.current(pickedId);
+            return;
+          }
+          onSelectPlacementRef.current(null);
+        }, ScreenSpaceEventType.LEFT_UP);
+
+        // Show UI even if tiles are slow; Worker load failures surface as errors.
+        window.setTimeout(() => {
+          if (!disposed) {
+            setIsMapReady(true);
+          }
+        }, 1_500);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "地図の初期化に失敗しました";
+        setMapError(message);
+      }
+
+      return () => {
+        disposed = true;
+        window.cancelAnimationFrame(waterRenderFrame);
+        eventHandler?.destroy();
+        removeCameraMoveEnd?.();
+        if (handleVisibilityChange !== undefined) {
+          document.removeEventListener("visibilitychange", handleVisibilityChange);
+        }
+        riverWaterRef.current?.destroy();
+        riverWaterRef.current = null;
+        viewerRef.current = null;
+        buildingTilesetRef.current = null;
+        viewer?.destroy();
+      };
+    }, [visibilityEpoch]);
+
+    useEffect(() => {
       const viewer = viewerRef.current;
-      if (viewer === null || viewer.isDestroyed()) {
-        return false;
-      }
-      const canvas = viewer.scene.canvas;
-      const rect = canvas.getBoundingClientRect();
-      const screen = new Cartesian2(clientX - rect.left, clientY - rect.top);
-      if (
-        screen.x < 0 ||
-        screen.y < 0 ||
-        screen.x > rect.width ||
-        screen.y > rect.height
-      ) {
-        onInvalidPositionRef.current("地図の上にドロップしてください");
-        return false;
-      }
-
-      const picked = pickPlacementPosition(viewer, screen);
-      if (picked === undefined) {
-        onInvalidPositionRef.current("地表を取得できませんでした");
-        return false;
-      }
-      if (!isInsidePlayArea(picked)) {
-        onInvalidPositionRef.current("プレイ範囲外です。阿武隈川周辺に戻してください");
-        return false;
-      }
-      const placeable = resolvePlaceablePosition(picked);
-      if (placeable === undefined) {
-        onInvalidPositionRef.current("阿武隈川の河道（青い帯）の上に置いてください");
-        return false;
-      }
-
-      const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
-      onDropPlaceRef.current(structureId, placeable, headingDegrees);
-      return true;
-    },
-  }));
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (container === null) {
-      return;
-    }
-
-    let disposed = false;
-    let eventHandler: ScreenSpaceEventHandler | null = null;
-    let viewer: Viewer | null = null;
-    let removeCameraMoveEnd: (() => void) | undefined;
-
-    try {
-      // React StrictMode remounts effects; clear leftover Cesium DOM first.
-      container.replaceChildren();
-
-      const gsiBaseLayer = createGsiPhotoImageryLayer();
-      viewer = new Viewer(container, {
-        animation: false,
-        baseLayer: gsiBaseLayer,
-        baseLayerPicker: false,
-        fullscreenButton: false,
-        geocoder: false,
-        homeButton: false,
-        infoBox: false,
-        navigationHelpButton: false,
-        sceneModePicker: false,
-        selectionIndicator: false,
-        timeline: false,
-        // Sun lighting + shadows make the aerial photo look like night.
-        shadows: false,
-        // Temporary flat terrain until PLATEAU-Terrain (or GSI+geoid fallback) loads.
-        terrainProvider: new EllipsoidTerrainProvider(),
-        // Skip Cesium Ion credit / default world imagery path.
-        creditContainer: document.createElement("div"),
-      });
-
-      if (disposed) {
-        viewer.destroy();
+      if (viewer === null) {
         return;
       }
 
-      viewerRef.current = viewer;
-      const mapViewer = viewer;
-
-      const groundTint = Color.fromCssColorString("#c5d4c4");
-      mapViewer.scene.backgroundColor = Color.fromCssColorString("#9ec6e0");
-      mapViewer.scene.globe.baseColor = groundTint;
-      mapViewer.scene.globe.undergroundColor = groundTint;
-      mapViewer.scene.globe.enableLighting = false;
-      mapViewer.scene.globe.dynamicAtmosphereLighting = false;
-      mapViewer.scene.globe.translucency.enabled = false;
-      mapViewer.scene.globe.depthTestAgainstTerrain = false;
-      mapViewer.scene.globe.show = true;
-      mapViewer.scene.fog.enabled = false;
-      mapViewer.scene.highDynamicRange = false;
-      if (mapViewer.scene.skyAtmosphere !== undefined) {
-        mapViewer.scene.skyAtmosphere.show = true;
+      for (const entity of [...viewer.entities.values]) {
+        if (entity.id.startsWith("placement-")) {
+          viewer.entities.remove(entity);
+        }
       }
-      // 真上寄りの光＋強めの照度（影は Viewer.shadows=false）
-      mapViewer.scene.light = new DirectionalLight({
-        direction: new Cartesian3(0.15, 0.35, -0.92),
-        intensity: 2.2,
-      });
-      tuneImageryLayer(gsiBaseLayer);
-      mapViewer.scene.screenSpaceCameraController.enableTilt = true;
-      mapViewer.scene.screenSpaceCameraController.enableLook = false;
-      mapViewer.scene.screenSpaceCameraController.minimumZoomDistance = CAMERA_MIN_ZOOM_DISTANCE_M;
-      mapViewer.scene.screenSpaceCameraController.maximumZoomDistance = CAMERA_MAX_ZOOM_DISTANCE_M;
-      // 境界で入力とクランプが喧嘩してガクガクしないよう、慣性が残らない程度に抑える
-      mapViewer.scene.screenSpaceCameraController.inertiaSpin = 0.5;
-      mapViewer.scene.screenSpaceCameraController.inertiaTranslate = 0.5;
-      mapViewer.scene.screenSpaceCameraController.inertiaZoom = 0.4;
-      mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
-        if (queuedTileCount === 0) {
-          setIsMapReady(true);
-        }
-      });
 
-      void loadAlignedTerrain(mapViewer, () => disposed).catch((error: unknown) => {
-        console.warn("Terrain failed to load", error);
-      });
-
-      void loadPlateauBuildings(mapViewer, () => disposed, (tileset) => {
-        buildingTilesetRef.current = tileset;
-      }).catch((error: unknown) => {
-        console.warn("PLATEAU buildings failed to load", error);
-      });
-
-      mapViewer.camera.lookAt(
-        Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
-        new HeadingPitchRange(
-          CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
-          CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
-          INITIAL_VIEW.range,
-        ),
-      );
-      // lookAt のロックを解除し、以降は自由にパン／ズームできるようにする。
-      mapViewer.camera.lookAtTransform(Matrix4.IDENTITY);
-
-      addPlayAreaOverlays(mapViewer);
-
-      // カメラ「位置」ではなく「見ている地点」を川周辺に制限する（俯瞰時のガクガク防止）
-      const settleCamera = () => {
-        if (mapViewer.isDestroyed()) {
-          return;
-        }
-        constrainCameraFocusNearRiver(mapViewer);
-        const focus = pickGroundFocus(mapViewer);
-        if (focus === undefined) {
-          return;
-        }
-        const cartographic = Cartographic.fromCartesian(focus);
-        onCameraFocusChangeRef.current?.({
-          longitude: CesiumMath.toDegrees(cartographic.longitude),
-          latitude: CesiumMath.toDegrees(cartographic.latitude),
-          height: cartographic.height,
-        });
-      };
-      removeCameraMoveEnd = mapViewer.camera.moveEnd.addEventListener(settleCamera);
-
-      // 設置済み施設の選択・ドラッグ回転（配置自体はドックからのドロップ）
-      const canvas = mapViewer.scene.canvas;
-      eventHandler = new ScreenSpaceEventHandler(canvas);
-      type RotateSession = {
-        placementId: string;
-        centerX: number;
-        centerY: number;
-        startPointerAngle: number;
-        startHeadingDegrees: number;
-        active: boolean;
-      };
-      let pointerDown: Cartesian2 | undefined;
-      let rotateSession: RotateSession | undefined;
-
-      const screenAngle = (centerX: number, centerY: number, point: Cartesian2) =>
-        Math.atan2(point.y - centerY, point.x - centerX);
-
-      const placementCenterScreen = (placement: PlacedStructure): Cartesian2 | undefined => {
-        const cartesian = Cartesian3.fromDegrees(
-          placement.position.longitude,
-          placement.position.latitude,
+      for (const placement of placements) {
+        addCivilEngineeringModel(
+          viewer,
+          placement,
+          placement.id === selectedPlacementId,
         );
-        return mapViewer.scene.cartesianToCanvasCoordinates(cartesian) ?? undefined;
-      };
-
-      const liveRotate = (headingDegrees: number, placementId: string) => {
-        const placement = placementsRef.current.find(({ id }) => id === placementId);
-        if (placement === undefined) {
-          return;
-        }
-        const structure = structuresRef.current.find(
-          ({ id }) => id === placement.structureId,
-        );
-        applyPlacementHeading(
-          mapViewer,
-          { ...placement, headingDegrees },
-          structure?.displayName ?? "施設",
-          placementId === selectedPlacementIdRef.current,
-        );
-        mapViewer.scene.requestRender();
-      };
-
-      eventHandler.setInputAction((event: { position: Cartesian2 }) => {
-        pointerDown = Cartesian2.clone(event.position);
-        const pickedId = pickPlacementIdAtScreen(mapViewer, event.position, placementsRef.current);
-        if (pickedId === undefined) {
-          rotateSession = undefined;
-          return;
-        }
-        const placement = placementsRef.current.find(({ id }) => id === pickedId);
-        const center = placement !== undefined ? placementCenterScreen(placement) : undefined;
-        if (placement === undefined || center === undefined) {
-          rotateSession = undefined;
-          return;
-        }
-        onSelectPlacementRef.current(pickedId);
-        rotateSession = {
-          placementId: pickedId,
-          centerX: center.x,
-          centerY: center.y,
-          startPointerAngle: screenAngle(center.x, center.y, event.position),
-          startHeadingDegrees: placement.headingDegrees,
-          active: false,
-        };
-      }, ScreenSpaceEventType.LEFT_DOWN);
-
-      eventHandler.setInputAction((event: { endPosition: Cartesian2 }) => {
-        if (pointerDown === undefined || rotateSession === undefined) {
-          return;
-        }
-        const distance = Cartesian2.distance(pointerDown, event.endPosition);
-        if (!rotateSession.active && distance > ROTATE_START_MOVE_PX) {
-          rotateSession.active = true;
-          mapViewer.scene.screenSpaceCameraController.enableInputs = false;
-        }
-        if (!rotateSession.active) {
-          return;
-        }
-        const angle = screenAngle(
-          rotateSession.centerX,
-          rotateSession.centerY,
-          event.endPosition,
-        );
-        const deltaDegrees = CesiumMath.toDegrees(angle - rotateSession.startPointerAngle);
-        const nextHeading = rotateSession.startHeadingDegrees + deltaDegrees;
-        liveRotate(nextHeading, rotateSession.placementId);
-      }, ScreenSpaceEventType.MOUSE_MOVE);
-
-      eventHandler.setInputAction((event: { position: Cartesian2 }) => {
-        const session = rotateSession;
-        const down = pointerDown;
-        pointerDown = undefined;
-        rotateSession = undefined;
-        mapViewer.scene.screenSpaceCameraController.enableInputs = true;
-
-        if (session?.active === true) {
-          const angle = screenAngle(session.centerX, session.centerY, event.position);
-          const deltaDegrees = CesiumMath.toDegrees(angle - session.startPointerAngle);
-          onRotatePlacementRef.current(
-            session.placementId,
-            session.startHeadingDegrees + deltaDegrees,
-          );
-          return;
-        }
-
-        if (down === undefined) {
-          return;
-        }
-        if (Cartesian2.distance(down, event.position) > ROTATE_START_MOVE_PX) {
-          return;
-        }
-        const pickedId = pickPlacementIdAtScreen(mapViewer, event.position, placementsRef.current);
-        onSelectPlacementRef.current(pickedId ?? null);
-      }, ScreenSpaceEventType.LEFT_UP);
-
-      // Show UI even if tiles are slow; Worker load failures surface as errors.
-      window.setTimeout(() => {
-        if (!disposed) {
-          setIsMapReady(true);
-        }
-      }, 1_500);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "地図の初期化に失敗しました";
-      setMapError(message);
-    }
-
-    return () => {
-      disposed = true;
-      eventHandler?.destroy();
-      removeCameraMoveEnd?.();
-      viewerRef.current = null;
-      buildingTilesetRef.current = null;
-      viewer?.destroy();
-    };
-  }, []);
-
-  useEffect(() => {
-    const viewer = viewerRef.current;
-    if (viewer === null) {
-      return;
-    }
-
-    for (const entity of [...viewer.entities.values]) {
-      if (entity.id.startsWith("placement-")) {
-        viewer.entities.remove(entity);
       }
-    }
+      viewer.scene.requestRender();
+    }, [placements, selectedPlacementId, structures]);
 
-    for (const placement of placements) {
-      const structure = structures.find(({ id }) => id === placement.structureId);
-      addCivilEngineeringModel(
+    useEffect(() => {
+      const viewer = viewerRef.current;
+      if (viewer === null || viewer.isDestroyed()) {
+        return;
+      }
+
+      for (const entity of [...viewer.entities.values]) {
+        if (entity.id.startsWith("flood-zone-")) {
+          viewer.entities.remove(entity);
+        }
+      }
+
+      const sites =
+        floodState?.active === true ? (floodState.overflowSites ?? []) : [];
+      syncOverflowVisualization(
         viewer,
-        placement,
-        structure?.displayName ?? "施設",
-        placement.id === selectedPlacementId,
+        sites,
+        floodState?.floodDepthMeters ?? 0,
       );
-    }
-    viewer.scene.requestRender();
-  }, [placements, selectedPlacementId, structures]);
 
-  return (
-    <div className="cesium-game-map">
-      <div className="cesium-game-map__canvas" ref={containerRef} />
-      {!isMapReady && mapError === null ? (
-        <div className="cesium-game-map__status" role="status">
-          地図を読み込み中…
+      if (
+        floodState?.active === true &&
+        floodState.floodedAreaPercent > 0.05 &&
+        floodState.floodDepthMeters > 0.005
+      ) {
+        addFloodVisualization(
+          viewer,
+          floodState.floodedAreaPercent,
+          floodState.floodDepthMeters,
+        );
+      }
+      viewer.scene.requestRender();
+    }, [
+      floodState?.active,
+      floodState?.floodDepthMeters,
+      floodState?.floodedAreaPercent,
+      floodState?.overflowSites,
+    ]);
+
+    useEffect(() => {
+      riverWaterRef.current?.setHydraulics({
+        riverLevelMeters: floodState?.riverLevelMeters ?? 2.2,
+        rainfallIntensity: floodState?.rainfallIntensity ?? 0,
+        overflowMeters: floodState?.overflowMeters ?? 0,
+        activeFlood: floodState?.active === true,
+      });
+    }, [
+      floodState?.active,
+      floodState?.overflowMeters,
+      floodState?.rainfallIntensity,
+      floodState?.riverLevelMeters,
+    ]);
+
+    // Cesium LabelGraphics は日本語が低解像度ラスタになりやすいため、HTML オーバーレイで描画する。
+    useEffect(() => {
+      const viewer = viewerRef.current;
+      if (viewer === null || viewer.isDestroyed() || !isMapReady) {
+        return;
+      }
+
+      const syncLabelPositions = () => {
+        if (viewer.isDestroyed()) {
+          return;
+        }
+        for (const label of facilityLabels) {
+          const element = labelElementRefs.current.get(`facility-${label.id}`);
+          if (element === undefined) {
+            continue;
+          }
+          const screen = viewer.scene.cartesianToCanvasCoordinates(
+            Cartesian3.fromDegrees(label.longitude, label.latitude, label.height + 8),
+          );
+          applyScreenLabelPosition(element, screen, 0, -28);
+        }
+      };
+
+      syncLabelPositions();
+      const removeListener = viewer.scene.postRender.addEventListener(syncLabelPositions);
+      viewer.scene.requestRender();
+      return () => {
+        removeListener();
+      };
+    }, [facilityLabels, isMapReady, visibilityEpoch]);
+
+    const setLabelElementRef = (id: string, element: HTMLDivElement | null) => {
+      if (element === null) {
+        labelElementRefs.current.delete(id);
+        return;
+      }
+      labelElementRefs.current.set(id, element);
+    };
+
+    return (
+      <div className="cesium-game-map">
+        <div className="cesium-game-map__canvas" ref={containerRef} />
+        <div className="cesium-game-map__labels" aria-hidden="true">
+          {facilityLabels.map((label) => (
+            <div
+              key={label.id}
+              ref={(element) => {
+                setLabelElementRef(`facility-${label.id}`, element);
+              }}
+              className={`cesium-map-label${label.selected ? " is-selected" : ""}`}
+            >
+              {label.text}
+            </div>
+          ))}
         </div>
-      ) : null}
-      {mapError !== null ? (
-        <div className="cesium-game-map__status cesium-game-map__status--error" role="alert">
-          {mapError}
-        </div>
-      ) : null}
-    </div>
-  );
-});
+        {!isMapReady && mapError === null ? (
+          <div className="cesium-game-map__status" role="status">
+            地図を読み込み中…
+          </div>
+        ) : null}
+        {mapError !== null ? (
+          <div className="cesium-game-map__status cesium-game-map__status--error" role="alert">
+            {mapError}
+          </div>
+        ) : null}
+      </div>
+    );
+  },
+);
+
+function applyScreenLabelPosition(
+  element: HTMLDivElement,
+  screen: Cartesian2 | undefined,
+  offsetX: number,
+  offsetY: number,
+): void {
+  if (screen === undefined) {
+    element.style.visibility = "hidden";
+    return;
+  }
+  element.style.visibility = "visible";
+  element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) translate(-50%, -100%)`;
+}
 
 async function loadAlignedTerrain(viewer: Viewer, isDisposed: () => boolean): Promise<void> {
   try {
     const provider = await CesiumTerrainProvider.fromUrl(PLATEAU_TERRAIN_URL, {
-      requestVertexNormals: true,
+      // 地表ライティングを無効化しているため法線は取得せず、通信量と展開負荷を抑える。
+      requestVertexNormals: false,
     });
     if (isDisposed() || viewer.isDestroyed()) {
       return;
@@ -544,27 +764,28 @@ async function loadPlateauBuildings(
   isDisposed: () => boolean,
   onActiveTileset: (tileset: Cesium3DTileset) => void,
 ): Promise<Cesium3DTileset | null> {
-  try {
-    const textured = await loadBuildingTileset(viewer, PLATEAU_BUILDINGS_TEXTURE_URL, {
-      isDisposed,
-      maximumScreenSpaceError: 4,
-      // 写真付きは明るく、無地は従来のグレー箱（PBR陰影）へ
-      balanceBuildingAppearance: true,
-    });
-    if (textured !== null) {
-      onActiveTileset(textured);
-      return textured;
+  if (HIGH_DETAIL_BUILDINGS) {
+    try {
+      const textured = await loadBuildingTileset(viewer, PLATEAU_BUILDINGS_TEXTURE_URL, {
+        isDisposed,
+        maximumScreenSpaceError: 12,
+        balanceBuildingAppearance: true,
+      });
+      if (textured !== null) {
+        onActiveTileset(textured);
+        return textured;
+      }
+    } catch (error) {
+      console.warn(
+        "Local textured PLATEAU buildings missing. Run: pnpm --filter @civilcraft/web fetch:plateau",
+        error,
+      );
     }
-  } catch (error) {
-    console.warn(
-      "Local textured PLATEAU buildings missing. Run: pnpm --filter @civilcraft/web fetch:plateau",
-      error,
-    );
   }
 
   const lod1 = await loadBuildingTileset(viewer, PLATEAU_BUILDINGS_LOD1_URL, {
     isDisposed,
-    maximumScreenSpaceError: 8,
+    maximumScreenSpaceError: 16,
     balanceBuildingAppearance: false,
   });
   if (lod1 !== null) {
@@ -584,7 +805,8 @@ async function loadBuildingTileset(
 ): Promise<Cesium3DTileset | null> {
   const tileset = await Cesium3DTileset.fromUrl(url, {
     dynamicScreenSpaceError: true,
-    immediatelyLoadDesiredLevelOfDetail: true,
+    foveatedScreenSpaceError: true,
+    immediatelyLoadDesiredLevelOfDetail: false,
     maximumScreenSpaceError: options.maximumScreenSpaceError ?? 8,
     skipLevelOfDetail: true,
   });
@@ -607,11 +829,7 @@ async function loadBuildingTileset(
   return tileset;
 }
 
-/**
- * 写真テクスチャと無地マスを両立する。
- * - テクスチャあり: UNLIT で焼き込み色をそのまま明るく出す
- * - テクスチャなし: 画面空間の色変化がほぼ無い面をグレー箱として疑似陰影
- */
+/** 写真テクスチャを軽量な UNLIT 表示にし、ピクセル単位の陰影計算を避ける。 */
 function createBuildingAppearanceShader(): CustomShader {
   return new CustomShader({
     lightingModel: LightingModel.UNLIT,
@@ -621,23 +839,15 @@ function createBuildingAppearanceShader(): CustomShader {
         vec3 c = material.diffuse;
         float maxc = max(c.r, max(c.g, c.b));
         float minc = min(c.r, min(c.g, c.b));
-        float sat = maxc - minc;
         float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
-        // 写真はピクセル間で色が揺れる。無地の白マテリアルはほぼ平坦。
-        float variation = length(dFdx(c)) + length(dFdy(c));
-        // 無地の白〜薄灰をグレー箱へ。閾値を緩め、白飛びを防ぐ。
-        bool noTexture = variation < 0.035 && sat < 0.18 && luma > 0.55;
-
-        if (noTexture) {
+        bool paleSurface = (maxc - minc) < 0.16 && luma > 0.62;
+        if (paleSurface) {
           vec3 n = normalize(fsInput.attributes.normalEC);
           float lit = clamp(dot(n, normalize(vec3(0.2, 0.45, 0.87))), 0.0, 1.0);
-          float shade = 0.34 + 0.48 * lit;
-          material.diffuse = vec3(0.48, 0.49, 0.48) * shade;
-          return;
+          material.diffuse = vec3(0.56, 0.57, 0.56) * (0.48 + 0.48 * lit);
+        } else {
+          material.diffuse = min(c * 1.08, vec3(1.0));
         }
-
-        // テクスチャ面はライティングで潰さない（わずかに持ち上げ）
-        material.diffuse = min(c * 1.12, vec3(1.0));
       }
     `,
   });
@@ -768,11 +978,7 @@ function isInsidePlayArea(position: GeoPosition): boolean {
 }
 
 function isOnAbukumaRiver(position: GeoPosition): boolean {
-  return pointInPolygonDegrees(
-    position.longitude,
-    position.latitude,
-    ABUKUMA_PLACEABLE_POLYGON,
-  );
+  return pointInPolygonDegrees(position.longitude, position.latitude, ABUKUMA_PLACEABLE_POLYGON);
 }
 
 /**
@@ -801,23 +1007,37 @@ function resolvePlaceablePosition(position: GeoPosition): GeoPosition | undefine
   return snapped;
 }
 
-function addPlayAreaOverlays(viewer: Viewer): void {
-  // Classification / 広い地面ポリゴンは衛星写真を黒く潰すことがある。
-  // 見た目は中心線コリドー、判定は ABUKUMA_PLACEABLE_POLYGON の点包含。
-  const positions: number[] = [];
-  for (const point of ABUKUMA_RIVER_CENTERLINE) {
-    positions.push(point.lon, point.lat);
+function addFloodVisualization(
+  viewer: Viewer,
+  floodedAreaPercent: number,
+  floodDepthMeters: number,
+): void {
+  const scale = Math.max(0.18, Math.sqrt(floodedAreaPercent / 100));
+  const alpha = Math.min(0.62, 0.24 + floodDepthMeters * 0.18);
+  const zones = [
+    { longitude: 140.3814, latitude: 37.3588, major: 440, minor: 260, threshold: 0 },
+    { longitude: 140.3865, latitude: 37.363, major: 350, minor: 220, threshold: 8 },
+    { longitude: 140.3788, latitude: 37.3672, major: 300, minor: 190, threshold: 22 },
+  ] as const;
+
+  for (const [index, zone] of zones.entries()) {
+    if (floodedAreaPercent < zone.threshold) {
+      continue;
+    }
+    viewer.entities.add({
+      id: `flood-zone-${index}`,
+      position: Cartesian3.fromDegrees(zone.longitude, zone.latitude),
+      ellipse: {
+        semiMajorAxis: zone.major * scale,
+        semiMinorAxis: zone.minor * scale,
+        height: Math.max(0.12, floodDepthMeters * 0.18),
+        heightReference: HeightReference.RELATIVE_TO_GROUND,
+        material: Color.fromCssColorString("#159bda").withAlpha(alpha),
+        outline: true,
+        outlineColor: Color.fromCssColorString("#8bdcff").withAlpha(0.68),
+      },
+    });
   }
-  viewer.entities.add({
-    id: "river-corridor",
-    corridor: {
-      positions: Cartesian3.fromDegreesArray(positions),
-      width: RIVER_CORRIDOR_DISPLAY_WIDTH_M,
-      material: Color.fromCssColorString("#159bda").withAlpha(0.38),
-      height: 0,
-      heightReference: HeightReference.CLAMP_TO_GROUND,
-    },
-  });
 }
 
 /** 経度緯度の単純ポリゴンに対する点包含（ray casting）。 */
@@ -836,8 +1056,7 @@ function pointInPolygonDegrees(
     const intersects =
       pi.lat > latitude !== pj.lat > latitude &&
       longitude <
-        ((pj.lon - pi.lon) * (latitude - pi.lat)) / (pj.lat - pi.lat + Number.EPSILON) +
-          pi.lon;
+        ((pj.lon - pi.lon) * (latitude - pi.lat)) / (pj.lat - pi.lat + Number.EPSILON) + pi.lon;
     if (intersects) {
       inside = !inside;
     }
@@ -955,7 +1174,10 @@ function nearestPointOnSegment(
  * 施設配置用の地表座標を取得する。
  * 建物 3D Tiles 上のタップでも lon/lat を取り、可能な限り地形高へ落とす。
  */
-function pickPlacementPosition(viewer: Viewer, windowPosition: Cartesian2): GeoPosition | undefined {
+function pickPlacementPosition(
+  viewer: Viewer,
+  windowPosition: Cartesian2,
+): GeoPosition | undefined {
   const scene = viewer.scene;
   const ray = viewer.camera.getPickRay(windowPosition);
   if (ray !== undefined) {
@@ -1037,9 +1259,7 @@ function matchPlacementId(
   }
   const matches = placements
     .map(({ id }) => id)
-    .filter(
-      (id) => entityId === `placement-${id}` || entityId.startsWith(`placement-${id}-`),
-    )
+    .filter((id) => entityId === `placement-${id}` || entityId.startsWith(`placement-${id}-`))
     .sort((left, right) => right.length - left.length);
   return matches[0];
 }
@@ -1047,7 +1267,6 @@ function matchPlacementId(
 function applyPlacementHeading(
   viewer: Viewer,
   placement: PlacedStructure,
-  displayName: string,
   selected: boolean,
 ): void {
   for (const entity of [...viewer.entities.values]) {
@@ -1058,20 +1277,40 @@ function applyPlacementHeading(
       viewer.entities.remove(entity);
     }
   }
-  addCivilEngineeringModel(viewer, placement, displayName, selected);
+  addCivilEngineeringModel(viewer, placement, selected);
 }
 
 function addCivilEngineeringModel(
   viewer: Viewer,
   placement: PlacedStructure,
-  displayName: string,
   selected: boolean,
 ): void {
   const heading = CesiumMath.toRadians(placement.headingDegrees);
   const parts = getStructureParts(placement.structureId);
-  const outlineColor = selected
-    ? Color.fromCssColorString("#f0b429")
-    : Color.WHITE.withAlpha(0.9);
+  const outlineColor = selected ? Color.fromCssColorString("#f0b429") : Color.WHITE.withAlpha(0.9);
+  // 非同期で地形プロバイダーが切り替わっても埋没しないよう、配置時の地表高を絶対標高にする。
+  const groundHeight = Math.max(
+    0,
+    viewer.scene.globe.getHeight(
+      Cartographic.fromDegrees(placement.position.longitude, placement.position.latitude),
+    ) ?? placement.position.height,
+  );
+
+  viewer.entities.add({
+    id: `placement-${placement.id}-marker`,
+    position: Cartesian3.fromDegrees(
+      placement.position.longitude,
+      placement.position.latitude,
+      groundHeight + 0.18,
+    ),
+    ellipse: {
+      semiMajorAxis: selected ? 23 : 19,
+      semiMinorAxis: selected ? 23 : 19,
+      material: Color.fromCssColorString(selected ? "#f0b429" : "#58d5a1").withAlpha(0.22),
+      outline: true,
+      outlineColor,
+    },
+  });
 
   for (const [index, part] of parts.entries()) {
     const { longitude, latitude } = offsetLonLatMeters(
@@ -1081,10 +1320,10 @@ function addCivilEngineeringModel(
       part.offsetNorth ?? 0,
       heading,
     );
-    const position = Cartesian3.fromDegrees(longitude, latitude, part.centerHeight);
+    const position = Cartesian3.fromDegrees(longitude, latitude, groundHeight + part.centerHeight);
     const isPrimaryPart = index === 0;
     const orientation = Transforms.headingPitchRollQuaternion(
-      Cartesian3.fromDegrees(longitude, latitude, 0),
+      Cartesian3.fromDegrees(longitude, latitude, groundHeight),
       new HeadingPitchRoll(heading, 0, 0),
     );
 
@@ -1101,10 +1340,8 @@ function addCivilEngineeringModel(
           outline: true,
           outlineColor,
           outlineWidth: selected ? 3 : 1,
-          heightReference: HeightReference.RELATIVE_TO_GROUND,
           shadows: ShadowMode.DISABLED,
         }),
-        label: isPrimaryPart ? createFacilityLabel(displayName, selected) : undefined,
       });
       continue;
     }
@@ -1127,33 +1364,10 @@ function addCivilEngineeringModel(
         outline: true,
         outlineColor,
         outlineWidth: selected ? 3 : 1,
-        heightReference: HeightReference.RELATIVE_TO_GROUND,
         shadows: ShadowMode.DISABLED,
       }),
-      label: isPrimaryPart ? createFacilityLabel(displayName, selected) : undefined,
     });
   }
-}
-
-function createFacilityLabel(displayName: string, selected: boolean) {
-  return {
-    text: displayName,
-    font: "700 16px sans-serif",
-    fillColor: Color.WHITE,
-    outlineColor: Color.fromCssColorString("#0b2a20"),
-    outlineWidth: 5,
-    style: LabelStyle.FILL_AND_OUTLINE,
-    verticalOrigin: VerticalOrigin.BOTTOM,
-    horizontalOrigin: HorizontalOrigin.CENTER,
-    pixelOffset: new Cartesian2(0, -28),
-    heightReference: HeightReference.RELATIVE_TO_GROUND,
-    disableDepthTestDistance: Number.POSITIVE_INFINITY,
-    showBackground: true,
-    backgroundColor: Color.fromCssColorString(selected ? "#5a3d08" : "#0b2a20").withAlpha(
-      0.78,
-    ),
-    backgroundPadding: new Cartesian2(8, 5),
-  };
 }
 
 /** 施設パーツの東西南北オフセット（m）を経度緯度へ変換する。 */
@@ -1337,4 +1551,3 @@ function getStructureColor(structureId: string): Color {
   };
   return Color.fromCssColorString(colors[structureId] ?? "#17362a");
 }
-
