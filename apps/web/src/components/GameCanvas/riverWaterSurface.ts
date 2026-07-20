@@ -19,12 +19,20 @@ import { ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
 /** Cesium 同梱の水面法線。開発時は `/cesiumStatic` 経由で配信する。 */
 const WATER_NORMAL_MAP_URL = "/cesiumStatic/Assets/Textures/waterNormalsSmall.jpg";
 
-const FLOW_STREAK_COUNT = 10;
-const FLOW_STREAK_SEGMENT_POINTS = 4;
-/** 平常時の流向周期（秒）。短いほど速く見える。 */
-const BASE_FLOW_PERIOD_SECONDS = 10;
+const FLOW_STREAK_COUNT = 14;
+const FLOW_STREAK_SEGMENT_POINTS = 7;
+/** 平常時の流向周期（秒）。短いほど速く見える。下流方向への流れ。 */
+const BASE_FLOW_PERIOD_SECONDS = 8.5;
+/** ストリーク長（m）。先頭が下流側。 */
+const FLOW_STREAK_LENGTH_M = 120;
+/** 河道横断方向に並べるレーンの半幅（m）。 */
+const FLOW_LANE_HALF_SPAN_M = 22;
 const RIVER_VOLUME_ENTITY_ID = "river-volume-body";
 const INITIAL_RIVER_LEVEL_METERS = 2.2;
+/** GroundPrimitive は再生成するとチラつくため固定幅にする。 */
+const BASE_WATER_PRIMITIVE_WIDTH_M = 88;
+/** 表示値を目標へ寄せる速さ（大きいほど速い。1/s 前後）。 */
+const VISUAL_LERP_RATE = 1.35;
 
 export type RiverHydraulics = {
   riverLevelMeters: number;
@@ -33,6 +41,8 @@ export type RiverHydraulics = {
   overflowMeters: number;
   /** 災害フェーズ中は流れを強める。 */
   activeFlood: boolean;
+  /** 0〜1。施設の治水効果で波・流速を抑えて「効いている」感を出す。 */
+  mitigationCalm?: number;
 };
 
 export type RiverWaterSurfaceController = {
@@ -49,11 +59,23 @@ type FlowSample = {
 type StreakHandle = {
   entity: Entity;
   phase: number;
+  /** 中心線からの横断オフセット（m）。右岸＋／左岸−。 */
+  laneOffsetMeters: number;
+};
+
+type VisualHydraulics = {
+  levelRatio: number;
+  rain: number;
+  overflow: number;
+  activeFlood: number;
+  calm: number;
+  widthMeters: number;
+  extrudeMeters: number;
 };
 
 /**
  * 阿武隈川の水面を Cesium Water マテリアルで描き、流向ストリークを流す。
- * `requestRenderMode` 利用時は呼び出し側で毎フレーム `requestRender` すること。
+ * 水位変化は Entity の水量帯を補間して表現し、GroundPrimitive は再生成しない。
  */
 export async function createRiverWaterSurface(
   viewer: Viewer,
@@ -64,36 +86,40 @@ export async function createRiverWaterSurface(
   }
 
   const centerlineDegrees = flattenCenterline();
-  const samples = buildFlowSamples();
+  // 中心線配列は南→北なので、流向サンプルは北→南（下流）に並べ替える。
+  const samples = buildDownstreamFlowSamples();
   const totalLength = samples[samples.length - 1]?.distance ?? 1;
+  const centerlinePositions = Cartesian3.fromDegreesArray(centerlineDegrees);
 
-  let widthMeters = 96;
   const waterMaterial = Material.fromType("Water", {
-    baseWaterColor: Color.fromCssColorString("#1a7eb8").withAlpha(0.72),
-    blendColor: Color.fromCssColorString("#0b3d5c").withAlpha(0.35),
+    baseWaterColor: Color.fromCssColorString("#1f96c9").withAlpha(0.68),
+    blendColor: Color.fromCssColorString("#0b3d5c").withAlpha(0.32),
     normalMap: WATER_NORMAL_MAP_URL,
     frequency: 900,
-    animationSpeed: 0.018,
-    amplitude: 2.4,
-    specularIntensity: 0.55,
+    animationSpeed: 0.016,
+    amplitude: 2.2,
+    specularIntensity: 0.5,
     fadeFactor: 0.9,
   });
 
-  let waterPrimitive = createWaterPrimitive(centerlineDegrees, widthMeters, waterMaterial);
+  // 固定幅の本川水面。幅の増減は下の水量帯 Entity で滑らかに見せる。
+  const waterPrimitive = createWaterPrimitive(
+    centerlineDegrees,
+    BASE_WATER_PRIMITIVE_WIDTH_M,
+    waterMaterial,
+  );
   viewer.scene.groundPrimitives.add(waterPrimitive);
 
-  // 水位上昇を立体の水量帯として見せる（GroundPrimitive は厚みを持たないため Entity で補う）。
   const volumeEntity = viewer.entities.add({
     id: RIVER_VOLUME_ENTITY_ID,
     corridor: {
-      positions: Cartesian3.fromDegreesArray(centerlineDegrees),
-      width: widthMeters * 0.92,
-      // height + extrudedHeight で水量の厚みを表現する
+      positions: centerlinePositions,
+      width: BASE_WATER_PRIMITIVE_WIDTH_M * 0.94,
       height: 0.05,
-      extrudedHeight: 0.35,
+      extrudedHeight: 0.32,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
       extrudedHeightReference: HeightReference.RELATIVE_TO_GROUND,
-      material: Color.fromCssColorString("#1280b8").withAlpha(0.38),
+      material: Color.fromCssColorString("#1280b8").withAlpha(0.34),
       outline: false,
       cornerType: CornerType.ROUNDED,
     },
@@ -102,42 +128,30 @@ export async function createRiverWaterSurface(
   const streaks = createFlowStreaks(viewer);
   let flowPeriodSeconds = BASE_FLOW_PERIOD_SECONDS;
   const startedAt = performance.now();
+  let lastFrameAt = startedAt;
 
-  const removePreUpdate = viewer.scene.preUpdate.addEventListener(() => {
-    if (viewer.isDestroyed()) {
-      return;
-    }
-    const elapsedSeconds = (performance.now() - startedAt) / 1000;
-    for (const streak of streaks) {
-      const head = (streak.phase + elapsedSeconds / flowPeriodSeconds) % 1;
-      if (streak.entity.polyline !== undefined) {
-        streak.entity.polyline.positions = new ConstantProperty(
-          sampleArcWindow(samples, totalLength, head, 85),
-        );
-      }
-    }
+  let target = hydraulicsToVisual({
+    riverLevelMeters: INITIAL_RIVER_LEVEL_METERS,
+    rainfallIntensity: 0,
+    overflowMeters: 0,
+    activeFlood: false,
   });
+  let displayed: VisualHydraulics = { ...target };
 
-  const setHydraulics = (hydraulics: RiverHydraulics) => {
-    if (viewer.isDestroyed()) {
-      return;
-    }
-    const levelRise = Math.max(0, hydraulics.riverLevelMeters - INITIAL_RIVER_LEVEL_METERS);
-    const levelRatio = Math.min(1, levelRise / 4.4);
-    const rain = Math.min(1, Math.max(0, hydraulics.rainfallIntensity));
-    const overflow = Math.max(0, hydraulics.overflowMeters);
-    const nextWidth =
-      78 + levelRatio * 58 + overflow * 18 + (hydraulics.activeFlood ? 10 : 0);
+  const applyDisplayed = (visual: VisualHydraulics) => {
+    const { levelRatio, rain, overflow, activeFlood, calm, widthMeters, extrudeMeters } = visual;
+    const calmFactor = 1 - calm * 0.55;
 
     waterMaterial.uniforms.animationSpeed =
-      0.014 +
-      levelRatio * 0.02 +
-      rain * 0.018 +
-      overflow * 0.015 +
-      (hydraulics.activeFlood ? 0.012 : 0);
-    waterMaterial.uniforms.amplitude = 2.1 + levelRatio * 2.4 + rain * 1.4 + overflow * 1.8;
-    waterMaterial.uniforms.baseWaterColor = Color.fromCssColorString(
-      overflow > 0.35 ? "#0c4f7a" : levelRatio > 0.65 ? "#0f5f96" : levelRatio > 0.3 ? "#1784bc" : "#1f96c9",
+      (0.014 + levelRatio * 0.02 + rain * 0.018 + overflow * 0.015 + activeFlood * 0.01) *
+      calmFactor;
+    waterMaterial.uniforms.amplitude =
+      (2.1 + levelRatio * 2.4 + rain * 1.4 + overflow * 1.8) * calmFactor;
+    waterMaterial.uniforms.baseWaterColor = Color.lerp(
+      Color.fromCssColorString("#1f96c9"),
+      Color.fromCssColorString("#0c4f7a"),
+      clamp01(levelRatio * 0.75 + overflow * 0.35),
+      new Color(),
     ).withAlpha(0.62 + levelRatio * 0.2 + Math.min(0.15, overflow * 0.12));
     waterMaterial.uniforms.blendColor = Color.fromCssColorString("#06263d").withAlpha(
       0.28 + rain * 0.12 + Math.min(0.18, overflow * 0.1),
@@ -145,44 +159,98 @@ export async function createRiverWaterSurface(
     waterMaterial.uniforms.specularIntensity = 0.45 + levelRatio * 0.2 + overflow * 0.1;
     flowPeriodSeconds = Math.max(
       3.8,
-      BASE_FLOW_PERIOD_SECONDS -
-        levelRatio * 3 -
-        rain * 2.5 -
-        overflow * 2 -
-        (hydraulics.activeFlood ? 2 : 0),
+      (BASE_FLOW_PERIOD_SECONDS - levelRatio * 3 - rain * 2.5 - overflow * 2 - activeFlood * 1.5) *
+        (1 + calm * 0.45),
     );
 
     for (const streak of streaks) {
       if (streak.entity.polyline !== undefined) {
         streak.entity.polyline.width = new ConstantProperty(
-          5 + levelRatio * 5 + overflow * 3 + (hydraulics.activeFlood ? 3 : 0),
+          6 + levelRatio * 5 + overflow * 3 + activeFlood * 2,
+        );
+        streak.entity.polyline.material = new PolylineGlowMaterialProperty({
+          glowPower: 0.28 + levelRatio * 0.08,
+          taperPower: 0.62,
+          color: Color.fromCssColorString("#eaf8ff").withAlpha(
+            0.42 + levelRatio * 0.2 + overflow * 0.12,
+          ),
+        });
+      }
+    }
+
+    if (volumeEntity.corridor !== undefined) {
+      volumeEntity.corridor.width = new ConstantProperty(widthMeters * 0.96);
+      volumeEntity.corridor.height = new ConstantProperty(0.05);
+      volumeEntity.corridor.extrudedHeight = new ConstantProperty(extrudeMeters);
+      volumeEntity.corridor.material = new ColorMaterialProperty(
+        Color.lerp(
+          Color.fromCssColorString("#1280b8"),
+          Color.fromCssColorString("#0d6fa8"),
+          clamp01(overflow * 1.2),
+          new Color(),
+        ).withAlpha(0.3 + levelRatio * 0.28 + Math.min(0.22, overflow * 0.15)),
+      );
+    }
+  };
+
+  applyDisplayed(displayed);
+
+  const removePreUpdate = viewer.scene.preUpdate.addEventListener(() => {
+    if (viewer.isDestroyed()) {
+      return;
+    }
+    const now = performance.now();
+    const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - lastFrameAt) / 1000));
+    lastFrameAt = now;
+
+    const elapsedSeconds = (now - startedAt) / 1000;
+    for (const streak of streaks) {
+      // 下流方向（北→南）へ進む。先頭が下流側になるようウィンドウを取る。
+      const head = (streak.phase + elapsedSeconds / flowPeriodSeconds) % 1;
+      if (streak.entity.polyline !== undefined) {
+        streak.entity.polyline.positions = new ConstantProperty(
+          sampleDownstreamArcWindow(
+            samples,
+            totalLength,
+            head,
+            FLOW_STREAK_LENGTH_M,
+            streak.laneOffsetMeters,
+          ),
         );
       }
     }
 
-    // 水位に応じて水量帯を膨らませる（押し出し高さ＝増水の視認性）
-    if (volumeEntity.corridor !== undefined) {
-      volumeEntity.corridor.width = new ConstantProperty(nextWidth * 0.94);
-      volumeEntity.corridor.height = new ConstantProperty(0.05);
-      volumeEntity.corridor.extrudedHeight = new ConstantProperty(
-        0.3 + levelRise * 0.55 + overflow * 0.75,
-      );
-      volumeEntity.corridor.material = new ColorMaterialProperty(
-        Color.fromCssColorString(overflow > 0.2 ? "#0d6fa8" : "#1280b8").withAlpha(
-          0.32 + levelRatio * 0.28 + Math.min(0.2, overflow * 0.15),
-        ),
-      );
-    }
+    const alpha = 1 - Math.exp(-VISUAL_LERP_RATE * deltaSeconds);
+    const nextDisplayed: VisualHydraulics = {
+      levelRatio: lerp(displayed.levelRatio, target.levelRatio, alpha),
+      rain: lerp(displayed.rain, target.rain, alpha),
+      overflow: lerp(displayed.overflow, target.overflow, alpha),
+      activeFlood: lerp(displayed.activeFlood, target.activeFlood, alpha),
+      calm: lerp(displayed.calm, target.calm, alpha),
+      widthMeters: lerp(displayed.widthMeters, target.widthMeters, alpha),
+      extrudeMeters: lerp(displayed.extrudeMeters, target.extrudeMeters, alpha),
+    };
 
-    if (Math.abs(nextWidth - widthMeters) > 1.5) {
-      widthMeters = nextWidth;
-      viewer.scene.groundPrimitives.remove(waterPrimitive);
-      if (!waterPrimitive.isDestroyed()) {
-        waterPrimitive.destroy();
-      }
-      waterPrimitive = createWaterPrimitive(centerlineDegrees, widthMeters, waterMaterial);
-      viewer.scene.groundPrimitives.add(waterPrimitive);
+    const changed =
+      Math.abs(nextDisplayed.widthMeters - displayed.widthMeters) > 0.05 ||
+      Math.abs(nextDisplayed.extrudeMeters - displayed.extrudeMeters) > 0.01 ||
+      Math.abs(nextDisplayed.levelRatio - displayed.levelRatio) > 0.002 ||
+      Math.abs(nextDisplayed.rain - displayed.rain) > 0.002 ||
+      Math.abs(nextDisplayed.overflow - displayed.overflow) > 0.002 ||
+      Math.abs(nextDisplayed.calm - displayed.calm) > 0.002;
+
+    displayed = nextDisplayed;
+    if (changed) {
+      applyDisplayed(displayed);
+      viewer.scene.requestRender();
     }
+  });
+
+  const setHydraulics = (hydraulics: RiverHydraulics) => {
+    if (viewer.isDestroyed()) {
+      return;
+    }
+    target = hydraulicsToVisual(hydraulics);
     viewer.scene.requestRender();
   };
 
@@ -209,6 +277,25 @@ export async function createRiverWaterSurface(
       }
     },
   };
+}
+
+function hydraulicsToVisual(hydraulics: RiverHydraulics): VisualHydraulics {
+  const levelRise = Math.max(0, hydraulics.riverLevelMeters - INITIAL_RIVER_LEVEL_METERS);
+  const levelRatio = Math.min(1, levelRise / 4.4);
+  const rain = clamp01(hydraulics.rainfallIntensity);
+  const overflow = Math.max(0, hydraulics.overflowMeters);
+  const activeFlood = hydraulics.activeFlood ? 1 : 0;
+  const calm = clamp01(hydraulics.mitigationCalm ?? 0);
+  // 災害開始の瞬間に幅が跳ねないよう、activeFlood は水位比率に乗せる。
+  // 治水が効くと見かけの増水幅も少し抑える。
+  const widthMeters =
+    78 +
+    levelRatio * 58 * (1 - calm * 0.2) +
+    overflow * 18 * (1 - calm * 0.35) +
+    activeFlood * levelRatio * 10;
+  const extrudeMeters =
+    0.3 + levelRise * 0.55 * (1 - calm * 0.25) + overflow * 0.75 * (1 - calm * 0.3);
+  return { levelRatio, rain, overflow, activeFlood, calm, widthMeters, extrudeMeters };
 }
 
 function noopController(): RiverWaterSurfaceController {
@@ -244,27 +331,33 @@ function createWaterPrimitive(
 
 function createFlowStreaks(viewer: Viewer): StreakHandle[] {
   const streaks: StreakHandle[] = [];
+  const last = ABUKUMA_RIVER_CENTERLINE[ABUKUMA_RIVER_CENTERLINE.length - 1]!;
+  const nearLast = ABUKUMA_RIVER_CENTERLINE[ABUKUMA_RIVER_CENTERLINE.length - 2]!;
   for (let index = 0; index < FLOW_STREAK_COUNT; index += 1) {
     const phase = index / FLOW_STREAK_COUNT;
+    // レーンを横断方向に分散（中央寄りを厚く）
+    const laneT = FLOW_STREAK_COUNT <= 1 ? 0 : index / (FLOW_STREAK_COUNT - 1);
+    const laneOffsetMeters = (laneT * 2 - 1) * FLOW_LANE_HALF_SPAN_M;
     const entity = viewer.entities.add({
       id: `river-flow-streak-${index}`,
       polyline: {
+        // 初期は上流寄り（北）から下流へ向かう短い線
         positions: Cartesian3.fromDegreesArray([
-          ABUKUMA_RIVER_CENTERLINE[0]!.lon,
-          ABUKUMA_RIVER_CENTERLINE[0]!.lat,
-          ABUKUMA_RIVER_CENTERLINE[1]!.lon,
-          ABUKUMA_RIVER_CENTERLINE[1]!.lat,
+          last.lon,
+          last.lat,
+          nearLast.lon,
+          nearLast.lat,
         ]),
         width: 7,
         clampToGround: true,
         material: new PolylineGlowMaterialProperty({
-          glowPower: 0.22,
-          taperPower: 0.35,
-          color: Color.fromCssColorString("#d7f4ff").withAlpha(0.55),
+          glowPower: 0.28,
+          taperPower: 0.62,
+          color: Color.fromCssColorString("#eaf8ff").withAlpha(0.5),
         }),
       },
     });
-    streaks.push({ entity, phase });
+    streaks.push({ entity, phase, laneOffsetMeters });
   }
   return streaks;
 }
@@ -277,11 +370,16 @@ function flattenCenterline(): number[] {
   return degrees;
 }
 
-function buildFlowSamples(): FlowSample[] {
+/**
+ * 下流方向（北→南）に沿ったサンプリング点列。
+ * `ABUKUMA_RIVER_CENTERLINE` は南→北なので逆順で距離を積算する。
+ */
+function buildDownstreamFlowSamples(): FlowSample[] {
   const samples: FlowSample[] = [];
   let distance = 0;
   let previous: { lon: number; lat: number } | undefined;
-  for (const point of ABUKUMA_RIVER_CENTERLINE) {
+  for (let index = ABUKUMA_RIVER_CENTERLINE.length - 1; index >= 0; index -= 1) {
+    const point = ABUKUMA_RIVER_CENTERLINE[index]!;
     if (previous !== undefined) {
       distance += haversineMeters(previous.lat, previous.lon, point.lat, point.lon);
     }
@@ -291,11 +389,15 @@ function buildFlowSamples(): FlowSample[] {
   return samples;
 }
 
-function sampleArcWindow(
+/**
+ * 下流へ進むストリーク。positions の末尾が先端（下流側）になり、テーパーで矢印感を出す。
+ */
+function sampleDownstreamArcWindow(
   samples: FlowSample[],
   totalLength: number,
   headNormalized: number,
   windowMeters: number,
+  laneOffsetMeters: number,
 ): Cartesian3[] {
   const headDistance = headNormalized * totalLength;
   const startDistance = Math.max(0, headDistance - windowMeters);
@@ -304,7 +406,9 @@ function sampleArcWindow(
     const t = index / (FLOW_STREAK_SEGMENT_POINTS - 1);
     const distance = startDistance + (headDistance - startDistance) * t;
     const point = interpolateAlongSamples(samples, distance);
-    positions.push(point.lon, point.lat);
+    const bearing = bearingAlongSamples(samples, distance);
+    const offset = offsetMeters(point, bearing + Math.PI / 2, laneOffsetMeters);
+    positions.push(offset.lon, offset.lat);
   }
   return Cartesian3.fromDegreesArray(positions);
 }
@@ -343,4 +447,37 @@ function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number)
     Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon / 2) ** 2;
   return 6_371_000 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/** サンプル列上の進行方向（ラジアン。北=0、東=+π/2）。 */
+function bearingAlongSamples(samples: FlowSample[], distance: number): number {
+  const lookAhead = Math.min(samples[samples.length - 1]?.distance ?? distance, distance + 35);
+  const from = interpolateAlongSamples(samples, Math.max(0, distance - 8));
+  const to = interpolateAlongSamples(samples, lookAhead);
+  const east = (to.lon - from.lon) * 111_320 * Math.cos((from.lat * Math.PI) / 180);
+  const north = (to.lat - from.lat) * 110_540;
+  return Math.atan2(east, north);
+}
+
+function offsetMeters(
+  point: { lon: number; lat: number },
+  bearingRadians: number,
+  distanceMeters: number,
+): { lon: number; lat: number } {
+  const metersPerDegreeLat = 110_540;
+  const metersPerDegreeLon = 111_320 * Math.cos((point.lat * Math.PI) / 180);
+  const north = Math.cos(bearingRadians) * distanceMeters;
+  const east = Math.sin(bearingRadians) * distanceMeters;
+  return {
+    lon: point.lon + east / metersPerDegreeLon,
+    lat: point.lat + north / metersPerDegreeLat,
+  };
+}
+
+function lerp(from: number, to: number, t: number): number {
+  return from + (to - from) * t;
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
 }

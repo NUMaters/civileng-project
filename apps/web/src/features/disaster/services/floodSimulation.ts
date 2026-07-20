@@ -1,6 +1,18 @@
 import { loadRules, loadStructures } from "@civilcraft/game-data/load";
 import type { StructureEffects } from "@civilcraft/game-data/types";
 import type { PlacedStructure } from "../../construction";
+import { getStructureEffectLabel } from "../../construction/structureVisuals";
+import { calculateFloodplainExtent } from "./floodplainExtent";
+import {
+  calculateHydraulicEffectiveness,
+  getRiverPlacementContext,
+  protectionHeadingBonus,
+} from "./hydraulicPlacement";
+import {
+  applyOverflowTerrainElevations,
+  listOverflowCandidates,
+  resolveCandidateVulnerability,
+} from "./overflowBankSites";
 
 export type GamePhase = "idle" | "preparation" | "disaster" | "result";
 
@@ -11,8 +23,32 @@ export type OverflowSite = {
   latitude: number;
   /** 流出方向（度、北=0・時計回り）。 */
   outflowHeadingDegrees: number;
-  /** 0〜1。越水量と防護施設の近さで決まる。 */
+  /** 0〜1。越水量・標高弱点・防護施設で決まる。 */
   intensity: number;
+};
+
+/** 弱点地点の防護状態（施設効果の可視化用）。 */
+export type ProtectedBankSite = {
+  id: string;
+  longitude: number;
+  latitude: number;
+  /** 0〜1。施設による抑え込みの強さ。 */
+  protectionStrength: number;
+  /** true なら越水プルームが出ている。false なら施設が抑え込み中。 */
+  overflowing: boolean;
+};
+
+/** 施設1基の川への影響範囲（地図表示用）。 */
+export type StructureInfluence = {
+  placementId: string;
+  structureId: string;
+  longitude: number;
+  latitude: number;
+  radiusMeters: number;
+  /** 短い効果ラベル。 */
+  effectLabel: string;
+  /** 位置・向き・標高から見た配置有効率 0〜1。 */
+  effectiveness: number;
 };
 
 export type FloodSimulationState = {
@@ -23,16 +59,30 @@ export type FloodSimulationState = {
   riverLevelMeters: number;
   /** 計画高水位を超えた分（m）。0 なら越水なし。 */
   overflowMeters: number;
+  /** 施設込みの越水開始水位（m）。 */
+  overflowLevelMeters: number;
   floodDepthMeters: number;
   floodedAreaPercent: number;
+  /** 氾濫寸前〜越水時の氾濫原の塗りつぶし率（0〜1）。通常水位では 0。 */
+  floodplainFillRatio: number;
+  /** 描画・判定用の氾濫原片岸幅（m）。 */
+  floodplainHalfWidthMeters: number;
   damagePercent: number;
   score: number;
   isClear: boolean | null;
   overflowSites: OverflowSite[];
+  /** 施設による治水効果の集計。 */
+  mitigation: MitigationSummary;
+  /** 弱点地点ごとの防護／越水状態。 */
+  protectedBankSites: ProtectedBankSite[];
+  /** 確定配置の影響圏。 */
+  structureInfluences: StructureInfluence[];
 };
 
 export type MitigationSummary = StructureEffects & {
   activeStructureCount: number;
+  /** 配置有効率の平均 0〜1。 */
+  averageEffectiveness: number;
 };
 
 const rules = loadRules();
@@ -40,55 +90,8 @@ const structureById = new Map(loadStructures().map((structure) => [structure.id,
 
 const INITIAL_RIVER_LEVEL_METERS = 2.2;
 const BASE_OVERFLOW_LEVEL_METERS = 4.9;
-const PROTECTION_TARGET = { longitude: 140.3838, latitude: 37.3598 } as const;
 
-/**
- * 局所越水の候補地点（阿武隈川右岸寄り・工学部周辺の弱点）。
- * 近くに堤防・護岸があると intensity が下がる。
- */
-const OVERFLOW_CANDIDATES: ReadonlyArray<{
-  id: string;
-  longitude: number;
-  latitude: number;
-  outflowHeadingDegrees: number;
-  vulnerability: number;
-}> = [
-  {
-    id: "campus-south",
-    longitude: 140.3826,
-    latitude: 37.3584,
-    outflowHeadingDegrees: 95,
-    vulnerability: 1,
-  },
-  {
-    id: "campus-core",
-    longitude: 140.3842,
-    latitude: 37.3602,
-    outflowHeadingDegrees: 110,
-    vulnerability: 1.15,
-  },
-  {
-    id: "campus-north",
-    longitude: 140.3854,
-    latitude: 37.3638,
-    outflowHeadingDegrees: 85,
-    vulnerability: 0.9,
-  },
-  {
-    id: "mid-east",
-    longitude: 140.3792,
-    latitude: 37.3568,
-    outflowHeadingDegrees: 100,
-    vulnerability: 0.75,
-  },
-  {
-    id: "north-bend",
-    longitude: 140.3888,
-    latitude: 37.3724,
-    outflowHeadingDegrees: 70,
-    vulnerability: 0.7,
-  },
-];
+export { applyOverflowTerrainElevations };
 
 export function createInitialFloodState(): FloodSimulationState {
   return {
@@ -98,12 +101,30 @@ export function createInitialFloodState(): FloodSimulationState {
     rainfallIntensity: 0,
     riverLevelMeters: INITIAL_RIVER_LEVEL_METERS,
     overflowMeters: 0,
+    overflowLevelMeters: BASE_OVERFLOW_LEVEL_METERS,
     floodDepthMeters: 0,
     floodedAreaPercent: 0,
+    floodplainFillRatio: 0,
+    floodplainHalfWidthMeters: 0,
     damagePercent: 0,
     score: 1_000,
     isClear: null,
     overflowSites: [],
+    mitigation: emptyMitigation(),
+    protectedBankSites: [],
+    structureInfluences: [],
+  };
+}
+
+function emptyMitigation(): MitigationSummary {
+  return {
+    waterLevelReduction: 0,
+    overflowPrevention: 0,
+    drainageCapacity: 0,
+    bankProtection: 0,
+    channelCapacityIncrease: 0,
+    activeStructureCount: 0,
+    averageEffectiveness: 0,
   };
 }
 
@@ -154,27 +175,51 @@ export function advanceFloodSimulation(
     INITIAL_RIVER_LEVEL_METERS,
     unmitigatedRiverLevel - mitigation.waterLevelReduction * 2.3,
   );
-  const overflowLevel =
+  const overflowLevelMeters =
     BASE_OVERFLOW_LEVEL_METERS +
     mitigation.overflowPrevention * 1.8 +
     mitigation.channelCapacityIncrease * 1.1;
-  const overflowMeters = Math.max(0, riverLevelMeters - overflowLevel);
+  const overflowMeters = Math.max(0, riverLevelMeters - overflowLevelMeters);
   const inflowPerSecond = overflowMeters * (1 - mitigation.overflowPrevention * 0.35) * 0.045;
   const drainagePerSecond = mitigation.drainageCapacity * 0.025;
   const floodDepthMeters = Math.max(
     0,
     current.floodDepthMeters + (inflowPerSecond - drainagePerSecond) * deltaSeconds,
   );
-  const floodedAreaPercent = clamp(floodDepthMeters * 28, 0, 100);
-  const damagePercent = clamp(floodedAreaPercent * (1 - mitigation.bankProtection * 0.45), 0, 100);
-  const overflowSites = calculateOverflowSites(placements, overflowMeters, floodDepthMeters);
+  const bankEffects = calculateBankEffects(placements, overflowMeters, floodDepthMeters);
+  // 浸水面積は水深＋主要な決壊（強度上位）に依存。弱点を押さえると広がらない。
+  const breachLoad = bankEffects.overflowSites
+    .slice(0, 5)
+    .reduce((sum, site) => sum + site.intensity, 0);
+  const floodedAreaPercent = clamp(
+    floodDepthMeters * 22 + Math.min(2.2, breachLoad) * 14 + Math.max(0, overflowMeters) * 5,
+    0,
+    100,
+  );
+  const damagePercent = clamp(
+    floodedAreaPercent *
+      (1 - mitigation.bankProtection * 0.4) *
+      (1 - Math.min(0.35, bankEffects.protectedBankSites.filter((s) => !s.overflowing).length * 0.04)),
+    0,
+    100,
+  );
+  const floodplain = calculateFloodplainExtent({
+    riverLevelMeters,
+    overflowMeters,
+    overflowLevelMeters,
+  });
   const score = Math.max(
     0,
     Math.round(
-      1_000 - damagePercent * 9 - floodDepthMeters * 40 + mitigation.activeStructureCount * 8,
+      1_000 -
+        damagePercent * 9 -
+        floodDepthMeters * 40 +
+        mitigation.activeStructureCount * 8 +
+        mitigation.averageEffectiveness * 40,
     ),
   );
   const remaining = Math.max(0, rules.timing.phases.disasterSeconds - elapsed);
+  const structureInfluences = calculateStructureInfluences(placements);
 
   if (remaining === 0) {
     return {
@@ -184,12 +229,18 @@ export function advanceFloodSimulation(
       rainfallIntensity: 0,
       riverLevelMeters,
       overflowMeters,
+      overflowLevelMeters,
       floodDepthMeters,
       floodedAreaPercent,
+      floodplainFillRatio: floodplain.fillRatio,
+      floodplainHalfWidthMeters: floodplain.halfWidthMeters,
       damagePercent,
       score,
       isClear: damagePercent < rules.victory.clearThresholdPercent,
-      overflowSites,
+      overflowSites: bankEffects.overflowSites,
+      mitigation,
+      protectedBankSites: bankEffects.protectedBankSites,
+      structureInfluences,
     };
   }
 
@@ -200,12 +251,38 @@ export function advanceFloodSimulation(
     rainfallIntensity,
     riverLevelMeters,
     overflowMeters,
+    overflowLevelMeters,
     floodDepthMeters,
     floodedAreaPercent,
+    floodplainFillRatio: floodplain.fillRatio,
+    floodplainHalfWidthMeters: floodplain.halfWidthMeters,
     damagePercent,
     score,
     isClear: null,
-    overflowSites,
+    overflowSites: bankEffects.overflowSites,
+    mitigation,
+    protectedBankSites: bankEffects.protectedBankSites,
+    structureInfluences,
+  };
+}
+
+/** 準備フェーズなど、配置変更だけで治水表示を更新する。 */
+export function refreshPlacementEffects(
+  current: FloodSimulationState,
+  placements: PlacedStructure[],
+): FloodSimulationState {
+  const mitigation = calculateMitigation(placements);
+  const bankEffects = calculateBankEffects(
+    placements,
+    current.overflowMeters,
+    current.floodDepthMeters,
+  );
+  return {
+    ...current,
+    mitigation,
+    overflowSites: bankEffects.overflowSites,
+    protectedBankSites: bankEffects.protectedBankSites,
+    structureInfluences: calculateStructureInfluences(placements),
   };
 }
 
@@ -215,21 +292,28 @@ export function calculateOverflowSites(
   overflowMeters: number,
   floodDepthMeters: number,
 ): OverflowSite[] {
-  if (overflowMeters <= 0.02 && floodDepthMeters <= 0.01) {
-    return [];
-  }
+  return calculateBankEffects(placements, overflowMeters, floodDepthMeters).overflowSites;
+}
 
+function calculateBankEffects(
+  placements: PlacedStructure[],
+  overflowMeters: number,
+  floodDepthMeters: number,
+): { overflowSites: OverflowSite[]; protectedBankSites: ProtectedBankSite[] } {
   const protective = placements.filter(
     (placement) =>
-      placement.structureId === "levee" ||
-      placement.structureId === "revetment" ||
-      placement.structureId === "retention-basin",
+      placement.preview !== true &&
+      (placement.structureId === "levee" ||
+        placement.structureId === "revetment" ||
+        placement.structureId === "retention-basin"),
   );
 
   const basePressure = clamp(overflowMeters / 1.8 + floodDepthMeters * 0.55, 0, 1.4);
-  const sites: OverflowSite[] = [];
+  const overflowSites: OverflowSite[] = [];
+  const protectedBankSites: ProtectedBankSite[] = [];
 
-  for (const candidate of OVERFLOW_CANDIDATES) {
+  for (const candidate of listOverflowCandidates()) {
+    const vulnerability = resolveCandidateVulnerability(candidate);
     let protection = 0;
     for (const placement of protective) {
       const distance = distanceInMeters(
@@ -238,33 +322,92 @@ export function calculateOverflowSites(
         candidate.longitude,
         candidate.latitude,
       );
-      const coverage =
+      const coverageRadius =
         placement.structureId === "levee"
-          ? Math.exp(-distance / 280)
+          ? 280
           : placement.structureId === "revetment"
-            ? Math.exp(-distance / 220)
-            : Math.exp(-distance / 360) * 0.7;
-      protection = combineProtection(protection, coverage * 0.85);
+            ? 220
+            : 360;
+      const coverage =
+        Math.exp(-distance / coverageRadius) *
+        (placement.structureId === "retention-basin" ? 0.7 : 0.85) *
+        protectionHeadingBonus(placement, candidate.outflowHeadingDegrees) *
+        calculateHydraulicEffectiveness(placement);
+      protection = combineProtection(protection, coverage);
     }
 
-    const intensity = clamp(
-      (basePressure * candidate.vulnerability - protection * 1.15) * (0.55 + basePressure * 0.5),
-      0,
-      1,
-    );
-    if (intensity < 0.08) {
-      continue;
+    const intensity =
+      overflowMeters <= 0.02 && floodDepthMeters <= 0.01
+        ? 0
+        : clamp(
+            (basePressure * vulnerability - protection * 1.2) * (0.55 + basePressure * 0.5),
+            0,
+            1,
+          );
+    const overflowing = intensity >= 0.08;
+
+    if (overflowing) {
+      overflowSites.push({
+        id: candidate.id,
+        longitude: candidate.longitude,
+        latitude: candidate.latitude,
+        outflowHeadingDegrees: candidate.outflowHeadingDegrees,
+        intensity,
+      });
     }
-    sites.push({
-      id: candidate.id,
-      longitude: candidate.longitude,
-      latitude: candidate.latitude,
-      outflowHeadingDegrees: candidate.outflowHeadingDegrees,
-      intensity,
-    });
+
+    if (protection >= 0.12 || overflowing) {
+      protectedBankSites.push({
+        id: candidate.id,
+        longitude: candidate.longitude,
+        latitude: candidate.latitude,
+        protectionStrength: clamp(protection, 0, 1),
+        overflowing,
+      });
+    }
   }
 
-  return sites.sort((left, right) => right.intensity - left.intensity);
+  overflowSites.sort((left, right) => right.intensity - left.intensity);
+  return { overflowSites, protectedBankSites };
+}
+
+/** 施設ごとの川への影響半径（可視化・説明用）。 */
+export function getStructureInfluenceRadiusMeters(structureId: string): number {
+  switch (structureId) {
+    case "levee":
+      return 280;
+    case "revetment":
+      return 220;
+    case "retention-basin":
+      return 360;
+    case "drainage-pump":
+      return 200;
+    case "channel-dredging":
+      return 420;
+    default:
+      return 180;
+  }
+}
+
+export { getStructureEffectLabel, getRiverPlacementContext };
+
+export function calculateStructureInfluences(
+  placements: PlacedStructure[],
+): StructureInfluence[] {
+  return placements
+    .filter((placement) => placement.preview !== true)
+    .map((placement) => {
+      const effectiveness = calculatePlacementEffectiveness(placement);
+      return {
+        placementId: placement.id,
+        structureId: placement.structureId,
+        longitude: placement.position.longitude,
+        latitude: placement.position.latitude,
+        radiusMeters: getStructureInfluenceRadiusMeters(placement.structureId) * (0.7 + 0.3 * effectiveness),
+        effectLabel: getStructureEffectLabel(placement.structureId),
+        effectiveness,
+      };
+    });
 }
 
 export function calculateMitigation(placements: PlacedStructure[]): MitigationSummary {
@@ -275,14 +418,21 @@ export function calculateMitigation(placements: PlacedStructure[]): MitigationSu
     bankProtection: 0,
     channelCapacityIncrease: 0,
     activeStructureCount: 0,
+    averageEffectiveness: 0,
   };
 
+  let effectivenessSum = 0;
+
   for (const placement of placements) {
+    if (placement.preview === true) {
+      continue;
+    }
     const definition = structureById.get(placement.structureId);
     if (definition === undefined) {
       continue;
     }
     const effectiveness = calculatePlacementEffectiveness(placement);
+    effectivenessSum += effectiveness;
     combined.waterLevelReduction += definition.effects.waterLevelReduction * effectiveness;
     combined.overflowPrevention = combineProtection(
       combined.overflowPrevention,
@@ -293,7 +443,8 @@ export function calculateMitigation(placements: PlacedStructure[]): MitigationSu
       combined.bankProtection,
       definition.effects.bankProtection * effectiveness,
     );
-    combined.channelCapacityIncrease += definition.effects.channelCapacityIncrease * effectiveness;
+    combined.channelCapacityIncrease +=
+      definition.effects.channelCapacityIncrease * effectiveness;
     combined.activeStructureCount += 1;
   }
 
@@ -304,21 +455,44 @@ export function calculateMitigation(placements: PlacedStructure[]): MitigationSu
     drainageCapacity: clamp(combined.drainageCapacity, 0, 2),
     bankProtection: clamp(combined.bankProtection, 0, 0.95),
     channelCapacityIncrease: clamp(combined.channelCapacityIncrease, 0, 1.5),
+    averageEffectiveness:
+      combined.activeStructureCount > 0
+        ? effectivenessSum / combined.activeStructureCount
+        : 0,
   };
+}
+
+/**
+ * 公開: テストと HUD 用。位置・向き・標高・弱点近接を織り込む。
+ */
+export function calculatePlacementEffectiveness(placement: PlacedStructure): number {
+  const hydraulic = calculateHydraulicEffectiveness(placement);
+  const weaknessBoost = nearestWeaknessBoost(placement);
+  const combined = hydraulic * 0.82 + weaknessBoost * 0.18;
+  if (!Number.isFinite(combined)) {
+    return 0.35;
+  }
+  return clamp(combined, 0.15, 1);
+}
+
+function nearestWeaknessBoost(placement: PlacedStructure): number {
+  let best = 0;
+  for (const candidate of listOverflowCandidates()) {
+    const distance = distanceInMeters(
+      placement.position.longitude,
+      placement.position.latitude,
+      candidate.longitude,
+      candidate.latitude,
+    );
+    const vulnerability = resolveCandidateVulnerability(candidate);
+    const cover = Math.exp(-distance / 320) * vulnerability;
+    best = Math.max(best, cover);
+  }
+  return clamp(best, 0, 1);
 }
 
 function calculateRainfallIntensity(progress: number): number {
   return clamp(0.25 + Math.sin(progress * Math.PI) * 0.75, 0, 1);
-}
-
-function calculatePlacementEffectiveness(placement: PlacedStructure): number {
-  const distanceMeters = distanceInMeters(
-    placement.position.longitude,
-    placement.position.latitude,
-    PROTECTION_TARGET.longitude,
-    PROTECTION_TARGET.latitude,
-  );
-  return 0.35 + 0.65 * Math.exp(-distanceMeters / 650);
 }
 
 function distanceInMeters(

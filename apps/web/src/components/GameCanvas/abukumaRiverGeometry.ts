@@ -1,9 +1,27 @@
+import {
+  FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
+  NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
+  NORMAL_CHANNEL_HALF_WIDTH_M,
+} from "../../features/disaster/services/floodplainExtent";
+
+/**
+ * 施設を置ける河道＋河岸の片岸幅（m）。
+ * 本川（約 42 m）の外側に堤防・護岸用地を含め、氾濫原（200 m）より狭くして市街地を除外する。
+ */
+export const PLACEABLE_CORRIDOR_HALF_WIDTH_M = 75;
+
+export {
+  FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
+  NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
+  NORMAL_CHANNEL_HALF_WIDTH_M,
+};
+
 /**
  * OSM multipolygon relation/18504988 (阿武隈川水面) をプレイ範囲で切り出し、
- * 堤防配置用に岸から約 18m 外側へオフセットした配置可能ポリゴン。
+ * 岸から約 18 m 外側へオフセットした水面ポリゴン（河道判定の参考）。
  * 出典: OpenStreetMap (ODbL)
  */
-export const ABUKUMA_PLACEABLE_POLYGON: ReadonlyArray<{ lon: number; lat: number }> = [
+export const ABUKUMA_WATER_SURFACE_POLYGON: ReadonlyArray<{ lon: number; lat: number }> = [
   { lon: 140.3712035, lat: 37.347966 },
   { lon: 140.3709738, lat: 37.3484276 },
   { lon: 140.370589, lat: 37.3496411 },
@@ -78,6 +96,8 @@ export const ABUKUMA_PLACEABLE_POLYGON: ReadonlyArray<{ lon: number; lat: number
 
 /**
  * 左右岸の中点から得た阿武隈川の中心線（プレイ範囲）。
+ * 配列順は南→北（index 0 が下流側、末尾が上流側）。
+ * 阿武隈川はこの区間では概ね南へ流れるため、流向アニメは逆順（北→南）で進める。
  */
 export const ABUKUMA_RIVER_CENTERLINE: ReadonlyArray<{ lon: number; lat: number }> = [
   { lon: 140.3714964, lat: 37.34872 },
@@ -117,3 +137,83 @@ export const ABUKUMA_RIVER_CENTERLINE: ReadonlyArray<{ lon: number; lat: number 
   { lon: 140.3963632, lat: 37.38382 },
   { lon: 140.3978822, lat: 37.3849 },
 ];
+
+export type LonLat = { lon: number; lat: number };
+
+/**
+ * 中心線から左右に半幅だけオフセットしたコリドーリングを作る。
+ * 左岸を上流→下流、右岸を下流→上流の順で閉じる。
+ */
+export function buildCenterlineCorridorRing(
+  centerline: ReadonlyArray<LonLat>,
+  halfWidthMeters: number,
+): LonLat[] {
+  if (centerline.length < 2 || halfWidthMeters <= 0) {
+    return [];
+  }
+
+  const left: LonLat[] = [];
+  const right: LonLat[] = [];
+
+  for (let index = 0; index < centerline.length; index += 1) {
+    const point = centerline[index];
+    if (point === undefined) {
+      continue;
+    }
+    const prev = centerline[Math.max(0, index - 1)] ?? point;
+    const next = centerline[Math.min(centerline.length - 1, index + 1)] ?? point;
+    const bearing = bearingRadians(prev, next);
+    const leftOffset = offsetMeters(point, bearing - Math.PI / 2, halfWidthMeters);
+    const rightOffset = offsetMeters(point, bearing + Math.PI / 2, halfWidthMeters);
+    left.push(leftOffset);
+    right.push(rightOffset);
+  }
+
+  const ring = [...left, ...right.reverse()];
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (first !== undefined && last !== undefined && (first.lon !== last.lon || first.lat !== last.lat)) {
+    ring.push({ ...first });
+  }
+  return ring;
+}
+
+/**
+ * 河道＋両岸の配置可能コリドー（中心線 ± PLACEABLE_CORRIDOR_HALF_WIDTH_M）。
+ * 堤防・護岸は河岸側に置ける。市街地（氾濫原外側）は含まない。
+ */
+export const ABUKUMA_PLACEABLE_CORRIDOR: ReadonlyArray<LonLat> = buildCenterlineCorridorRing(
+  ABUKUMA_RIVER_CENTERLINE,
+  PLACEABLE_CORRIDOR_HALF_WIDTH_M,
+);
+
+/** @deprecated 配置判定は `ABUKUMA_PLACEABLE_CORRIDOR` を使う。互換用エイリアス。 */
+export const ABUKUMA_PLACEABLE_POLYGON = ABUKUMA_PLACEABLE_CORRIDOR;
+
+/** 氾濫寸前の河道沿い氾濫原（中心線 ± 200 m）。 */
+export const ABUKUMA_NEAR_OVERFLOW_FLOODPLAIN: ReadonlyArray<LonLat> =
+  buildCenterlineCorridorRing(ABUKUMA_RIVER_CENTERLINE, NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
+
+/** 越水拡大時の最大氾濫原（中心線 ± 320 m）。 */
+export const ABUKUMA_FULL_OVERFLOW_FLOODPLAIN: ReadonlyArray<LonLat> =
+  buildCenterlineCorridorRing(ABUKUMA_RIVER_CENTERLINE, FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
+
+function bearingRadians(from: LonLat, to: LonLat): number {
+  const lat1 = (from.lat * Math.PI) / 180;
+  const lat2 = (to.lat * Math.PI) / 180;
+  const dLon = ((to.lon - from.lon) * Math.PI) / 180;
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return Math.atan2(y, x);
+}
+
+function offsetMeters(point: LonLat, bearingRadiansValue: number, distanceMeters: number): LonLat {
+  const metersPerDegreeLat = 110_540;
+  const metersPerDegreeLon = 111_320 * Math.cos((point.lat * Math.PI) / 180);
+  const north = Math.cos(bearingRadiansValue) * distanceMeters;
+  const east = Math.sin(bearingRadiansValue) * distanceMeters;
+  return {
+    lon: point.lon + east / metersPerDegreeLon,
+    lat: point.lat + north / metersPerDegreeLat,
+  };
+}
