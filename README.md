@@ -6,6 +6,10 @@
 
 詳細は [docs/game-design/overview.md](./docs/game-design/overview.md) を参照。
 
+## ライセンス
+
+[MIT License](./LICENSE)（Copyright 2026 NUMaters / CivilCraft contributors）
+
 ## 技術スタック
 
 | 領域           | 技術                                                                                            |
@@ -100,6 +104,8 @@ make setup
 make up    # PostgreSQL / Redis を起動
 ```
 
+環境変数の一覧は [docs/development/environment-variables.md](./docs/development/environment-variables.md)。DB 詳細は [docs/development/local-database.md](./docs/development/local-database.md)。
+
 #### 開発コマンド
 
 ```bash
@@ -155,9 +161,13 @@ pnpm --filter @civilcraft/web fetch:plateau
 | API 命名           | [docs/api/](./docs/api/)                                                                   |
 | Git 運用           | [docs/git/](./docs/git/)                                                                   |
 | マスターデータ設計 | [docs/architecture/game-data-master-data.md](./docs/architecture/game-data-master-data.md) |
+| マップデータ形式 | [docs/architecture/map-data-format.md](./docs/architecture/map-data-format.md) |
+| DB スキーマ（ルーム等） | [docs/architecture/db-schema.md](./docs/architecture/db-schema.md) |
 | game-schema 設計   | [docs/architecture/game-schema-design.md](./docs/architecture/game-schema-design.md)       |
 | ゲーム状態モデル   | [docs/architecture/game-state-model.md](./docs/architecture/game-state-model.md)           |
 | ローカル DB 構成   | [docs/development/local-database.md](./docs/development/local-database.md)                 |
+| 環境変数一覧 | [docs/development/environment-variables.md](./docs/development/environment-variables.md) |
+| MVP 外データ方針 | [docs/development/mvp-scope-data.md](./docs/development/mvp-scope-data.md) |
 | 地理空間アーキテクチャ | [docs/architecture/geospatial.md](./docs/architecture/geospatial.md)                    |
 | CesiumJS 導入作業 | [docs/development/cesium-roadmap.md](./docs/development/cesium-roadmap.md)                  |
 

@@ -1,5 +1,5 @@
 {
-  "note": "計算グリッドの詳細は #80 で確定。現プロトタイプはクライアント側の河道ポリゴンで配置判定する。",
+  "note": "形式は docs/architecture/map-data-format.md。現プロトタイプの配置判定はクライアント側の河道・河岸コリドー。",
   "placeableRegion": "abukuma-river-corridor",
   "coordinateSystem": "EPSG:4326"
 }
