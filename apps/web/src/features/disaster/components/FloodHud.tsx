@@ -1,4 +1,4 @@
-import type { FloodSimulationState } from "../services/floodSimulation";
+import type { FloodSimulationState, MitigationSummary } from "../services/floodSimulation";
 
 type FloodHudProps = FloodSimulationState & {
   onStartGame: () => void;
@@ -19,11 +19,17 @@ export function FloodHud({
   riverLevelMeters,
   overflowMeters,
   floodDepthMeters,
+  floodplainFillRatio,
+  floodplainHalfWidthMeters,
   damagePercent,
   overflowSites,
+  mitigation,
+  protectedBankSites,
   onStartGame,
   onStartRainNow,
 }: FloodHudProps) {
+  const heldSites = protectedBankSites.filter((site) => !site.overflowing).length;
+
   return (
     <section className={`flood-hud flood-hud--${phase}`} aria-label="災害状況">
       <div className="flood-hud__heading">
@@ -36,50 +42,65 @@ export function FloodHud({
       {phase === "idle" ? (
         <>
           <strong className="flood-hud__title">阿武隈川・大雨シナリオ</strong>
-          <p>施設を配置して、日本大学周辺の浸水を5%未満に抑えてください。</p>
+          <p>
+            低い河岸ほど氾濫しやすく、施設は河岸の位置・向き・標高で効き方が変わります。弱点を押さえて浸水を5%未満に抑えてください。
+          </p>
           <button className="flood-hud__primary" type="button" onClick={onStartGame}>
             ゲーム開始
           </button>
         </>
       ) : (
-        <div className="flood-hud__metrics">
+        <>
+          <MitigationPanel mitigation={mitigation} heldSites={heldSites} />
+          <div className="flood-hud__metrics">
+            <FloodMetric
+              label="雨量"
+              value={`${Math.round(rainfallIntensity * 100)}%`}
+              ratio={rainfallIntensity}
+              tone="rain"
+            />
+            <FloodMetric
+              label="河川水位"
+              value={`${riverLevelMeters.toFixed(1)} m`}
+              ratio={riverLevelMeters / 7}
+              tone="water"
+            />
+            <FloodMetric
+              label="越水量"
+              value={overflowMeters > 0.02 ? `+${overflowMeters.toFixed(2)} m` : "なし"}
+              ratio={Math.min(1, overflowMeters / 1.5)}
+              tone="water"
+            />
+            <FloodMetric
+              label="氾濫原"
+              value={
+                floodplainFillRatio > 0.04
+                  ? `片岸 ${Math.round(floodplainHalfWidthMeters)} m`
+                  : "本川のみ"
+              }
+              ratio={floodplainFillRatio}
+              tone="water"
+            />
           <FloodMetric
-            label="雨量"
-            value={`${Math.round(rainfallIntensity * 100)}%`}
-            ratio={rainfallIntensity}
-            tone="rain"
-          />
-          <FloodMetric
-            label="河川水位"
-            value={`${riverLevelMeters.toFixed(1)} m`}
-            ratio={riverLevelMeters / 7}
-            tone="water"
-          />
-          <FloodMetric
-            label="越水量"
-            value={overflowMeters > 0.02 ? `+${overflowMeters.toFixed(2)} m` : "なし"}
-            ratio={Math.min(1, overflowMeters / 1.5)}
-            tone="water"
-          />
-          <FloodMetric
-            label="局所流出"
+            label="決壊地点"
             value={overflowSites.length > 0 ? `${overflowSites.length} 箇所` : "なし"}
             ratio={Math.min(1, overflowSites.length / 4)}
             tone="damage"
           />
-          <FloodMetric
-            label="最大浸水深"
-            value={`${floodDepthMeters.toFixed(2)} m`}
-            ratio={floodDepthMeters / 2}
-            tone="water"
-          />
-          <FloodMetric
-            label="被災度"
-            value={`${damagePercent.toFixed(1)}%`}
-            ratio={damagePercent / 100}
-            tone="damage"
-          />
-        </div>
+            <FloodMetric
+              label="最大浸水深"
+              value={`${floodDepthMeters.toFixed(2)} m`}
+              ratio={floodDepthMeters / 2}
+              tone="water"
+            />
+            <FloodMetric
+              label="被災度"
+              value={`${damagePercent.toFixed(1)}%`}
+              ratio={damagePercent / 100}
+              tone="damage"
+            />
+          </div>
+        </>
       )}
 
       {phase === "preparation" ? (
@@ -88,6 +109,56 @@ export function FloodHud({
         </button>
       ) : null}
     </section>
+  );
+}
+
+function MitigationPanel({
+  mitigation,
+  heldSites,
+}: {
+  mitigation: MitigationSummary;
+  heldSites: number;
+}) {
+  const hasFacilities = mitigation.activeStructureCount > 0;
+  return (
+    <div className="mitigation-panel" aria-label="施設の治水効果">
+      <div className="mitigation-panel__title">
+        <span>治水効果</span>
+        <strong>{hasFacilities ? `${mitigation.activeStructureCount} 施設` : "未配置"}</strong>
+      </div>
+      {hasFacilities ? (
+        <ul className="mitigation-panel__list">
+          <li>
+            <span>越水抑制</span>
+            <strong>{Math.round(mitigation.overflowPrevention * 100)}%</strong>
+          </li>
+          <li>
+            <span>水位低減</span>
+            <strong>{Math.round(mitigation.waterLevelReduction * 100)}%</strong>
+          </li>
+          <li>
+            <span>流下能力</span>
+            <strong>+{mitigation.channelCapacityIncrease.toFixed(1)}</strong>
+          </li>
+          <li>
+            <span>排水</span>
+            <strong>{mitigation.drainageCapacity.toFixed(1)}</strong>
+          </li>
+          <li>
+            <span>弱点を抑制</span>
+            <strong>{heldSites} 箇所</strong>
+          </li>
+          <li>
+            <span>配置効率</span>
+            <strong>{Math.round(mitigation.averageEffectiveness * 100)}%</strong>
+          </li>
+        </ul>
+      ) : (
+        <p className="mitigation-panel__empty">
+          河岸に川沿いへ置くほど効きます。低い岸の弱点を優先してください
+        </p>
+      )}
+    </div>
   );
 }
 

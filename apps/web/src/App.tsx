@@ -180,13 +180,25 @@ export function App() {
         onInvalidPosition={construction.setMessage}
         onCameraFocusChange={handleCameraFocusChange}
         floodState={{
+          // 準備中も影響圏を出す。越水プルーム等は災害中のみ。
           active: flood.phase === "disaster" || flood.phase === "result",
           rainfallIntensity: flood.rainfallIntensity,
           riverLevelMeters: flood.riverLevelMeters,
           overflowMeters: flood.overflowMeters,
           floodDepthMeters: flood.floodDepthMeters,
           floodedAreaPercent: flood.floodedAreaPercent,
+          floodplainFillRatio: flood.floodplainFillRatio,
+          floodplainHalfWidthMeters: flood.floodplainHalfWidthMeters,
+          overflowLevelMeters: flood.overflowLevelMeters,
           overflowSites: flood.overflowSites,
+          protectedBankSites: flood.protectedBankSites,
+          structureInfluences: flood.structureInfluences,
+          mitigationCalm: Math.min(
+            1,
+            flood.mitigation.overflowPrevention * 0.65 +
+              flood.mitigation.waterLevelReduction * 0.5 +
+              flood.mitigation.channelCapacityIncrease * 0.2,
+          ),
         }}
       />
 
@@ -216,9 +228,7 @@ export function App() {
 
       {construction.pendingPlacement !== null ? (
         <div className="placement-confirm" role="region" aria-label="仮配置の確定">
-          <p className="placement-confirm__copy">
-            仮配置中 — 向きを調整してから確定するか、キャンセルしてください
-          </p>
+          <p className="placement-confirm__copy">向きは施設前のスライダーで調整</p>
           <div className="placement-confirm__actions">
             <button
               type="button"
@@ -255,7 +265,7 @@ export function App() {
       {drag !== null ? (
         <div className="dock-drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
           <span className="dock-drag-ghost__icon">
-            <img src={drag.imageSrc} alt="" draggable={false} width={34} height={34} />
+            <img src={drag.imageSrc} alt="" draggable={false} width={56} height={56} />
           </span>
           <span>{drag.displayName}</span>
         </div>

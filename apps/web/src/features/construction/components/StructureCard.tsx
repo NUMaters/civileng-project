@@ -36,14 +36,14 @@ export function StructureCard({
       aria-pressed={selected}
       aria-grabbed={selected}
     >
-      <span className="structure-card__icon" aria-hidden="true">
+      <span className="structure-card__thumb" aria-hidden="true">
         <img
           className="structure-card__image"
           src={visual.imageSrc}
           alt=""
           draggable={false}
-          width={38}
-          height={38}
+          width={72}
+          height={72}
         />
       </span>
       <span className="structure-card__body">

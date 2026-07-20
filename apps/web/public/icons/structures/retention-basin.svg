@@ -1,8 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" aria-hidden="true">
-  <rect width="64" height="64" rx="14" fill="#2379b0"/>
-  <path d="M10 22h44v28H10z" fill="#1a5f8c"/>
-  <path d="M14 26h36v20H14z" fill="#4eb4e8"/>
-  <path d="M18 34c4-4 8-6 14-6s10 2 14 6c-4 4-8 6-14 6s-10-2-14-6z" fill="#b9e8ff" opacity=".7"/>
-  <path d="M10 22l6-8h32l6 8H10z" fill="#8fd0f0"/>
-  <path d="M22 14h4v6h-4zm16 0h4v6h-4z" fill="#d9f2ff" opacity=".8"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="rb-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8ec4e8"/>
+      <stop offset="1" stop-color="#d4eaf7"/>
+    </linearGradient>
+    <radialGradient id="rb-pool" cx="50%" cy="45%" r="55%">
+      <stop offset="0" stop-color="#8fd8ff"/>
+      <stop offset="1" stop-color="#1f7eb4"/>
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="20" fill="url(#rb-sky)"/>
+  <!-- 外堤 -->
+  <ellipse cx="64" cy="72" rx="52" ry="34" fill="#8b6235"/>
+  <ellipse cx="64" cy="70" rx="46" ry="29" fill="#6f9a45"/>
+  <!-- 水面 -->
+  <ellipse cx="64" cy="72" rx="34" ry="20" fill="url(#rb-pool)"/>
+  <ellipse cx="58" cy="66" rx="14" ry="6" fill="#ffffff" opacity=".28"/>
+  <!-- 放流施設 -->
+  <rect x="88" y="54" width="16" height="22" rx="2" fill="#c8ced1"/>
+  <rect x="91" y="48" width="10" height="8" rx="1" fill="#9aa3a8"/>
+  <rect x="80" y="68" width="14" height="5" rx="2" fill="#6f777c"/>
+  <!-- 草地 -->
+  <ellipse cx="30" cy="98" rx="18" ry="8" fill="#5f8d3e" opacity=".55"/>
+  <ellipse cx="100" cy="100" rx="16" ry="7" fill="#5f8d3e" opacity=".45"/>
+  <rect x="0" y="0" width="128" height="24" rx="20" fill="#000" opacity=".2"/>
+  <rect x="0" y="12" width="128" height="12" fill="#000" opacity=".12"/>
+  <text x="12" y="16" fill="#ffffff" font-family="Hiragino Sans, Noto Sans JP, sans-serif" font-size="12" font-weight="700">遊水地</text>
 </svg>

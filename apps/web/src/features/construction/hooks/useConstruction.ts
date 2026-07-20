@@ -5,6 +5,7 @@ import {
   normalizeHeadingDegrees,
   placeStructure,
 } from "../services/constructionService";
+import { getStructureEffectLabel } from "../structureVisuals";
 import type { GeoPosition, PlacedStructure, StructureDefinition } from "../types/construction";
 
 const structures: StructureDefinition[] = loadStructures().map(
@@ -161,7 +162,9 @@ export function useConstruction() {
     setPendingPlacement(null);
     setSelectedStructureId(structure.id);
     setSelectedPlacementId(confirmed.id);
-    setMessage(`${structure.displayName}を配置しました — ドラッグで向きを再調整できます`);
+    setMessage(
+      `${structure.displayName}を配置 — ${getStructureEffectLabel(structure.id)}（緑の円が影響範囲）`,
+    );
     return confirmed;
   }, [pendingPlacement, setMessage]);
 
@@ -181,6 +184,20 @@ export function useConstruction() {
       ),
     );
   }, []);
+
+  const rotatePlacementBy = useCallback(
+    (placementId: string, deltaDegrees: number) => {
+      const target =
+        pendingPlacement?.id === placementId
+          ? pendingPlacement
+          : placements.find(({ id }) => id === placementId);
+      if (target === undefined) {
+        return;
+      }
+      rotatePlacement(placementId, target.headingDegrees + deltaDegrees);
+    },
+    [pendingPlacement, placements, rotatePlacement],
+  );
 
   const visiblePlacements = useMemo(() => {
     if (pendingPlacement === null) {
@@ -203,6 +220,7 @@ export function useConstruction() {
     confirmPendingPlacement,
     cancelPendingPlacement,
     rotatePlacement,
+    rotatePlacementBy,
     selectStructure,
     setSelectedPlacementId,
     setMessage,

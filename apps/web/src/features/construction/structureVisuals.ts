@@ -45,3 +45,21 @@ const FALLBACK_VISUAL: StructureVisual = {
 export function getStructureVisual(structureId: string): StructureVisual {
   return STRUCTURE_VISUALS[structureId] ?? FALLBACK_VISUAL;
 }
+
+/** 配置トースト・影響圏説明用の短い効果ラベル。 */
+export function getStructureEffectLabel(structureId: string): string {
+  switch (structureId) {
+    case "levee":
+      return "越水を抑える";
+    case "revetment":
+      return "護岸を守る";
+    case "retention-basin":
+      return "水位を貯留";
+    case "drainage-pump":
+      return "浸水を排水";
+    case "channel-dredging":
+      return "流下能力アップ";
+    default:
+      return "治水効果";
+  }
+}

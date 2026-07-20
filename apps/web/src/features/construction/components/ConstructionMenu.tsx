@@ -23,7 +23,7 @@ export function ConstructionMenu({
       <div className="construction-menu__heading">
         <div>
           <span className="construction-menu__heading-label">建設ドック</span>
-          <strong>カードを青い河道へドラッグして配置</strong>
+          <strong>カードを河道・河岸（薄い青い帯）へドラッグして配置</strong>
         </div>
         {selected !== undefined ? (
           <p className="construction-menu__hint" key={selected.id}>
