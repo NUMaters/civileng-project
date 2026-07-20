@@ -54,6 +54,28 @@ describe("resolvePlaceablePosition", () => {
     expect(result?.latitude).toBeCloseTo(bank.latitude, 6);
   });
 
+  it("本川付近でも中心線へスナップせずドロップ位置を維持する", () => {
+    const nearCenter = offsetFromCenterline(12);
+    const nearest = nearestPointOnRiverCenterline(nearCenter.longitude, nearCenter.latitude);
+    expect(nearest.distanceMeters).toBeLessThan(20);
+
+    const result = resolvePlaceablePosition(nearCenter);
+    expect(result).toBeDefined();
+    expect(result?.longitude).toBeCloseTo(nearCenter.longitude, 6);
+    expect(result?.latitude).toBeCloseTo(nearCenter.latitude, 6);
+    expect(result?.longitude).not.toBeCloseTo(nearest.longitude, 6);
+  });
+
+  it("帯内の任意距離（片岸 30 m / 70 m）でもそのまま置ける", () => {
+    for (const distance of [30, 70]) {
+      const spot = offsetFromCenterline(distance);
+      const result = resolvePlaceablePosition(spot);
+      expect(result, `${distance}m`).toBeDefined();
+      expect(result?.longitude).toBeCloseTo(spot.longitude, 6);
+      expect(result?.latitude).toBeCloseTo(spot.latitude, 6);
+    }
+  });
+
   it("市街地側（片岸 150 m・氾濫原内）には置けない", () => {
     const urban = offsetFromCenterline(150);
     const nearest = nearestPointOnRiverCenterline(urban.longitude, urban.latitude);

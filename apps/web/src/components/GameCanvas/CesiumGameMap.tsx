@@ -6,6 +6,7 @@ import {
   Cesium3DTileset,
   CesiumTerrainProvider,
   Color,
+  ColorMaterialProperty,
   Credit,
   CustomHeightmapTerrainProvider,
   CustomShader,
@@ -56,12 +57,15 @@ import {
   nearestPointOnPolyline,
   resolvePlaceablePosition,
 } from "./riverPlacement";
+
+const DRAG_GHOST_ENTITY_PREFIX = "drag-ghost";
+const DRAG_GHOST_PLACEMENT_ID = "cursor";
 import {
   createRiverWaterSurface,
   type RiverWaterSurfaceController,
 } from "./riverWaterSurface";
 import { createStructureMaterial } from "./structureMaterials";
-import { getStructureModelParts } from "./structureModels";
+import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
 import type {
   OverflowSite,
   ProtectedBankSite,
@@ -133,9 +137,26 @@ const ROTATE_DEGREES_PER_PX = 0.55;
 const PLACEMENT_PICK_RADIUS_PX = 64;
 /** 回転終了時に揃える角度刻み（度）。 */
 const ROTATE_SNAP_DEGREES = 5;
+/** 地形高が取れないとき・NaN のときのフォールバック標高（楕円体高 m）。 */
+const FALLBACK_GROUND_HEIGHT_M = 18;
+
+export type DragGhostStatus = {
+  /** ポインタが地図キャンバス上にある。 */
+  overMap: boolean;
+  /** 河道・河岸の配置可能域上にある。 */
+  placeable: boolean;
+};
 
 export type CesiumGameMapHandle = {
   tryDropStructure: (structureId: string, clientX: number, clientY: number) => boolean;
+  /** ドラッグ中に設置予定モデルをカーソル下の地表へ追従表示する。 */
+  updateDragGhost: (
+    structureId: string,
+    clientX: number,
+    clientY: number,
+  ) => DragGhostStatus;
+  /** ドラッグ終了時にゴーストモデルを消す。 */
+  clearDragGhost: () => void;
 };
 
 type CesiumGameMapProps = {
@@ -146,6 +167,10 @@ type CesiumGameMapProps = {
   onRotatePlacement: (placementId: string, headingDegrees: number) => void;
   onSelectPlacement: (placementId: string | null) => void;
   onInvalidPosition: (message: string) => void;
+  /** 仮配置の確定（施設上のチェック）。 */
+  onConfirmPendingPlacement?: () => void;
+  /** 仮配置のキャンセル（施設上の ×）。 */
+  onCancelPendingPlacement?: () => void;
   /** カメラ操作終了時の画面中央注視点（プレイヤー移動の Phase 1 同期用）。 */
   onCameraFocusChange?: (position: GeoPosition) => void;
   floodState?: {
@@ -176,6 +201,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       onRotatePlacement,
       onSelectPlacement,
       onInvalidPosition,
+      onConfirmPendingPlacement,
+      onCancelPendingPlacement,
       onCameraFocusChange,
       floodState,
     },
@@ -189,6 +216,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const floodStateRef = useRef(floodState);
     const labelElementRefs = useRef(new Map<string, HTMLDivElement>());
     const orientationHudRef = useRef<HTMLDivElement | null>(null);
+    const confirmHudRef = useRef<HTMLDivElement | null>(null);
     const placementsRef = useRef(placements);
     const structuresRef = useRef(structures);
     const onDropPlaceRef = useRef(onDropPlace);
@@ -197,41 +225,39 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const onInvalidPositionRef = useRef(onInvalidPosition);
     const onCameraFocusChangeRef = useRef(onCameraFocusChange);
     const selectedPlacementIdRef = useRef(selectedPlacementId);
+    const dragGhostRafRef = useRef(0);
+    const dragGhostLastKeyRef = useRef("");
     const [mapError, setMapError] = useState<string | null>(null);
     const [isMapReady, setIsMapReady] = useState(false);
     const [visibilityEpoch, setVisibilityEpoch] = useState(0);
 
     const facilityLabels = useMemo(
       () =>
-        placements.map((placement) => {
-          const displayName =
-            structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設";
-          const preview = placement.preview === true;
-          return {
-            id: placement.id,
-            kind: "facility" as const,
-            text: preview ? `${displayName}（仮）` : displayName,
-            selected: placement.id === selectedPlacementId,
-            preview,
-            longitude: placement.position.longitude,
-            latitude: placement.position.latitude,
-            height: placement.position.height,
-          };
-        }),
+        placements
+          // 仮配置は施設上の ✓／× と向きスライダーだけで足りるのでラベルを出さない。
+          .filter((placement) => placement.preview !== true)
+          .map((placement) => {
+            const displayName =
+              structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設";
+            return {
+              id: placement.id,
+              kind: "facility" as const,
+              text: displayName,
+              selected: placement.id === selectedPlacementId,
+              preview: false,
+              longitude: placement.position.longitude,
+              latitude: placement.position.latitude,
+              height: placement.position.height,
+            };
+          }),
       [placements, selectedPlacementId, structures],
     );
 
-    /** 仮配置または選択中の施設。その手前に向きスライダーを追従表示する。 */
-    const orientationTarget = useMemo(() => {
-      const preview = placements.find((placement) => placement.preview === true);
-      if (preview !== undefined) {
-        return preview;
-      }
-      if (selectedPlacementId === null) {
-        return null;
-      }
-      return placements.find((placement) => placement.id === selectedPlacementId) ?? null;
-    }, [placements, selectedPlacementId]);
+    /** 向き変更は仮配置中のみ。確定後はスライダーを出さない。 */
+    const orientationTarget = useMemo(
+      () => placements.find((placement) => placement.preview === true) ?? null,
+      [placements],
+    );
 
     const breachLabels = useMemo(() => {
       if (floodState?.active !== true) {
@@ -279,6 +305,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     useImperativeHandle(ref, () => ({
       tryDropStructure: (structureId: string, clientX: number, clientY: number) => {
         const viewer = viewerRef.current;
+        clearDragGhostEntities(viewer);
         if (viewer === null || viewer.isDestroyed()) {
           return false;
         }
@@ -310,6 +337,86 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
         onDropPlaceRef.current(structureId, placeable, headingDegrees);
         return true;
+      },
+      updateDragGhost: (structureId: string, clientX: number, clientY: number) => {
+        const viewer = viewerRef.current;
+        if (viewer === null || viewer.isDestroyed()) {
+          return { overMap: false, placeable: false };
+        }
+        const canvas = viewer.scene.canvas;
+        const rect = canvas.getBoundingClientRect();
+        const screen = new Cartesian2(clientX - rect.left, clientY - rect.top);
+        if (screen.x < 0 || screen.y < 0 || screen.x > rect.width || screen.y > rect.height) {
+          clearDragGhostEntities(viewer);
+          dragGhostLastKeyRef.current = "";
+          return { overMap: false, placeable: false };
+        }
+
+        const picked = pickPlacementPosition(viewer, screen);
+        if (picked === undefined) {
+          clearDragGhostEntities(viewer);
+          dragGhostLastKeyRef.current = "";
+          return { overMap: true, placeable: false };
+        }
+
+        const resolved = resolvePlaceablePosition(picked);
+        const placeable = resolved !== undefined && isInsidePlayArea(resolved);
+        // 配置可能域内はスナップせずポインタ直下。域外でもゴーストはカーソル位置に出す。
+        const position = resolved ?? picked;
+        const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
+        // 約 0.1 m 単位で追従（粗すぎる量子化だと「決まったマス」に感じる）。
+        const key = [
+          structureId,
+          placeable ? "1" : "0",
+          position.longitude.toFixed(6),
+          position.latitude.toFixed(6),
+          Math.round(headingDegrees),
+        ].join("|");
+        if (key === dragGhostLastKeyRef.current) {
+          return { overMap: true, placeable };
+        }
+        dragGhostLastKeyRef.current = key;
+
+        if (dragGhostRafRef.current !== 0) {
+          window.cancelAnimationFrame(dragGhostRafRef.current);
+        }
+        dragGhostRafRef.current = window.requestAnimationFrame(() => {
+          dragGhostRafRef.current = 0;
+          const activeViewer = viewerRef.current;
+          if (activeViewer === null || activeViewer.isDestroyed()) {
+            return;
+          }
+          clearDragGhostEntities(activeViewer);
+          const ghost: PlacedStructure = {
+            id: DRAG_GHOST_PLACEMENT_ID,
+            structureId,
+            position,
+            headingDegrees,
+            preview: true,
+          };
+          try {
+            // 堤防など多パーツ施設は毎フレーム全再生成すると描画例外で白画面になるため簡易体で追従する。
+            addDragGhostSilhouette(activeViewer, ghost, !placeable);
+          } catch (error) {
+            console.error("Failed to render drag ghost model", structureId, error);
+            addFallbackStructureMarker(activeViewer, ghost, false, true, {
+              entityIdPrefix: DRAG_GHOST_ENTITY_PREFIX,
+              invalid: !placeable,
+            });
+          }
+          activeViewer.scene.requestRender();
+        });
+
+        return { overMap: true, placeable };
+      },
+      clearDragGhost: () => {
+        if (dragGhostRafRef.current !== 0) {
+          window.cancelAnimationFrame(dragGhostRafRef.current);
+          dragGhostRafRef.current = 0;
+        }
+        dragGhostLastKeyRef.current = "";
+        clearDragGhostEntities(viewerRef.current);
+        viewerRef.current?.scene.requestRender();
       },
     }));
 
@@ -520,7 +627,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         removeCameraMoveEnd = mapViewer.camera.moveEnd.addEventListener(settleCamera);
 
-        // 設置済み施設の選択・左右ドラッグ回転（配置自体はドックからのドロップ）
+        // 設置済み施設の選択。向きドラッグ回転は仮配置中のみ。
         const canvas = mapViewer.scene.canvas;
         eventHandler = new ScreenSpaceEventHandler(canvas);
         type RotateSession = {
@@ -535,14 +642,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
 
         const liveRotate = (headingDegrees: number, placementId: string) => {
           const placement = placementsRef.current.find(({ id }) => id === placementId);
-          if (placement === undefined) {
+          if (placement === undefined || placement.preview !== true) {
             return;
           }
           applyPlacementHeading(
             mapViewer,
             { ...placement, headingDegrees },
             true,
-            placement.preview === true,
+            true,
           );
           mapViewer.scene.requestRender();
         };
@@ -565,6 +672,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             return;
           }
           onSelectPlacementRef.current(pickedId);
+          // 確定済みは向き変更不可。選択のみ。
+          if (placement.preview !== true) {
+            rotateSession = undefined;
+            canvas.style.cursor = "";
+            return;
+          }
           canvas.style.cursor = "ew-resize";
           rotateSession = {
             placementId: pickedId,
@@ -603,11 +716,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           canvas.style.cursor = "";
 
           if (session?.active === true) {
-            const deltaX = event.position.x - session.startX;
-            const rawHeading = session.startHeadingDegrees + deltaX * ROTATE_DEGREES_PER_PX;
-            const snapped =
-              Math.round(rawHeading / ROTATE_SNAP_DEGREES) * ROTATE_SNAP_DEGREES;
-            onRotatePlacementRef.current(session.placementId, snapped);
+            const target = placementsRef.current.find(({ id }) => id === session.placementId);
+            if (target?.preview === true) {
+              const deltaX = event.position.x - session.startX;
+              const rawHeading = session.startHeadingDegrees + deltaX * ROTATE_DEGREES_PER_PX;
+              const snapped =
+                Math.round(rawHeading / ROTATE_SNAP_DEGREES) * ROTATE_SNAP_DEGREES;
+              onRotatePlacementRef.current(session.placementId, snapped);
+            }
             return;
           }
 
@@ -654,6 +770,11 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         riverWaterRef.current = null;
         placeableZoneRef.current?.destroy();
         placeableZoneRef.current = null;
+        if (dragGhostRafRef.current !== 0) {
+          window.cancelAnimationFrame(dragGhostRafRef.current);
+          dragGhostRafRef.current = 0;
+        }
+        clearDragGhostEntities(viewer);
         if (viewer != null && !viewer.isDestroyed()) {
           destroyNearOverflowFloodplain(viewer);
         }
@@ -665,7 +786,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
 
     useEffect(() => {
       const viewer = viewerRef.current;
-      if (viewer === null) {
+      if (viewer === null || viewer.isDestroyed()) {
         return;
       }
 
@@ -676,12 +797,27 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       }
 
       for (const placement of placements) {
-        addCivilEngineeringModel(
-          viewer,
-          placement,
-          placement.id === selectedPlacementId,
-          placement.preview === true,
-        );
+        try {
+          addCivilEngineeringModel(
+            viewer,
+            placement,
+            placement.id === selectedPlacementId,
+            placement.preview === true,
+          );
+        } catch (error) {
+          console.error(
+            "Failed to render structure model",
+            placement.structureId,
+            placement.id,
+            error,
+          );
+          addFallbackStructureMarker(
+            viewer,
+            placement,
+            placement.id === selectedPlacementId,
+            placement.preview === true,
+          );
+        }
       }
       viewer.scene.requestRender();
     }, [placements, selectedPlacementId, structures]);
@@ -769,18 +905,32 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           applyScreenLabelPosition(element, screen, 0, label.kind === "breach" ? -36 : -28);
         }
 
-        const hud = orientationHudRef.current;
         const target = orientationTarget;
-        if (hud !== null && target !== null) {
-          const screen = viewer.scene.cartesianToCanvasCoordinates(
+        if (target !== null) {
+          const screenBelow = viewer.scene.cartesianToCanvasCoordinates(
             Cartesian3.fromDegrees(
               target.position.longitude,
               target.position.latitude,
               target.position.height + 6,
             ),
           );
-          // 施設の手前（画面下側）にスライダーを置く。
-          applyScreenHudPosition(hud, screen, 0, 28);
+          const screenAbove = viewer.scene.cartesianToCanvasCoordinates(
+            Cartesian3.fromDegrees(
+              target.position.longitude,
+              target.position.latitude,
+              target.position.height + 18,
+            ),
+          );
+          const hud = orientationHudRef.current;
+          if (hud !== null) {
+            // 施設の手前（画面下側）にスライダーを置く。
+            applyScreenHudPosition(hud, screenBelow, 0, 28, "below");
+          }
+          const confirmHud = confirmHudRef.current;
+          if (confirmHud !== null) {
+            // 施設の上に確定／キャンセルをさりげなく置く。
+            applyScreenHudPosition(confirmHud, screenAbove, 0, -8, "above");
+          }
         }
       };
 
@@ -817,18 +967,48 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           ))}
         </div>
         {orientationTarget !== null ? (
-          <div
-            ref={orientationHudRef}
-            className={`cesium-orientation-hud${orientationTarget.preview === true ? " is-preview" : ""}`}
-          >
-            <RotationControls
-              floating
-              headingDegrees={orientationTarget.headingDegrees}
-              onChange={(headingDegrees) =>
-                onRotatePlacement(orientationTarget.id, headingDegrees)
-              }
-            />
-          </div>
+          <>
+            <div
+              ref={confirmHudRef}
+              className="cesium-confirm-hud"
+              role="group"
+              aria-label="仮配置の確定"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+            >
+              <button
+                type="button"
+                className="cesium-confirm-hud__cancel"
+                aria-label="キャンセル"
+                title="キャンセル（Esc）"
+                onClick={() => onCancelPendingPlacement?.()}
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+              <button
+                type="button"
+                className="cesium-confirm-hud__confirm"
+                aria-label="確定して配置"
+                title="確定（Enter）"
+                onClick={() => onConfirmPendingPlacement?.()}
+              >
+                <span aria-hidden="true">✓</span>
+              </button>
+            </div>
+            <div
+              ref={orientationHudRef}
+              className={`cesium-orientation-hud${orientationTarget.preview === true ? " is-preview" : ""}`}
+            >
+              <RotationControls
+                floating
+                headingDegrees={orientationTarget.headingDegrees}
+                onChange={(headingDegrees) =>
+                  onRotatePlacement(orientationTarget.id, headingDegrees)
+                }
+              />
+            </div>
+          </>
         ) : null}
         {!isMapReady && mapError === null ? (
           <div className="cesium-game-map__status" role="status">
@@ -865,13 +1045,15 @@ function applyScreenHudPosition(
   screen: Cartesian2 | undefined,
   offsetX: number,
   offsetY: number,
+  anchor: "below" | "above" = "below",
 ): void {
   if (screen === undefined) {
     element.style.visibility = "hidden";
     return;
   }
   element.style.visibility = "visible";
-  element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) translate(-50%, 0)`;
+  const anchorTransform = anchor === "above" ? "translate(-50%, -100%)" : "translate(-50%, 0)";
+  element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) ${anchorTransform}`;
 }
 
 async function loadAlignedTerrain(viewer: Viewer, isDisposed: () => boolean): Promise<void> {
@@ -1206,10 +1388,16 @@ function pickPlacementPosition(
     if (picked !== undefined) {
       const cartographic = Cartographic.fromCartesian(picked);
       const terrainHeight = scene.globe.getHeight(cartographic);
+      const height =
+        typeof terrainHeight === "number" && Number.isFinite(terrainHeight)
+          ? terrainHeight
+          : Number.isFinite(cartographic.height)
+            ? cartographic.height
+            : FALLBACK_GROUND_HEIGHT_M;
       return {
         longitude: CesiumMath.toDegrees(cartographic.longitude),
         latitude: CesiumMath.toDegrees(cartographic.latitude),
-        height: terrainHeight ?? cartographic.height,
+        height,
       };
     }
   }
@@ -1224,10 +1412,11 @@ function pickPlacementPosition(
 
 function cartesianToGeoPosition(cartesian: Cartesian3): GeoPosition {
   const cartographic = Cartographic.fromCartesian(cartesian);
+  const height = cartographic.height;
   return {
     longitude: CesiumMath.toDegrees(cartographic.longitude),
     latitude: CesiumMath.toDegrees(cartographic.latitude),
-    height: cartographic.height,
+    height: Number.isFinite(height) ? height : FALLBACK_GROUND_HEIGHT_M,
   };
 }
 
@@ -1285,6 +1474,13 @@ function matchPlacementId(
   return matches[0];
 }
 
+type StructureModelOptions = {
+  entityIdPrefix?: string;
+  /** 配置不可位置（ドラッグ中の市街地など）。 */
+  invalid?: boolean;
+  showHeadingCue?: boolean;
+};
+
 function applyPlacementHeading(
   viewer: Viewer,
   placement: PlacedStructure,
@@ -1299,7 +1495,159 @@ function applyPlacementHeading(
       viewer.entities.remove(entity);
     }
   }
-  addCivilEngineeringModel(viewer, placement, selected, preview);
+  try {
+    addCivilEngineeringModel(viewer, placement, selected, preview);
+  } catch (error) {
+    console.error("Failed to update structure heading model", placement.structureId, error);
+    addFallbackStructureMarker(viewer, placement, selected, preview);
+  }
+}
+
+function clearDragGhostEntities(viewer: Viewer | null): void {
+  if (viewer === null || viewer.isDestroyed()) {
+    return;
+  }
+  for (const entity of [...viewer.entities.values]) {
+    if (entity.id.startsWith(`${DRAG_GHOST_ENTITY_PREFIX}-`)) {
+      viewer.entities.remove(entity);
+    }
+  }
+}
+
+function resolveGroundHeightMeters(viewer: Viewer, placement: PlacedStructure): number {
+  const sampled = viewer.scene.globe.getHeight(
+    Cartographic.fromDegrees(placement.position.longitude, placement.position.latitude),
+  );
+  if (typeof sampled === "number" && Number.isFinite(sampled)) {
+    return Math.max(0, sampled);
+  }
+  const stored = placement.position.height;
+  if (typeof stored === "number" && Number.isFinite(stored)) {
+    return Math.max(0, stored);
+  }
+  return FALLBACK_GROUND_HEIGHT_M;
+}
+
+function addFallbackStructureMarker(
+  viewer: Viewer,
+  placement: PlacedStructure,
+  selected: boolean,
+  preview = false,
+  options: StructureModelOptions = {},
+): void {
+  const prefix = options.entityIdPrefix ?? "placement";
+  const invalid = options.invalid === true;
+  const groundHeight = resolveGroundHeightMeters(viewer, placement);
+  const color = Color.fromCssColorString(
+    invalid ? "#ef6b4a" : preview ? "#5ec8ff" : selected ? "#f0b429" : "#58d5a1",
+  ).withAlpha(preview || invalid ? 0.55 : 0.85);
+  viewer.entities.add({
+    id: `${prefix}-${placement.id}`,
+    position: Cartesian3.fromDegrees(
+      placement.position.longitude,
+      placement.position.latitude,
+      groundHeight + 4,
+    ),
+    box: new BoxGraphics({
+      dimensions: new Cartesian3(22, 22, 8),
+      material: color,
+      outline: true,
+      outlineColor: Color.WHITE.withAlpha(0.7),
+      outlineWidth: 1,
+      shadows: ShadowMode.DISABLED,
+    }),
+  });
+}
+
+/**
+ * ドラッグ中の軽量シルエット。堤防のような多層モデルを毎フレーム組むと WebGL / Cesium が落ちるため。
+ */
+function addDragGhostSilhouette(
+  viewer: Viewer,
+  placement: PlacedStructure,
+  invalid: boolean,
+): void {
+  const prefix = DRAG_GHOST_ENTITY_PREFIX;
+  const groundHeight = resolveGroundHeightMeters(viewer, placement);
+  const heading = CesiumMath.toRadians(
+    Number.isFinite(placement.headingDegrees) ? placement.headingDegrees : 0,
+  );
+  const footprint = getStructureFootprintMeters(placement.structureId);
+  const fill = Color.fromCssColorString(invalid ? "#ef6b4a" : "#5ec8ff").withAlpha(
+    invalid ? 0.35 : 0.42,
+  );
+  const outline = Color.fromCssColorString(invalid ? "#ffb0a0" : "#9fe4ff").withAlpha(0.9);
+
+  viewer.entities.add({
+    id: `${prefix}-${placement.id}-marker`,
+    position: Cartesian3.fromDegrees(
+      placement.position.longitude,
+      placement.position.latitude,
+      groundHeight + 0.1,
+    ),
+    ellipse: {
+      semiMajorAxis: Math.max(footprint.length, footprint.width) * 0.35,
+      semiMinorAxis: Math.max(footprint.length, footprint.width) * 0.35,
+      material: fill.withAlpha(invalid ? 0.16 : 0.2),
+      outline: true,
+      outlineColor: outline,
+      outlineWidth: 1,
+    },
+  });
+
+  const bodyHeight = Math.min(Math.max(footprint.height, 4), 14);
+  viewer.entities.add({
+    id: `${prefix}-${placement.id}`,
+    position: Cartesian3.fromDegrees(
+      placement.position.longitude,
+      placement.position.latitude,
+      groundHeight + bodyHeight * 0.5,
+    ),
+    orientation: Transforms.headingPitchRollQuaternion(
+      Cartesian3.fromDegrees(
+        placement.position.longitude,
+        placement.position.latitude,
+        groundHeight,
+      ),
+      new HeadingPitchRoll(heading, 0, 0),
+    ),
+    box: new BoxGraphics({
+      dimensions: new Cartesian3(
+        Math.min(footprint.length, 100),
+        Math.min(footprint.width, 48),
+        bodyHeight,
+      ),
+      material: fill,
+      outline: true,
+      outlineColor: outline,
+      outlineWidth: 1,
+      shadows: ShadowMode.DISABLED,
+    }),
+  });
+
+  const tip = offsetLonLatMeters(
+    placement.position.longitude,
+    placement.position.latitude,
+    0,
+    Math.min(footprint.length * 0.45, 48),
+    heading,
+  );
+  viewer.entities.add({
+    id: `${prefix}-${placement.id}-heading`,
+    polyline: {
+      positions: Cartesian3.fromDegreesArrayHeights([
+        placement.position.longitude,
+        placement.position.latitude,
+        groundHeight + bodyHeight + 0.8,
+        tip.longitude,
+        tip.latitude,
+        groundHeight + bodyHeight + 0.8,
+      ]),
+      width: 4,
+      material: outline,
+      clampToGround: false,
+    },
+  });
 }
 
 function addCivilEngineeringModel(
@@ -1307,25 +1655,28 @@ function addCivilEngineeringModel(
   placement: PlacedStructure,
   selected: boolean,
   preview = false,
+  options: StructureModelOptions = {},
 ): void {
-  const heading = CesiumMath.toRadians(placement.headingDegrees);
-  const parts = getStructureModelParts(placement.structureId);
-  const outlineColor = preview
-    ? Color.fromCssColorString("#7ad8ff")
-    : selected
-      ? Color.fromCssColorString("#f0b429")
-      : Color.WHITE.withAlpha(0.35);
-  // 非同期で地形プロバイダーが切り替わっても埋没しないよう、配置時の地表高を絶対標高にする。
-  const groundHeight = Math.max(
-    0,
-    viewer.scene.globe.getHeight(
-      Cartographic.fromDegrees(placement.position.longitude, placement.position.latitude),
-    ) ?? placement.position.height,
+  const prefix = options.entityIdPrefix ?? "placement";
+  const invalid = options.invalid === true;
+  const showHeadingCue = options.showHeadingCue ?? preview;
+  const heading = CesiumMath.toRadians(
+    Number.isFinite(placement.headingDegrees) ? placement.headingDegrees : 0,
   );
+  const parts = getStructureModelParts(placement.structureId);
+  const outlineColor = invalid
+    ? Color.fromCssColorString("#ff8b6b")
+    : preview
+      ? Color.fromCssColorString("#7ad8ff")
+      : selected
+        ? Color.fromCssColorString("#f0b429")
+        : Color.WHITE.withAlpha(0.35);
+  // 非同期で地形プロバイダーが切り替わっても埋没しないよう、配置時の地表高を絶対標高にする。
+  const groundHeight = resolveGroundHeightMeters(viewer, placement);
 
-  const markerRadius = selected || preview ? 36 : 18;
+  const markerRadius = selected || preview || invalid ? 36 : 18;
   viewer.entities.add({
-    id: `placement-${placement.id}-marker`,
+    id: `${prefix}-${placement.id}-marker`,
     position: Cartesian3.fromDegrees(
       placement.position.longitude,
       placement.position.latitude,
@@ -1335,15 +1686,17 @@ function addCivilEngineeringModel(
       semiMajorAxis: markerRadius,
       semiMinorAxis: markerRadius,
       material: Color.fromCssColorString(
-        preview ? "#5ec8ff" : selected ? "#f0b429" : "#58d5a1",
-      ).withAlpha(preview ? 0.28 : selected ? 0.24 : 0.1),
-      outline: selected || preview,
+        invalid ? "#ef6b4a" : preview ? "#5ec8ff" : selected ? "#f0b429" : "#58d5a1",
+      ).withAlpha(invalid ? 0.22 : preview ? 0.28 : selected ? 0.24 : 0.1),
+      outline: selected || preview || invalid,
       outlineColor,
+      // WebGL1 環境では outlineWidth>1 が例外になることがある。
+      outlineWidth: 1,
     },
   });
 
-  // 選択中・仮配置中は向きを矢印で示す（操作の手がかり）。
-  if (selected || preview) {
+  // 仮配置中（または明示指定時）のみ向き矢印を示す。確定後は向き固定。
+  if (showHeadingCue) {
     const tip = offsetLonLatMeters(
       placement.position.longitude,
       placement.position.latitude,
@@ -1351,9 +1704,11 @@ function addCivilEngineeringModel(
       52,
       heading,
     );
-    const arrowColor = Color.fromCssColorString(preview ? "#9fe4ff" : "#ffd56a").withAlpha(0.95);
+    const arrowColor = Color.fromCssColorString(
+      invalid ? "#ffb0a0" : preview ? "#9fe4ff" : "#ffd56a",
+    ).withAlpha(0.95);
     viewer.entities.add({
-      id: `placement-${placement.id}-heading`,
+      id: `${prefix}-${placement.id}-heading`,
       polyline: {
         positions: Cartesian3.fromDegreesArrayHeights([
           placement.position.longitude,
@@ -1369,7 +1724,7 @@ function addCivilEngineeringModel(
       },
     });
     viewer.entities.add({
-      id: `placement-${placement.id}-heading-tip`,
+      id: `${prefix}-${placement.id}-heading-tip`,
       position: Cartesian3.fromDegrees(tip.longitude, tip.latitude, groundHeight + 2.4),
       orientation: Transforms.headingPitchRollQuaternion(
         Cartesian3.fromDegrees(tip.longitude, tip.latitude, groundHeight),
@@ -1400,55 +1755,73 @@ function addCivilEngineeringModel(
       Cartesian3.fromDegrees(longitude, latitude, groundHeight),
       new HeadingPitchRoll(heading, 0, 0),
     );
-    const material = createStructureMaterial(part.material, {
-      preview,
-      accentHex: part.accentHex,
-      repeatX: part.repeatX,
-      repeatY: part.repeatY,
-    });
-    const showOutline = selected || preview;
-    const outlineWidth = selected || preview ? 2 : 0;
+    const isCylinder = part.kind === "cylinder";
+    // ImageMaterial（キャンバス procedural）は堤防など多パーツで描画例外→白画面になりやすい。
+    // 見た目の識別色は solid ColorMaterial で十分出せる。
+    let material;
+    try {
+      material = createStructureMaterial(part.material, {
+        preview: preview || invalid,
+        accentHex: invalid ? "#ef6b4a" : part.accentHex,
+        repeatX: part.repeatX,
+        repeatY: part.repeatY,
+        solidOnly: true,
+      });
+    } catch (error) {
+      console.warn("Structure material failed", part.material, error);
+      material = new ColorMaterialProperty(
+        Color.fromCssColorString(invalid ? "#ef6b4a" : "#9aa3a8").withAlpha(0.7),
+      );
+    }
+    const showOutline = selected || preview || invalid;
+    const entityId = isPrimaryPart
+      ? `${prefix}-${placement.id}`
+      : `${prefix}-${placement.id}-${part.id}`;
 
-    if (part.kind === "cylinder") {
+    try {
+      if (isCylinder) {
+        viewer.entities.add({
+          id: entityId,
+          position,
+          orientation,
+          cylinder: new CylinderGraphics({
+            length: Math.max(part.dimensions?.height ?? 1, 1.2),
+            topRadius: part.radius ?? 10,
+            bottomRadius: part.radius ?? 10,
+            material,
+            outline: showOutline,
+            outlineColor,
+            outlineWidth: 1,
+            shadows: ShadowMode.DISABLED,
+          }),
+        });
+        continue;
+      }
+
+      if (part.dimensions === undefined) {
+        continue;
+      }
+
       viewer.entities.add({
-        id: isPrimaryPart ? `placement-${placement.id}` : `placement-${placement.id}-${part.id}`,
+        id: entityId,
         position,
         orientation,
-        cylinder: new CylinderGraphics({
-          length: Math.max(part.dimensions?.height ?? 1, 1.2),
-          topRadius: part.radius ?? 10,
-          bottomRadius: part.radius ?? 10,
+        box: new BoxGraphics({
+          dimensions: new Cartesian3(
+            part.dimensions.length,
+            part.dimensions.width,
+            Math.max(part.dimensions.height, 0.8),
+          ),
           material,
           outline: showOutline,
           outlineColor,
-          outlineWidth,
+          outlineWidth: 1,
           shadows: ShadowMode.DISABLED,
         }),
       });
-      continue;
+    } catch (error) {
+      console.warn("Skipped structure part", placement.structureId, part.id, error);
     }
-
-    if (part.dimensions === undefined) {
-      continue;
-    }
-
-    viewer.entities.add({
-      id: isPrimaryPart ? `placement-${placement.id}` : `placement-${placement.id}-${part.id}`,
-      position,
-      orientation,
-      box: new BoxGraphics({
-        dimensions: new Cartesian3(
-          part.dimensions.length,
-          part.dimensions.width,
-          Math.max(part.dimensions.height, 0.8),
-        ),
-        material,
-        outline: showOutline,
-        outlineColor,
-        outlineWidth,
-        shadows: ShadowMode.DISABLED,
-      }),
-    });
   }
 }
 

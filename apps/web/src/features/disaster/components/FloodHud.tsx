@@ -28,12 +28,15 @@ export function FloodHud({
   onStartGame,
   onStartRainNow,
 }: FloodHudProps) {
-  const heldSites = protectedBankSites.filter((site) => !site.overflowing).length;
+  const bankSites = protectedBankSites ?? [];
+  const overflows = overflowSites ?? [];
+  const heldSites = bankSites.filter((site) => !site.overflowing).length;
+  const safeMitigation = sanitizeMitigation(mitigation);
 
   return (
     <section className={`flood-hud flood-hud--${phase}`} aria-label="災害状況">
       <div className="flood-hud__heading">
-        <span className="flood-hud__phase">{phaseLabel[phase]}</span>
+        <span className="flood-hud__phase">{phaseLabel[phase] ?? phase}</span>
         {phase !== "idle" ? (
           <strong className="flood-hud__timer">{formatTime(phaseRemainingSeconds)}</strong>
         ) : null}
@@ -51,52 +54,56 @@ export function FloodHud({
         </>
       ) : (
         <>
-          <MitigationPanel mitigation={mitigation} heldSites={heldSites} />
+          <MitigationPanel mitigation={safeMitigation} heldSites={heldSites} />
           <div className="flood-hud__metrics">
             <FloodMetric
               label="雨量"
-              value={`${Math.round(rainfallIntensity * 100)}%`}
-              ratio={rainfallIntensity}
+              value={`${Math.round(finiteOr(rainfallIntensity, 0) * 100)}%`}
+              ratio={finiteOr(rainfallIntensity, 0)}
               tone="rain"
             />
             <FloodMetric
               label="河川水位"
-              value={`${riverLevelMeters.toFixed(1)} m`}
-              ratio={riverLevelMeters / 7}
+              value={`${finiteOr(riverLevelMeters, 0).toFixed(1)} m`}
+              ratio={finiteOr(riverLevelMeters, 0) / 7}
               tone="water"
             />
             <FloodMetric
               label="越水量"
-              value={overflowMeters > 0.02 ? `+${overflowMeters.toFixed(2)} m` : "なし"}
-              ratio={Math.min(1, overflowMeters / 1.5)}
+              value={
+                finiteOr(overflowMeters, 0) > 0.02
+                  ? `+${finiteOr(overflowMeters, 0).toFixed(2)} m`
+                  : "なし"
+              }
+              ratio={Math.min(1, finiteOr(overflowMeters, 0) / 1.5)}
               tone="water"
             />
             <FloodMetric
               label="氾濫原"
               value={
-                floodplainFillRatio > 0.04
-                  ? `片岸 ${Math.round(floodplainHalfWidthMeters)} m`
+                finiteOr(floodplainFillRatio, 0) > 0.04
+                  ? `片岸 ${Math.round(finiteOr(floodplainHalfWidthMeters, 0))} m`
                   : "本川のみ"
               }
-              ratio={floodplainFillRatio}
+              ratio={finiteOr(floodplainFillRatio, 0)}
               tone="water"
             />
-          <FloodMetric
-            label="決壊地点"
-            value={overflowSites.length > 0 ? `${overflowSites.length} 箇所` : "なし"}
-            ratio={Math.min(1, overflowSites.length / 4)}
-            tone="damage"
-          />
+            <FloodMetric
+              label="決壊地点"
+              value={overflows.length > 0 ? `${overflows.length} 箇所` : "なし"}
+              ratio={Math.min(1, overflows.length / 4)}
+              tone="damage"
+            />
             <FloodMetric
               label="最大浸水深"
-              value={`${floodDepthMeters.toFixed(2)} m`}
-              ratio={floodDepthMeters / 2}
+              value={`${finiteOr(floodDepthMeters, 0).toFixed(2)} m`}
+              ratio={finiteOr(floodDepthMeters, 0) / 2}
               tone="water"
             />
             <FloodMetric
               label="被災度"
-              value={`${damagePercent.toFixed(1)}%`}
-              ratio={damagePercent / 100}
+              value={`${finiteOr(damagePercent, 0).toFixed(1)}%`}
+              ratio={finiteOr(damagePercent, 0) / 100}
               tone="damage"
             />
           </div>
@@ -170,7 +177,7 @@ type FloodMetricProps = {
 };
 
 function FloodMetric({ label, value, ratio, tone }: FloodMetricProps) {
-  const safeRatio = Math.max(0, Math.min(1, ratio));
+  const safeRatio = Math.max(0, Math.min(1, finiteOr(ratio, 0)));
   return (
     <div className="flood-metric">
       <div className="flood-metric__copy">
@@ -188,7 +195,23 @@ function FloodMetric({ label, value, ratio, tone }: FloodMetricProps) {
 }
 
 function formatTime(seconds: number): string {
-  const safeSeconds = Math.max(0, Math.ceil(seconds));
+  const safeSeconds = Math.max(0, Math.ceil(finiteOr(seconds, 0)));
   const minutes = Math.floor(safeSeconds / 60);
   return `${minutes}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
+
+function finiteOr(value: number | undefined, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function sanitizeMitigation(mitigation: MitigationSummary | undefined): MitigationSummary {
+  return {
+    waterLevelReduction: finiteOr(mitigation?.waterLevelReduction, 0),
+    overflowPrevention: finiteOr(mitigation?.overflowPrevention, 0),
+    drainageCapacity: finiteOr(mitigation?.drainageCapacity, 0),
+    bankProtection: finiteOr(mitigation?.bankProtection, 0),
+    channelCapacityIncrease: finiteOr(mitigation?.channelCapacityIncrease, 0),
+    activeStructureCount: Math.max(0, Math.round(finiteOr(mitigation?.activeStructureCount, 0))),
+    averageEffectiveness: finiteOr(mitigation?.averageEffectiveness, 0),
+  };
 }

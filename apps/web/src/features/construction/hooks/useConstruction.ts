@@ -161,42 +161,33 @@ export function useConstruction() {
     setPlacements((current) => [...current, confirmed]);
     setPendingPlacement(null);
     setSelectedStructureId(structure.id);
-    setSelectedPlacementId(confirmed.id);
+    // 確定後は向き変更 UI を出さない（選択ハイライトも外す）。
+    setSelectedPlacementId(null);
     setMessage(
       `${structure.displayName}を配置 — ${getStructureEffectLabel(structure.id)}（緑の円が影響範囲）`,
     );
     return confirmed;
   }, [pendingPlacement, setMessage]);
 
+  /** 向き変更は仮配置中のみ。確定済み施設は変更しない。 */
   const rotatePlacement = useCallback((placementId: string, headingDegrees: number) => {
     const nextHeading = normalizeHeadingDegrees(headingDegrees);
     setPendingPlacement((current) => {
-      if (current !== null && current.id === placementId) {
-        return { ...current, headingDegrees: nextHeading };
+      if (current === null || current.id !== placementId) {
+        return current;
       }
-      return current;
+      return { ...current, headingDegrees: nextHeading };
     });
-    setPlacements((current) =>
-      current.map((placement) =>
-        placement.id === placementId
-          ? { ...placement, headingDegrees: nextHeading }
-          : placement,
-      ),
-    );
   }, []);
 
   const rotatePlacementBy = useCallback(
     (placementId: string, deltaDegrees: number) => {
-      const target =
-        pendingPlacement?.id === placementId
-          ? pendingPlacement
-          : placements.find(({ id }) => id === placementId);
-      if (target === undefined) {
+      if (pendingPlacement === null || pendingPlacement.id !== placementId) {
         return;
       }
-      rotatePlacement(placementId, target.headingDegrees + deltaDegrees);
+      rotatePlacement(placementId, pendingPlacement.headingDegrees + deltaDegrees);
     },
-    [pendingPlacement, placements, rotatePlacement],
+    [pendingPlacement, rotatePlacement],
   );
 
   const visiblePlacements = useMemo(() => {

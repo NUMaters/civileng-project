@@ -59,7 +59,9 @@ export function calculateHydraulicEffectiveness(placement: PlacedStructure): num
     placement.headingDegrees,
   );
   const structureId = placement.structureId;
-  const heightMeters = placement.position.height;
+  const rawHeight = placement.position.height;
+  const heightMeters =
+    typeof rawHeight === "number" && Number.isFinite(rawHeight) ? rawHeight : 18;
 
   let locationScore = 0.45;
   let headingScore = 0.7;

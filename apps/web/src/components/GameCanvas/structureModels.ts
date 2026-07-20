@@ -362,3 +362,31 @@ export function getStructureModelParts(structureId: string): StructureModelPart[
     ]
   );
 }
+
+/** ドラッグゴースト用の外接サイズ（m）。 */
+export function getStructureFootprintMeters(structureId: string): {
+  length: number;
+  width: number;
+  height: number;
+} {
+  const parts = getStructureModelParts(structureId);
+  let length = 22;
+  let width = 22;
+  let height = 8;
+  for (const part of parts) {
+    if (part.kind === "cylinder") {
+      const diameter = (part.radius ?? 10) * 2;
+      length = Math.max(length, diameter);
+      width = Math.max(width, diameter);
+      height = Math.max(height, part.dimensions?.height ?? part.centerHeight * 2);
+      continue;
+    }
+    if (part.dimensions === undefined) {
+      continue;
+    }
+    length = Math.max(length, part.dimensions.length + Math.abs(part.offsetEast ?? 0) * 2);
+    width = Math.max(width, part.dimensions.width + Math.abs(part.offsetNorth ?? 0) * 2);
+    height = Math.max(height, part.centerHeight + part.dimensions.height * 0.5);
+  }
+  return { length, width, height };
+}

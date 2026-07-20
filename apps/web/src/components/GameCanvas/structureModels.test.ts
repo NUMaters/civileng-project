@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getStructureModelParts } from "./structureModels";
+import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
 
 const STRUCTURE_IDS = [
   "levee",
@@ -26,5 +26,12 @@ describe("getStructureModelParts", () => {
     expect(materials).toContain("grass");
     expect(materials).toContain("asphalt");
     expect(materials).toContain("earth");
+  });
+
+  it("堤防のフットプリントはドラッグ用に十分なサイズを持つ", () => {
+    const footprint = getStructureFootprintMeters("levee");
+    expect(footprint.length).toBeGreaterThan(80);
+    expect(footprint.width).toBeGreaterThan(20);
+    expect(footprint.height).toBeGreaterThan(5);
   });
 });

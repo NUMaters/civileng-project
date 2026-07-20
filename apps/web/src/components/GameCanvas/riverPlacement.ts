@@ -41,45 +41,13 @@ export function isInPlaceableRiverZone(position: GeoPosition): boolean {
 
 /**
  * 施設ドロップ座標を解決する。
- * - 河道・河岸内: ドロップ位置を維持（河岸に堤防などを置ける）
- * - 河道中央付近のわずかなずれ: 中心線へ軽く寄せる（任意）
- * - それ以外（市街地など）: undefined
+ * 配置可能域内ならポインタ位置をそのまま返し、中心線などへの強制スナップはしない。
+ * 域外（市街地など）は undefined。
  */
 export function resolvePlaceablePosition(position: GeoPosition): GeoPosition | undefined {
-  const nearest = nearestPointOnPolyline(
-    position.longitude,
-    position.latitude,
-    ABUKUMA_RIVER_CENTERLINE,
-  );
-
-  const inWater = pointInPolygonDegrees(
-    position.longitude,
-    position.latitude,
-    ABUKUMA_WATER_SURFACE_POLYGON,
-  );
-  const inCorridor = pointInPolygonDegrees(
-    position.longitude,
-    position.latitude,
-    ABUKUMA_PLACEABLE_CORRIDOR,
-  );
-
-  if (
-    !inWater &&
-    !inCorridor &&
-    nearest.distanceMeters > PLACEABLE_CORRIDOR_HALF_WIDTH_M
-  ) {
+  if (!isInPlaceableRiverZone(position)) {
     return undefined;
   }
-
-  // 本川中央付近だけ、タップずれを中心線へ寄せる。河岸はそのまま残す。
-  if (!inWater && nearest.distanceMeters <= NORMAL_CHANNEL_HALF_WIDTH_M * 0.45) {
-    return {
-      longitude: nearest.longitude,
-      latitude: nearest.latitude,
-      height: position.height,
-    };
-  }
-
   return position;
 }
 

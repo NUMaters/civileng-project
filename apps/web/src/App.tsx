@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { CesiumGameMap, type CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
-import {
-  ConstructionMenu,
-  getStructureVisual,
-  useConstruction,
-} from "./features/construction";
+import { ConstructionMenu, useConstruction } from "./features/construction";
 import { formatBudget, INITIAL_BUDGET } from "./features/construction/services/constructionService";
 import type { GeoPosition } from "./features/construction/types/construction";
 import { FloodHud, FloodResultPanel, useFloodSimulation } from "./features/disaster";
@@ -14,11 +10,13 @@ import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 type DockDragState = {
   structureId: string;
   displayName: string;
-  imageSrc: string;
   startX: number;
   startY: number;
   x: number;
   y: number;
+  /** 地図上で 3D ゴーストを表示中（HTML アイコンは隠す）。 */
+  overMap: boolean;
+  placeable: boolean;
 };
 
 /** タップ選択とドラッグ配置を区別する最小移動量（CSS px）。 */
@@ -58,11 +56,12 @@ export function App() {
       const next: DockDragState = {
         structureId,
         displayName: structure.displayName,
-        imageSrc: getStructureVisual(structureId).imageSrc,
         startX: clientX,
         startY: clientY,
         x: clientX,
         y: clientY,
+        overMap: false,
+        placeable: false,
       };
       dragRef.current = next;
       setDrag(next);
@@ -135,15 +134,38 @@ export function App() {
       if (current === null) {
         return;
       }
-      const next = { ...current, x: event.clientX, y: event.clientY };
+      const moved = Math.hypot(event.clientX - current.startX, event.clientY - current.startY);
+      const ghost =
+        moved >= DOCK_DRAG_PLACE_THRESHOLD_PX
+          ? mapRef.current?.updateDragGhost(
+              current.structureId,
+              event.clientX,
+              event.clientY,
+            )
+          : undefined;
+      const next: DockDragState = {
+        ...current,
+        x: event.clientX,
+        y: event.clientY,
+        overMap: ghost?.overMap === true,
+        placeable: ghost?.placeable === true,
+      };
       dragRef.current = next;
-      setDrag(next);
+      // 地図上では 3D ゴーストが本体なので、HTML 更新は状態変化時／地図外だけ。
+      if (
+        current.overMap !== next.overMap ||
+        current.placeable !== next.placeable ||
+        !next.overMap
+      ) {
+        setDrag(next);
+      }
     };
 
     const onUp = (event: PointerEvent) => {
       const current = dragRef.current;
       dragRef.current = null;
       setDrag(null);
+      mapRef.current?.clearDragGhost();
       if (current === null) {
         return;
       }
@@ -161,8 +183,9 @@ export function App() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
+      mapRef.current?.clearDragGhost();
     };
-  }, [drag]);
+  }, [drag !== null]);
 
   return (
     <main className={`game-shell${drag !== null ? " is-dock-dragging" : ""}`}>
@@ -178,6 +201,8 @@ export function App() {
         onRotatePlacement={construction.rotatePlacement}
         onSelectPlacement={construction.setSelectedPlacementId}
         onInvalidPosition={construction.setMessage}
+        onConfirmPendingPlacement={handleConfirmPlacement}
+        onCancelPendingPlacement={construction.cancelPendingPlacement}
         onCameraFocusChange={handleCameraFocusChange}
         floodState={{
           // 準備中も影響圏を出す。越水プルーム等は災害中のみ。
@@ -226,28 +251,6 @@ export function App() {
         </div>
       </header>
 
-      {construction.pendingPlacement !== null ? (
-        <div className="placement-confirm" role="region" aria-label="仮配置の確定">
-          <p className="placement-confirm__copy">向きは施設前のスライダーで調整</p>
-          <div className="placement-confirm__actions">
-            <button
-              type="button"
-              className="placement-confirm__cancel"
-              onClick={construction.cancelPendingPlacement}
-            >
-              キャンセル
-            </button>
-            <button
-              type="button"
-              className="placement-confirm__confirm"
-              onClick={handleConfirmPlacement}
-            >
-              確定して配置
-            </button>
-          </div>
-        </div>
-      ) : null}
-
       {construction.message !== "" ? (
         <p key={construction.message} className="game-toast" role="status">
           {construction.message}
@@ -262,12 +265,23 @@ export function App() {
         onDragStart={beginDockDrag}
       />
 
-      {drag !== null ? (
-        <div className="dock-drag-ghost" style={{ left: drag.x, top: drag.y }} aria-hidden="true">
-          <span className="dock-drag-ghost__icon">
-            <img src={drag.imageSrc} alt="" draggable={false} width={56} height={56} />
-          </span>
+      {drag !== null && !drag.overMap ? (
+        <div
+          className="dock-drag-ghost dock-drag-ghost--lift"
+          style={{ left: drag.x, top: drag.y }}
+          aria-hidden="true"
+        >
+          <span className="dock-drag-ghost__hint">地図へドラッグして配置</span>
           <span>{drag.displayName}</span>
+        </div>
+      ) : null}
+      {drag !== null && drag.overMap ? (
+        <div
+          className={`dock-drag-ghost dock-drag-ghost--map${drag.placeable ? " is-placeable" : " is-blocked"}`}
+          style={{ left: drag.x, top: drag.y + 56 }}
+          aria-hidden="true"
+        >
+          <span>{drag.placeable ? `${drag.displayName}を配置` : "河道・河岸へ"}</span>
         </div>
       ) : null}
 

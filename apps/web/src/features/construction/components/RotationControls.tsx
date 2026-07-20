@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import { normalizeHeadingDegrees } from "../services/constructionService";
 
 type RotationControlsProps = {
@@ -7,8 +6,6 @@ type RotationControlsProps = {
   /** 地図上の施設付近に浮かべるコンパクト表示。 */
   floating?: boolean;
 };
-
-const NUDGE_STEP = 15;
 
 /**
  * 施設付近に置くシンプルな向きスライダー。
@@ -19,26 +16,6 @@ export function RotationControls({
   floating = true,
 }: RotationControlsProps) {
   const displayDegrees = Math.round(normalizeHeadingDegrees(headingDegrees));
-  const headingRef = useRef(headingDegrees);
-  const onChangeRef = useRef(onChange);
-
-  useEffect(() => {
-    headingRef.current = headingDegrees;
-  }, [headingDegrees]);
-
-  useEffect(() => {
-    onChangeRef.current = onChange;
-  }, [onChange]);
-
-  const applyAbsolute = (nextDegrees: number) => {
-    const next = normalizeHeadingDegrees(nextDegrees);
-    headingRef.current = next;
-    onChangeRef.current(next);
-  };
-
-  const nudge = (deltaDegrees: number) => {
-    applyAbsolute(headingRef.current + deltaDegrees);
-  };
 
   return (
     <div
@@ -50,18 +27,7 @@ export function RotationControls({
         event.stopPropagation();
       }}
     >
-      <button
-        type="button"
-        className="orientation-slider__nudge"
-        aria-label={`左へ ${NUDGE_STEP} 度`}
-        onClick={() => nudge(-NUDGE_STEP)}
-      >
-        ↺
-      </button>
       <label className="orientation-slider__track">
-        <span className="orientation-slider__value" aria-live="polite">
-          {displayDegrees}°
-        </span>
         <input
           className="orientation-slider__input"
           type="range"
@@ -71,17 +37,9 @@ export function RotationControls({
           value={displayDegrees}
           aria-valuetext={`${displayDegrees}度`}
           aria-label="向きスライダー"
-          onChange={(event) => applyAbsolute(Number(event.target.value))}
+          onChange={(event) => onChange(normalizeHeadingDegrees(Number(event.target.value)))}
         />
       </label>
-      <button
-        type="button"
-        className="orientation-slider__nudge"
-        aria-label={`右へ ${NUDGE_STEP} 度`}
-        onClick={() => nudge(NUDGE_STEP)}
-      >
-        ↻
-      </button>
     </div>
   );
 }

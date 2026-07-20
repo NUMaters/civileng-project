@@ -53,12 +53,18 @@ export function syncProtectionVisualization(
     const fill = Color.fromCssColorString(colorHex).withAlpha(0.14);
     const outline = Color.fromCssColorString(colorHex).withAlpha(0.7);
     const existing = viewer.entities.getById(id);
+    if (!Number.isFinite(influence.longitude) || !Number.isFinite(influence.latitude)) {
+      continue;
+    }
+    const radius = Number.isFinite(influence.radiusMeters)
+      ? Math.max(20, influence.radiusMeters)
+      : 180;
     const position = Cartesian3.fromDegrees(influence.longitude, influence.latitude);
 
     if (existing?.ellipse !== undefined) {
       existing.position = new ConstantPositionProperty(position);
-      existing.ellipse.semiMajorAxis = new ConstantProperty(influence.radiusMeters);
-      existing.ellipse.semiMinorAxis = new ConstantProperty(influence.radiusMeters);
+      existing.ellipse.semiMajorAxis = new ConstantProperty(radius);
+      existing.ellipse.semiMinorAxis = new ConstantProperty(radius);
       existing.ellipse.material = new ColorMaterialProperty(fill);
       existing.ellipse.outlineColor = new ConstantProperty(outline);
       existing.show = true;
@@ -69,14 +75,14 @@ export function syncProtectionVisualization(
       id,
       position,
       ellipse: {
-        semiMajorAxis: influence.radiusMeters,
-        semiMinorAxis: influence.radiusMeters,
+        semiMajorAxis: radius,
+        semiMinorAxis: radius,
         height: 0.35,
         heightReference: HeightReference.RELATIVE_TO_GROUND,
         material: fill,
         outline: true,
         outlineColor: outline,
-        outlineWidth: 2,
+        outlineWidth: 1,
       },
     });
   }

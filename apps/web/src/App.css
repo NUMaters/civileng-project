@@ -123,9 +123,75 @@ a {
   top: 0;
   left: 0;
   visibility: hidden;
-  width: min(280px, 78vw);
+  width: min(148px, 42vw);
   pointer-events: auto;
   will-change: transform;
+}
+
+.cesium-confirm-hud {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  visibility: hidden;
+  pointer-events: auto;
+  will-change: transform;
+}
+
+.cesium-confirm-hud__confirm,
+.cesium-confirm-hud__cancel {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.cesium-confirm-hud__confirm {
+  width: 40px;
+  height: 40px;
+  border-color: rgb(180 240 210 / 45%);
+  background: rgb(28 120 88 / 88%);
+  box-shadow: 0 6px 16px rgb(0 20 12 / 35%);
+  color: #f3fff8;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.cesium-confirm-hud__confirm:hover {
+  background: rgb(36 140 102 / 94%);
+  transform: scale(1.05);
+}
+
+.cesium-confirm-hud__confirm:active {
+  transform: scale(0.96);
+}
+
+.cesium-confirm-hud__cancel {
+  width: 30px;
+  height: 30px;
+  border-color: rgb(255 255 255 / 16%);
+  background: rgb(12 20 24 / 55%);
+  color: rgb(230 236 240 / 85%);
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.cesium-confirm-hud__cancel:hover {
+  background: rgb(40 20 18 / 72%);
+  border-color: rgb(255 140 110 / 40%);
+  color: #ffe8e0;
 }
 
 .cesium-orientation-hud.is-preview .orientation-slider {
@@ -134,71 +200,32 @@ a {
 }
 
 .orientation-slider {
-  display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 8px 8px 6px;
-  border: 1px solid rgb(240 180 41 / 45%);
-  border-radius: 14px;
-  background: rgb(22 18 8 / 90%);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 35%);
-  backdrop-filter: blur(12px);
-}
-
-.orientation-slider__nudge {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  place-items: center;
-  border: 0;
-  border-radius: 10px;
-  background: rgb(255 255 255 / 12%);
-  color: #fff8e8;
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.orientation-slider__nudge:active {
-  background: rgb(255 255 255 / 22%);
+  display: block;
+  padding: 4px 8px;
+  border: 1px solid rgb(240 180 41 / 40%);
+  border-radius: 999px;
+  background: rgb(22 18 8 / 78%);
+  box-shadow: 0 4px 12px rgb(0 0 0 / 28%);
+  backdrop-filter: blur(10px);
 }
 
 .orientation-slider__track {
-  display: grid;
-  gap: 2px;
+  display: block;
   min-width: 0;
-}
-
-.orientation-slider__value {
-  color: #ffe08a;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  text-align: center;
 }
 
 .orientation-slider__input {
   display: block;
   width: 100%;
-  height: 28px;
+  height: 18px;
   margin: 0;
   accent-color: #f0b429;
   cursor: pointer;
   touch-action: none;
 }
 
-.cesium-orientation-hud.is-preview .orientation-slider__value {
-  color: #9fe4ff;
-}
-
 .cesium-orientation-hud.is-preview .orientation-slider__input {
   accent-color: #3aa0d8;
-}
-
-.cesium-orientation-hud.is-preview .orientation-slider__nudge {
-  background: rgb(94 200 255 / 18%);
-  color: #e7f7ff;
 }
 
 .cesium-map-label {
@@ -372,64 +399,6 @@ a {
   pointer-events: none;
   transform: translateX(-50%);
   animation: hud-fade-up 280ms ease-out;
-}
-
-.placement-confirm {
-  position: absolute;
-  z-index: 7;
-  top: calc(12px + env(safe-area-inset-top));
-  left: 50%;
-  width: min(92vw, 320px);
-  padding: 10px 12px;
-  border: 1px solid rgba(94, 200, 255, 0.35);
-  border-radius: 14px;
-  background: rgba(8, 32, 40, 0.88);
-  box-shadow: var(--shadow);
-  color: #f4f7f5;
-  transform: translateX(-50%);
-  animation: hud-fade-up 280ms ease-out;
-  backdrop-filter: blur(16px) saturate(1.15);
-}
-
-.placement-confirm__copy {
-  margin: 0 0 8px;
-  color: #d7eef8;
-  font-size: 0.76rem;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.placement-confirm__actions {
-  display: grid;
-  grid-template-columns: 1fr 1.2fr;
-  gap: 8px;
-}
-
-.placement-confirm__cancel,
-.placement-confirm__confirm {
-  padding: 10px 12px;
-  border: 0;
-  border-radius: 12px;
-  font: inherit;
-  font-family: var(--font-display);
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.placement-confirm__cancel {
-  background: rgba(255, 255, 255, 0.1);
-  color: #e8f1f4;
-}
-
-.placement-confirm__confirm {
-  background: linear-gradient(135deg, #2aa8d8, #16729a);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
-  color: white;
-}
-
-.game-shell:has(.placement-confirm) .game-toast {
-  top: calc(118px + env(safe-area-inset-top));
 }
 
 .game-brand,
@@ -741,12 +710,13 @@ a {
   position: fixed;
   z-index: 40;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 8px 14px 8px 8px;
+  gap: 2px;
+  padding: 8px 14px;
   border: 1px solid rgb(240 180 41 / 55%);
-  border-radius: 18px;
-  background: rgb(8 28 22 / 92%);
+  border-radius: 14px;
+  background: rgb(8 28 22 / 88%);
   box-shadow: 0 14px 32px rgb(0 8 6 / 45%);
   color: var(--ink);
   font-family: var(--font-display);
@@ -754,24 +724,34 @@ a {
   font-weight: 700;
   pointer-events: none;
   transform: translate(-50%, -50%);
+  white-space: nowrap;
 }
 
-.dock-drag-ghost__icon {
-  display: grid;
-  width: 56px;
-  height: 56px;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 14px;
-  background: transparent;
-  box-shadow: 0 4px 12px rgb(0 0 0 / 28%);
+.dock-drag-ghost--lift {
+  border-color: rgb(126 212 255 / 55%);
 }
 
-.dock-drag-ghost__icon img {
-  display: block;
-  width: 56px;
-  height: 56px;
-  object-fit: cover;
+.dock-drag-ghost--map {
+  padding: 6px 12px;
+  font-size: 12px;
+  transform: translate(-50%, 0);
+}
+
+.dock-drag-ghost--map.is-placeable {
+  border-color: rgb(94 200 255 / 70%);
+  background: rgb(6 40 48 / 86%);
+}
+
+.dock-drag-ghost--map.is-blocked {
+  border-color: rgb(239 107 74 / 65%);
+  background: rgb(40 16 12 / 88%);
+}
+
+.dock-drag-ghost__hint {
+  color: var(--ink-muted);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 500;
 }
 
 .structure-card:active:not(:disabled) {

@@ -18,13 +18,32 @@ export type StructureMaterialKind =
 
 const textureCache = new Map<string, HTMLCanvasElement>();
 
+const SOLID_COLOR_BY_KIND: Record<Exclude<StructureMaterialKind, "accent">, string> = {
+  earth: "#a07440",
+  grass: "#5a8a3e",
+  concrete: "#c8ced1",
+  asphalt: "#3a3f44",
+  riprap: "#6b7074",
+  water: "#1f86bd",
+  metal: "#7a848a",
+};
+
 /**
  * 施設パーツ用のマテリアル（手続きテクスチャ）。
  * glTF 無しでもコンクリート・土・護岸などらしさを出す。
+ *
+ * @param options.solidOnly 円柱など ImageMaterial が不安定な形状向けに単色へ落とす。
  */
 export function createStructureMaterial(
   kind: StructureMaterialKind,
-  options: { preview?: boolean; accentHex?: string; repeatX?: number; repeatY?: number } = {},
+  options: {
+    preview?: boolean;
+    accentHex?: string;
+    repeatX?: number;
+    repeatY?: number;
+    /** true ならテクスチャを使わず ColorMaterial のみ（Cylinder 向け）。 */
+    solidOnly?: boolean;
+  } = {},
 ): MaterialProperty {
   const preview = options.preview === true;
   if (kind === "accent") {
@@ -33,18 +52,28 @@ export function createStructureMaterial(
     );
     return new ColorMaterialProperty(color);
   }
-  if (kind === "water") {
-    const image = getOrCreateTexture("water", paintWaterTexture);
-    return new ImageMaterialProperty({
-      image,
-      repeat: new Cartesian2(options.repeatX ?? 3, options.repeatY ?? 2),
-      color: Color.WHITE.withAlpha(preview ? 0.45 : 0.88),
-      transparent: true,
-    });
+
+  if (options.solidOnly === true) {
+    return new ColorMaterialProperty(
+      Color.fromCssColorString(SOLID_COLOR_BY_KIND[kind]).withAlpha(preview ? 0.55 : 0.92),
+    );
   }
 
-  const painters: Record<Exclude<StructureMaterialKind, "accent" | "water">, () => HTMLCanvasElement> =
-    {
+  try {
+    if (kind === "water") {
+      const image = getOrCreateTexture("water", paintWaterTexture);
+      return new ImageMaterialProperty({
+        image,
+        repeat: new Cartesian2(options.repeatX ?? 3, options.repeatY ?? 2),
+        color: Color.WHITE.withAlpha(preview ? 0.45 : 0.88),
+        transparent: true,
+      });
+    }
+
+    const painters: Record<
+      Exclude<StructureMaterialKind, "accent" | "water">,
+      () => HTMLCanvasElement
+    > = {
       earth: () => getOrCreateTexture("earth", paintEarthTexture),
       grass: () => getOrCreateTexture("grass", paintGrassTexture),
       concrete: () => getOrCreateTexture("concrete", paintConcreteTexture),
@@ -53,13 +82,26 @@ export function createStructureMaterial(
       metal: () => getOrCreateTexture("metal", paintMetalTexture),
     };
 
-  const image = painters[kind]();
-  return new ImageMaterialProperty({
-    image,
-    repeat: new Cartesian2(options.repeatX ?? 2.5, options.repeatY ?? 1.5),
-    color: Color.WHITE.withAlpha(preview ? 0.5 : 1),
-    transparent: preview,
-  });
+    const painter = painters[kind];
+    if (painter === undefined) {
+      return new ColorMaterialProperty(
+        Color.fromCssColorString("#9aa3a8").withAlpha(preview ? 0.5 : 0.9),
+      );
+    }
+
+    const image = painter();
+    return new ImageMaterialProperty({
+      image,
+      repeat: new Cartesian2(options.repeatX ?? 2.5, options.repeatY ?? 1.5),
+      color: Color.WHITE.withAlpha(preview ? 0.5 : 1),
+      transparent: preview,
+    });
+  } catch (error) {
+    console.warn("Structure texture unavailable, falling back to solid color", kind, error);
+    return new ColorMaterialProperty(
+      Color.fromCssColorString(SOLID_COLOR_BY_KIND[kind]).withAlpha(preview ? 0.55 : 0.92),
+    );
+  }
 }
 
 function getOrCreateTexture(key: string, paint: (ctx: CanvasRenderingContext2D, size: number) => void): HTMLCanvasElement {

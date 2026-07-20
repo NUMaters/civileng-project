@@ -468,7 +468,11 @@ export function calculateMitigation(placements: PlacedStructure[]): MitigationSu
 export function calculatePlacementEffectiveness(placement: PlacedStructure): number {
   const hydraulic = calculateHydraulicEffectiveness(placement);
   const weaknessBoost = nearestWeaknessBoost(placement);
-  return clamp(hydraulic * 0.82 + weaknessBoost * 0.18, 0.15, 1);
+  const combined = hydraulic * 0.82 + weaknessBoost * 0.18;
+  if (!Number.isFinite(combined)) {
+    return 0.35;
+  }
+  return clamp(combined, 0.15, 1);
 }
 
 function nearestWeaknessBoost(placement: PlacedStructure): number {
