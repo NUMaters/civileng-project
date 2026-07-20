@@ -15,7 +15,6 @@ function offsetFromCenterline(distanceMeters: number, bearingEast = true) {
   if (mid === undefined) {
     throw new Error("centerline missing");
   }
-  const metersPerDegreeLat = 110_540;
   const metersPerDegreeLon = 111_320 * Math.cos((mid.lat * Math.PI) / 180);
   const sign = bearingEast ? 1 : -1;
   return {

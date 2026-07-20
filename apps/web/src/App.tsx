@@ -124,10 +124,13 @@ export function App() {
     [socket],
   );
 
+  const isDockDragging = drag !== null;
+
   useEffect(() => {
-    if (drag === null) {
+    if (!isDockDragging) {
       return;
     }
+    const map = mapRef.current;
 
     const onMove = (event: PointerEvent) => {
       const current = dragRef.current;
@@ -183,9 +186,9 @@ export function App() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
-      mapRef.current?.clearDragGhost();
+      map?.clearDragGhost();
     };
-  }, [drag !== null]);
+  }, [isDockDragging]);
 
   return (
     <main className={`game-shell${drag !== null ? " is-dock-dragging" : ""}`}>

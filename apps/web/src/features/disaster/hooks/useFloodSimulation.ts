@@ -40,7 +40,7 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
   }, [state.phase]);
 
   const startGame = useCallback(() => {
-    setState((current) => refreshPlacementEffects(beginPreparation(), placementsRef.current));
+    setState(() => refreshPlacementEffects(beginPreparation(), placementsRef.current));
   }, []);
 
   const startRainNow = useCallback(() => {

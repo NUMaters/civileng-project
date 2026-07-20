@@ -15,7 +15,6 @@ import {
   EllipsoidTerrainProvider,
   HeadingPitchRange,
   HeadingPitchRoll,
-  HeightReference,
   ImageryLayer,
   Ion,
   LightingModel,
