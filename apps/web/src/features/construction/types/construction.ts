@@ -22,6 +22,8 @@ export type PlacedStructure = {
   position: GeoPosition;
   /** 真北から時計回りの向き（度）。Cesium camera.heading と同系。 */
   headingDegrees: number;
+  /** true のとき仮配置（予算未消費・未同期）。 */
+  preview?: boolean;
 };
 
 export type PlacementResult =

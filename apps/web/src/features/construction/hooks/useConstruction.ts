@@ -32,6 +32,7 @@ export function useConstruction() {
   const [budget, setBudget] = useState(INITIAL_BUDGET);
   const [selectedStructureId, setSelectedStructureId] = useState(structures[0]?.id ?? "");
   const [placements, setPlacements] = useState<PlacedStructure[]>([]);
+  const [pendingPlacement, setPendingPlacement] = useState<PlacedStructure | null>(null);
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
   const [message, setMessageState] = useState("");
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -72,12 +73,14 @@ export function useConstruction() {
     (structureId: string) => {
       setSelectedStructureId(structureId);
       setSelectedPlacementId(null);
+      setPendingPlacement(null);
       setMessage("");
     },
     [setMessage],
   );
 
-  const placeStructureAt = useCallback(
+  /** ドロップ後の仮配置。予算はまだ消費しない。 */
+  const beginPendingPlacement = useCallback(
     (
       structureId: string,
       position: GeoPosition,
@@ -88,42 +91,88 @@ export function useConstruction() {
         setMessage("配置する施設を選択してください");
         return null;
       }
-
-      try {
-        const placementId = `${structure.id}-${createPlacementId()}`;
-        const result = placeStructure(
-          structure,
-          position,
-          budgetRef.current,
-          placementId,
-          headingDegrees,
-        );
-
-        if (!result.ok) {
-          setMessage(result.reason);
-          return null;
-        }
-
-        budgetRef.current = result.remainingBudget;
-        setBudget(result.remainingBudget);
-        setPlacements((current) => [...current, result.placement]);
-        setSelectedStructureId(structure.id);
-        setSelectedPlacementId(result.placement.id);
+      if (budgetRef.current < structure.constructionCost) {
         setMessage(
-          `${structure.displayName}を配置 — 施設をドラッグして向きを調整できます`,
+          `${structure.displayName}の建設にはあと${(structure.constructionCost - budgetRef.current).toLocaleString("ja-JP")} pt必要です`,
         );
-        return result.placement;
-      } catch (error: unknown) {
-        const reason = error instanceof Error ? error.message : "配置に失敗しました";
-        setMessage(reason);
         return null;
       }
+
+      const pending: PlacedStructure = {
+        id: `preview-${structure.id}-${createPlacementId()}`,
+        structureId: structure.id,
+        position,
+        headingDegrees: normalizeHeadingDegrees(headingDegrees),
+        preview: true,
+      };
+      setPendingPlacement(pending);
+      setSelectedStructureId(structure.id);
+      setSelectedPlacementId(pending.id);
+      setMessage("");
+      return pending;
     },
     [setMessage],
   );
 
+  const cancelPendingPlacement = useCallback(() => {
+    setPendingPlacement((current) => {
+      if (current === null) {
+        return null;
+      }
+      setMessage("仮配置をキャンセルしました");
+      setSelectedPlacementId(null);
+      return null;
+    });
+  }, [setMessage]);
+
+  /** 仮配置を確定し予算を消費する。 */
+  const confirmPendingPlacement = useCallback((): PlacedStructure | null => {
+    const pending = pendingPlacement;
+    if (pending === null) {
+      return null;
+    }
+    const structure = structures.find(({ id }) => id === pending.structureId);
+    if (structure === undefined) {
+      setPendingPlacement(null);
+      setMessage("配置する施設を選択してください");
+      return null;
+    }
+
+    const confirmedId = `${structure.id}-${createPlacementId()}`;
+    const result = placeStructure(
+      structure,
+      pending.position,
+      budgetRef.current,
+      confirmedId,
+      pending.headingDegrees,
+    );
+    if (!result.ok) {
+      setMessage(result.reason);
+      return null;
+    }
+
+    const confirmed: PlacedStructure = {
+      ...result.placement,
+      preview: false,
+    };
+    budgetRef.current = result.remainingBudget;
+    setBudget(result.remainingBudget);
+    setPlacements((current) => [...current, confirmed]);
+    setPendingPlacement(null);
+    setSelectedStructureId(structure.id);
+    setSelectedPlacementId(confirmed.id);
+    setMessage(`${structure.displayName}を配置しました — ドラッグで向きを再調整できます`);
+    return confirmed;
+  }, [pendingPlacement, setMessage]);
+
   const rotatePlacement = useCallback((placementId: string, headingDegrees: number) => {
     const nextHeading = normalizeHeadingDegrees(headingDegrees);
+    setPendingPlacement((current) => {
+      if (current !== null && current.id === placementId) {
+        return { ...current, headingDegrees: nextHeading };
+      }
+      return current;
+    });
     setPlacements((current) =>
       current.map((placement) =>
         placement.id === placementId
@@ -133,15 +182,26 @@ export function useConstruction() {
     );
   }, []);
 
+  const visiblePlacements = useMemo(() => {
+    if (pendingPlacement === null) {
+      return placements;
+    }
+    return [...placements, pendingPlacement];
+  }, [pendingPlacement, placements]);
+
   return {
     budget,
     message,
     placements,
+    pendingPlacement,
+    visiblePlacements,
     selectedPlacementId,
     selectedStructureId,
     structures,
     selectedStructure,
-    placeStructureAt,
+    beginPendingPlacement,
+    confirmPendingPlacement,
+    cancelPendingPlacement,
     rotatePlacement,
     selectStructure,
     setSelectedPlacementId,

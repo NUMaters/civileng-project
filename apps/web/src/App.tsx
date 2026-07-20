@@ -72,19 +72,46 @@ export function App() {
 
   const handleDropPlace = useCallback(
     (structureId: string, position: GeoPosition, headingDegrees: number) => {
-      const placement = construction.placeStructureAt(structureId, position, headingDegrees);
-      if (placement === null) {
+      construction.beginPendingPlacement(structureId, position, headingDegrees);
+    },
+    [construction],
+  );
+
+  const handleConfirmPlacement = useCallback(() => {
+    const placement = construction.confirmPendingPlacement();
+    if (placement === null) {
+      return;
+    }
+    socket.sendPlaceStructure({
+      structureId: placement.structureId,
+      position: placement.position,
+      headingDegrees: placement.headingDegrees,
+      clientPlacementId: placement.id,
+    });
+  }, [construction.confirmPendingPlacement, socket]);
+
+  useEffect(() => {
+    if (construction.pendingPlacement === null) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        construction.cancelPendingPlacement();
         return;
       }
-      socket.sendPlaceStructure({
-        structureId: placement.structureId,
-        position: placement.position,
-        headingDegrees: placement.headingDegrees,
-        clientPlacementId: placement.id,
-      });
-    },
-    [construction, socket],
-  );
+      if (event.key === "Enter") {
+        event.preventDefault();
+        handleConfirmPlacement();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [
+    construction.cancelPendingPlacement,
+    construction.pendingPlacement,
+    handleConfirmPlacement,
+  ]);
 
   const handleCameraFocusChange = useCallback(
     (position: GeoPosition) => {
@@ -144,7 +171,7 @@ export function App() {
 
       <CesiumGameMap
         ref={mapRef}
-        placements={construction.placements}
+        placements={construction.visiblePlacements}
         structures={construction.structures}
         selectedPlacementId={construction.selectedPlacementId}
         onDropPlace={handleDropPlace}
@@ -186,6 +213,30 @@ export function App() {
           </div>
         </div>
       </header>
+
+      {construction.pendingPlacement !== null ? (
+        <div className="placement-confirm" role="region" aria-label="仮配置の確定">
+          <p className="placement-confirm__copy">
+            仮配置中 — 向きを調整してから確定するか、キャンセルしてください
+          </p>
+          <div className="placement-confirm__actions">
+            <button
+              type="button"
+              className="placement-confirm__cancel"
+              onClick={construction.cancelPendingPlacement}
+            >
+              キャンセル
+            </button>
+            <button
+              type="button"
+              className="placement-confirm__confirm"
+              onClick={handleConfirmPlacement}
+            >
+              確定して配置
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {construction.message !== "" ? (
         <p key={construction.message} className="game-toast" role="status">

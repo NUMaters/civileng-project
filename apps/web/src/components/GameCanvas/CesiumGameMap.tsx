@@ -164,15 +164,20 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
 
     const facilityLabels = useMemo(
       () =>
-        placements.map((placement) => ({
-          id: placement.id,
-          text:
-            structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設",
-          selected: placement.id === selectedPlacementId,
-          longitude: placement.position.longitude,
-          latitude: placement.position.latitude,
-          height: placement.position.height,
-        })),
+        placements.map((placement) => {
+          const displayName =
+            structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設";
+          const preview = placement.preview === true;
+          return {
+            id: placement.id,
+            text: preview ? `${displayName}（仮）` : displayName,
+            selected: placement.id === selectedPlacementId,
+            preview,
+            longitude: placement.position.longitude,
+            latitude: placement.position.latitude,
+            height: placement.position.height,
+          };
+        }),
       [placements, selectedPlacementId, structures],
     );
 
@@ -345,6 +350,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 mapViewer,
                 placement,
                 placement.id === selectedPlacementIdRef.current,
+                placement.preview === true,
               );
             }
             mapViewer.scene.requestRender();
@@ -462,6 +468,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             mapViewer,
             { ...placement, headingDegrees },
             placementId === selectedPlacementIdRef.current,
+            placement.preview === true,
           );
           mapViewer.scene.requestRender();
         };
@@ -596,6 +603,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           viewer,
           placement,
           placement.id === selectedPlacementId,
+          placement.preview === true,
         );
       }
       viewer.scene.requestRender();
@@ -703,7 +711,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               ref={(element) => {
                 setLabelElementRef(`facility-${label.id}`, element);
               }}
-              className={`cesium-map-label${label.selected ? " is-selected" : ""}`}
+              className={`cesium-map-label${label.selected ? " is-selected" : ""}${label.preview ? " is-preview" : ""}`}
             >
               {label.text}
             </div>
@@ -1268,6 +1276,7 @@ function applyPlacementHeading(
   viewer: Viewer,
   placement: PlacedStructure,
   selected: boolean,
+  preview = false,
 ): void {
   for (const entity of [...viewer.entities.values]) {
     if (
@@ -1277,17 +1286,22 @@ function applyPlacementHeading(
       viewer.entities.remove(entity);
     }
   }
-  addCivilEngineeringModel(viewer, placement, selected);
+  addCivilEngineeringModel(viewer, placement, selected, preview);
 }
 
 function addCivilEngineeringModel(
   viewer: Viewer,
   placement: PlacedStructure,
   selected: boolean,
+  preview = false,
 ): void {
   const heading = CesiumMath.toRadians(placement.headingDegrees);
   const parts = getStructureParts(placement.structureId);
-  const outlineColor = selected ? Color.fromCssColorString("#f0b429") : Color.WHITE.withAlpha(0.9);
+  const outlineColor = preview
+    ? Color.fromCssColorString("#7ad8ff")
+    : selected
+      ? Color.fromCssColorString("#f0b429")
+      : Color.WHITE.withAlpha(0.9);
   // 非同期で地形プロバイダーが切り替わっても埋没しないよう、配置時の地表高を絶対標高にする。
   const groundHeight = Math.max(
     0,
@@ -1304,9 +1318,11 @@ function addCivilEngineeringModel(
       groundHeight + 0.18,
     ),
     ellipse: {
-      semiMajorAxis: selected ? 23 : 19,
-      semiMinorAxis: selected ? 23 : 19,
-      material: Color.fromCssColorString(selected ? "#f0b429" : "#58d5a1").withAlpha(0.22),
+      semiMajorAxis: selected || preview ? 24 : 19,
+      semiMinorAxis: selected || preview ? 24 : 19,
+      material: Color.fromCssColorString(
+        preview ? "#5ec8ff" : selected ? "#f0b429" : "#58d5a1",
+      ).withAlpha(preview ? 0.38 : 0.22),
       outline: true,
       outlineColor,
     },
@@ -1326,6 +1342,10 @@ function addCivilEngineeringModel(
       Cartesian3.fromDegrees(longitude, latitude, groundHeight),
       new HeadingPitchRoll(heading, 0, 0),
     );
+    const material = preview
+      ? Color.clone(part.color).withAlpha(Math.min(part.color.alpha, 1) * 0.55)
+      : part.color;
+    const outlineWidth = selected || preview ? 3 : 1;
 
     if (part.kind === "cylinder") {
       viewer.entities.add({
@@ -1336,10 +1356,10 @@ function addCivilEngineeringModel(
           length: Math.max(part.dimensions?.height ?? 1, 2),
           topRadius: part.radius ?? 10,
           bottomRadius: part.radius ?? 10,
-          material: part.color,
+          material,
           outline: true,
           outlineColor,
-          outlineWidth: selected ? 3 : 1,
+          outlineWidth,
           shadows: ShadowMode.DISABLED,
         }),
       });
@@ -1360,10 +1380,10 @@ function addCivilEngineeringModel(
           part.dimensions.width,
           Math.max(part.dimensions.height, 2),
         ),
-        material: part.color,
+        material,
         outline: true,
         outlineColor,
-        outlineWidth: selected ? 3 : 1,
+        outlineWidth,
         shadows: ShadowMode.DISABLED,
       }),
     });
