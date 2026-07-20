@@ -52,21 +52,25 @@ docs: 被災度の定義
 
 ## [Alpha-M1] 開発基盤・リポジトリ整備
 
-| Issue                                                         | 内容                                             |
-| ------------------------------------------------------------- | ------------------------------------------------ |
-| [#3](https://github.com/NUMaters/civileng-project/issues/3)   | 開発環境（Makefile / docker-compose / 構築手順） |
-| [#22](https://github.com/NUMaters/civileng-project/issues/22) | develop ブランチの作成とブランチ保護設定         |
-| [#23](https://github.com/NUMaters/civileng-project/issues/23) | GitHub Actions CI パイプライン                   |
-| [#24](https://github.com/NUMaters/civileng-project/issues/24) | モノレポ workspace 設定                          |
-| [#25](https://github.com/NUMaters/civileng-project/issues/25) | ESLint / Prettier / golangci-lint 設定           |
-| [#26](https://github.com/NUMaters/civileng-project/issues/26) | Copilot カスタム指示の develop への反映          |
-| [#74](https://github.com/NUMaters/civileng-project/issues/74) | ルート package.json / pnpm workspace 初期化      |
-| [#75](https://github.com/NUMaters/civileng-project/issues/75) | .env.example と環境変数一覧の整備                |
-| [#76](https://github.com/NUMaters/civileng-project/issues/76) | GitHub Issue テンプレート作成                    |
-| [#77](https://github.com/NUMaters/civileng-project/issues/77) | Dependabot / CodeQL 有効化                       |
-| [#78](https://github.com/NUMaters/civileng-project/issues/78) | issue-management.md の Issue 一覧更新            |
-| [#81](https://github.com/NUMaters/civileng-project/issues/81) | MVP 外データの整理方針                           |
-| [#82](https://github.com/NUMaters/civileng-project/issues/82) | LICENSE 追加                                     |
+設計 docs（#17〜#21）と基盤（#22〜#26, #3, #78）は完了済み。残タスクの成果物は次のとおり。
+
+| Issue                                                         | 内容                                             | 成果物 |
+| ------------------------------------------------------------- | ------------------------------------------------ | ------ |
+| [#3](https://github.com/NUMaters/civileng-project/issues/3)   | 開発環境（Makefile / docker-compose / 構築手順） | 完了 |
+| [#22](https://github.com/NUMaters/civileng-project/issues/22) | develop ブランチの作成とブランチ保護設定         | 完了 |
+| [#23](https://github.com/NUMaters/civileng-project/issues/23) | GitHub Actions CI パイプライン                   | 完了 |
+| [#24](https://github.com/NUMaters/civileng-project/issues/24) | モノレポ workspace 設定                          | 完了 |
+| [#25](https://github.com/NUMaters/civileng-project/issues/25) | ESLint / Prettier / golangci-lint 設定           | 完了 |
+| [#26](https://github.com/NUMaters/civileng-project/issues/26) | Copilot カスタム指示の develop への反映          | 完了 |
+| [#74](https://github.com/NUMaters/civileng-project/issues/74) | ルート package.json / pnpm workspace 初期化      | `package.json` / `pnpm-workspace.yaml` |
+| [#75](https://github.com/NUMaters/civileng-project/issues/75) | .env.example と環境変数一覧の整備                | [.env.example](../../.env.example), [environment-variables.md](./environment-variables.md) |
+| [#76](https://github.com/NUMaters/civileng-project/issues/76) | GitHub Issue テンプレート作成                    | `.github/ISSUE_TEMPLATE/` |
+| [#77](https://github.com/NUMaters/civileng-project/issues/77) | Dependabot / CodeQL 有効化                       | `dependabot.yml` / `workflows/codeql.yml` |
+| [#78](https://github.com/NUMaters/civileng-project/issues/78) | issue-management.md の Issue 一覧更新            | 完了 |
+| [#79](https://github.com/NUMaters/civileng-project/issues/79) | DB スキーマ設計（ルーム・セッション）            | [db-schema.md](../architecture/db-schema.md) |
+| [#80](https://github.com/NUMaters/civileng-project/issues/80) | マップデータ形式の確定                           | [map-data-format.md](../architecture/map-data-format.md) |
+| [#81](https://github.com/NUMaters/civileng-project/issues/81) | MVP 外データの整理方針                           | [mvp-scope-data.md](./mvp-scope-data.md) |
+| [#82](https://github.com/NUMaters/civileng-project/issues/82) | LICENSE 追加                                     | ルート `LICENSE`（MIT） |
 
 ---
 
