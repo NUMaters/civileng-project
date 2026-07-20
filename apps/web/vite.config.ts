@@ -152,7 +152,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    host: true,
+    // :: で待ち受け、localhost（IPv6 ::1）と 127.0.0.1 の両方から接続できるようにする
+    host: "::",
     strictPort: true,
     proxy: {
       // ゲームサーバー WebSocket（cmd/game GET /ws）

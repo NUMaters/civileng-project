@@ -12,7 +12,7 @@ export class ErrorBoundary extends Component<Props, State> {
   state: State = { message: null };
 
   static getDerivedStateFromError(error: Error): State {
-    return { message: error.message };
+    return { message: error.message || "不明なエラー" };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -26,6 +26,9 @@ export class ErrorBoundary extends Component<Props, State> {
           <h1>画面の表示に失敗しました</h1>
           <p>{this.state.message}</p>
           <p>ページを再読み込みするか、開発サーバーを再起動してください。</p>
+          <button type="button" onClick={() => window.location.reload()}>
+            再読み込み
+          </button>
         </main>
       );
     }

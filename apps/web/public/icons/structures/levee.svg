@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="lv-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9fd0ef"/>
+      <stop offset="1" stop-color="#d7ebf7"/>
+    </linearGradient>
+    <linearGradient id="lv-water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4eb4e8"/>
+      <stop offset="1" stop-color="#1f7eb4"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="20" fill="url(#lv-sky)"/>
+  <!-- 市街地側 -->
+  <rect x="6" y="58" width="12" height="20" rx="2" fill="#d8c4a8"/>
+  <rect x="20" y="50" width="11" height="28" rx="2" fill="#cbb396"/>
+  <rect x="33" y="60" width="10" height="18" rx="2" fill="#e0d0b4"/>
+  <rect x="6" y="78" width="42" height="18" fill="#6f9a45"/>
+  <!-- 堤防（台形断面） -->
+  <path d="M48 96 L68 46 H100 L120 96 Z" fill="#a8763a"/>
+  <path d="M52 96 L70 50 H98 L116 96 Z" fill="#6f9a45"/>
+  <rect x="70" y="44" width="28" height="7" rx="1" fill="#4f555a"/>
+  <rect x="78" y="41" width="5" height="5" rx="1" fill="#f0b429"/>
+  <!-- 河川 -->
+  <path d="M0 96 H128 V122 H0 Z" fill="url(#lv-water)"/>
+  <path d="M10 105c14-5 24-5 36 0s28 5 40 0 26-5 38 0" stroke="#d7f4ff" stroke-width="2.5" stroke-linecap="round" opacity=".75"/>
+  <rect x="0" y="0" width="128" height="24" rx="20" fill="#000" opacity=".2"/>
+  <rect x="0" y="12" width="128" height="12" fill="#000" opacity=".12"/>
+  <text x="12" y="16" fill="#ffffff" font-family="Hiragino Sans, Noto Sans JP, sans-serif" font-size="12" font-weight="700">堤防</text>
+</svg>
