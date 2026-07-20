@@ -19,7 +19,7 @@ TypeScript で定義し、web は直接 import、server は将来 code generatio
 ```
 packages/game-schema/
 ├── common/           # REST / WebSocket 共通型
-│   ├── position.ts   # 座標・方向
+│   ├── position.ts   # 地理座標・方向（既存XYZ型は移行対象）
 │   ├── structure.ts  # 施設種別・定義
 │   └── disaster.ts   # 災害種別
 ├── rest/             # REST API リクエスト / レスポンス
@@ -102,6 +102,24 @@ export type PlayerMovePayload = { ... };
 
 新規型追加時は `common/` に共通部分を抽出してから `rest/` または `websocket/` に配置する。
 
+### 地理座標
+
+CesiumJS 導入後、通信境界の位置は意味が不明確な `x`, `y`, `z` ではなく、次の地理座標型を使用する。
+
+```typescript
+export type GeoPosition = {
+  longitude: number;
+  latitude: number;
+  height: number;
+};
+```
+
+- 経度・緯度は度、標高はメートル
+- CesiumJS固有の`Cartesian3`を通信スキーマへ含めない
+- 浸水計算用のローカル座標・グリッド座標はサーバー内部型とし、必要になるまで公開スキーマへ追加しない
+- 既存の`Position { x, y, z }`は移行が完了するまでのプロトタイプ型とする
+- 配置要求はサーバー側で座標範囲と対象地域内であることを検証する
+
 ---
 
 ## 関連ドキュメント
@@ -110,3 +128,4 @@ export type PlayerMovePayload = { ... };
 - [REST API 命名](../api/rest-naming.md)
 - [WebSocket 命名](../api/websocket-naming.md)
 - [TypeScript コーディング規約](../development/coding-standards-typescript.md)
+- [地理空間アーキテクチャ](./geospatial.md)

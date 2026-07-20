@@ -1,0 +1,7 @@
+{
+  "extends": "@civilcraft/config/typescript",
+  "compilerOptions": {
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts", "structures/**/*.json", "rules/**/*.json", "disasters/**/*.json"]
+}

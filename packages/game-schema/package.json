@@ -2,6 +2,18 @@
   "name": "@civilcraft/game-schema",
   "private": true,
   "type": "module",
+  "exports": {
+    "./common/*": "./common/*.ts",
+    "./rest/*": "./rest/*.ts",
+    "./websocket/*": "./websocket/*.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "common/*": ["common/*"],
+      "rest/*": ["rest/*"],
+      "websocket/*": ["websocket/*"]
+    }
+  },
   "scripts": {
     "lint": "eslint .",
     "test": "vitest run --passWithNoTests",

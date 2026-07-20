@@ -2,7 +2,7 @@
 
 土木工学の役割や面白さを、ゲームを通じて直感的に学べる **1 人〜複数人で遊べるブラウザ向けゲーム**。
 
-河川氾濫の危険がある街を舞台に、堤防・遊水地・排水機場・護岸・河道掘削などの土木技術を配置し、大雨から街を守る（MVP では大雨のみ。台風は将来追加）。福島県郡山市の阿武隈川をモデルとした地域設定。
+河川氾濫の危険がある街を舞台に、堤防・遊水地・排水機場・護岸・河道掘削などの土木技術を配置し、大雨から街を守る（MVP では大雨のみ。台風は将来追加）。CesiumJS と国土地理院の地理空間データを用い、福島県郡山市の日本大学工学部周辺を流れる阿武隈川を対象地域とする。
 
 詳細は [docs/game-design/overview.md](./docs/game-design/overview.md) を参照。
 
@@ -10,7 +10,7 @@
 
 | 領域           | 技術                                                                                            |
 | -------------- | ----------------------------------------------------------------------------------------------- |
-| フロントエンド | TypeScript, Vite, React, Three.js, WebGL（PWA は Phase 5 以降）                                 |
+| フロントエンド | TypeScript, Vite, React（`@vitejs/plugin-react-swc`）, CesiumJS, WebGL（PWA は Phase 5 以降） |
 | バックエンド   | Go（モジュラーモノリス → API Server / Game Server 分離可能）                                    |
 | データベース   | PostgreSQL, Redis                                                                               |
 | 通信           | REST API, WebSocket（サーバー権威型）                                                           |
@@ -117,12 +117,26 @@ make down     # docker compose down
 # フロントエンド開発サーバー（http://localhost:5173）
 pnpm dev:web
 
-# API サーバー（http://localhost:8080/health）
+# API サーバー（http://localhost:8080/health 、マスターデータ: /v1/game-data）
 ./bin/api
 
-# ゲームサーバー（http://localhost:8081/health）
+# ゲームサーバー（http://localhost:8081/health 、WebSocket: ws://localhost:8081/ws）
 ./bin/game
 ```
+
+マスターデータは `packages/game-data/`（土木技術・ルール・災害・マップ・シナリオ）。web は `@civilcraft/game-data`、server は `GAME_DATA_DIR`（既定で同ディレクトリを探索）経由で読み込む。
+
+ゲーム中のリアルタイム通信は **WebSocket**（`cmd/game` の `GET /ws`）。開発時フロントは Vite の `/ws` プロキシ経由で接続し、ヘッダーに接続状態（オンライン／オフライン）を表示する。イベント型は `@civilcraft/game-schema`（`packages/game-schema/websocket/`）。Phase 1 ではカメラ注視点移動（`player.move`）と施設配置（`construction.place` / `construction.placed`）を薄く同期する。
+
+Cesium の Worker / Assets は `apps/web/vite.config.ts` で `/cesiumStatic` として配信する（開発時は専用ミドルウェア、ビルド時は `dist/cesiumStatic` へコピー）。`CESIUM_BASE_URL` はサイトルート絶対パス（`/cesiumStatic`）である必要がある。`optimizeDeps.include` に `cesium` と `mersenne-twister` を入れ、CJS 依存の default export エラーで白画面になるのを防ぐ。地図が「Loading…」のまま止まる／真っ白な場合は、ポート 5173 の古い Vite を終了してから `pnpm --filter @civilcraft/web exec vite --force` で依存を再バンドルする。
+
+3D 地図は CesiumJS + 国土地理院シームレス写真 + **PLATEAU-Terrain** + 郡山市公式 ZIP の **テクスチャ付き建築物 3D Tiles**（`bldg_texture`）を使う。初回は次で取得する（約 390MB ダウンロード、`public/plateau/` へ展開。Git 管理外）。
+
+```bash
+pnpm --filter @civilcraft/web fetch:plateau
+```
+
+カメラ移動は日本大学工学部周辺の阿武隈川プレイ範囲内に制限し、施設は建設ドックから河道（青い帯）上へドラッグ＆ドロップで配置する。設置向きはカメラの向きに合わせ、設置後は施設をドラッグして自由に回転できる。ドロップずれは中心線付近へスナップする。マップ検証中はブランドヘッダーとミッションカードを非表示。詳細は [docs/architecture/geospatial.md](./docs/architecture/geospatial.md) と [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)。
 
 ローカル DB・Redis の構成詳細は [docs/development/local-database.md](./docs/development/local-database.md) を参照。`docker-compose.yml` で PostgreSQL 16 と Redis 7 を提供する。
 
@@ -144,6 +158,8 @@ pnpm dev:web
 | game-schema 設計   | [docs/architecture/game-schema-design.md](./docs/architecture/game-schema-design.md)       |
 | ゲーム状態モデル   | [docs/architecture/game-state-model.md](./docs/architecture/game-state-model.md)           |
 | ローカル DB 構成   | [docs/development/local-database.md](./docs/development/local-database.md)                 |
+| 地理空間アーキテクチャ | [docs/architecture/geospatial.md](./docs/architecture/geospatial.md)                    |
+| CesiumJS 導入作業 | [docs/development/cesium-roadmap.md](./docs/development/cesium-roadmap.md)                  |
 
 ルートの [AGENT.md](./AGENT.md) は `docs/agent/guide.md` への索引である。
 
