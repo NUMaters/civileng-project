@@ -7,6 +7,7 @@ import {
   HeightReference,
   Viewer,
 } from "cesium";
+import { getHazardMarkerColor } from "../../features/construction/structureVisuals";
 import type {
   ProtectedBankSite,
   StructureInfluence,
@@ -17,7 +18,7 @@ const BANK_PREFIX = "protect-bank-";
 
 const STRUCTURE_ZONE_COLOR: Record<string, string> = {
   levee: "#3ecf8e",
-  revetment: "#6bc4a0",
+  revetment: "#e0a03a",
   "retention-basin": "#3aa8d8",
   "drainage-pump": "#5b9cf0",
   "channel-dredging": "#2db89a",
@@ -25,7 +26,7 @@ const STRUCTURE_ZONE_COLOR: Record<string, string> = {
 
 /**
  * 施設の影響圏と、弱点地点の抑え込み／越水状態を地図に描く。
- * 配置した瞬間から「川のどこに効いているか」が分かるようにする。
+ * 弱点色は災害種別（越水／侵食／内水）で分け、対策のミスマッチが分かるようにする。
  */
 export function syncProtectionVisualization(
   viewer: Viewer,
@@ -91,12 +92,15 @@ export function syncProtectionVisualization(
     for (const site of bankSites) {
       const id = `${BANK_PREFIX}${site.id}`;
       const holding = !site.overflowing && site.protectionStrength >= 0.12;
+      const hazardColor = getHazardMarkerColor(site.primaryHazard);
       const fill = holding
         ? Color.fromCssColorString("#3ecf8e").withAlpha(0.28 + site.protectionStrength * 0.35)
-        : Color.fromCssColorString("#ff8b6b").withAlpha(0.22 + site.protectionStrength * 0.15);
+        : Color.fromCssColorString(hazardColor.fill).withAlpha(
+            0.24 + site.protectionStrength * 0.15,
+          );
       const outline = holding
         ? Color.fromCssColorString("#b8ffe0").withAlpha(0.85)
-        : Color.fromCssColorString("#ffd0c4").withAlpha(0.75);
+        : Color.fromCssColorString(hazardColor.outline).withAlpha(0.8);
       const radius = holding ? 38 + site.protectionStrength * 28 : 42 + site.protectionStrength * 20;
       const existing = viewer.entities.getById(id);
       const position = Cartesian3.fromDegrees(site.longitude, site.latitude);

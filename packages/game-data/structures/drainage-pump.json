@@ -1,17 +1,39 @@
 {
   "id": "drainage-pump",
   "displayName": "排水機場",
-  "description": "低地にたまった水を排出する。電力や処理能力に制約がある。",
-  "constructionCost": 2200,
+  "description": "越水後に低地へたまった内水を排水する。河岸の越水・侵食は止められない。",
+  "constructionCost": 2000,
   "constructionTimeSeconds": 12,
   "maintenanceCostPerSecond": 4,
-  "allowedTerrains": ["lowland", "urbanLowland"],
-  "supportedDisasters": ["heavy-rain"],
+  "allowedTerrains": [
+    "lowland",
+    "urbanLowland"
+  ],
+  "supportedDisasters": [
+    "heavy-rain"
+  ],
   "effects": {
     "waterLevelReduction": 0.05,
     "overflowPrevention": 0,
     "drainageCapacity": 0.6,
     "bankProtection": 0,
     "channelCapacityIncrease": 0
+  },
+  "role": {
+    "primaryHazard": "inlandPonding",
+    "strengths": [
+      "内水地点の浸水深を下げ、市街地側の被害拡大を抑える",
+      "越水が起きてからでも後始末として有効"
+    ],
+    "weaknesses": [
+      "河岸の越水口や侵食崩壊は止められない",
+      "維持費が高く、置き場所を間違えると効果が出ない"
+    ]
+  },
+  "hazardAffinity": {
+    "overtopping": 0.05,
+    "erosion": 0.05,
+    "inlandPonding": 1,
+    "capacityShortage": 0.1
   }
 }

@@ -1,4 +1,6 @@
+import type { HazardKind } from "@civilcraft/game-data/types";
 import type { FloodSimulationState, MitigationSummary } from "../services/floodSimulation";
+import { getHazardLabel } from "../../construction/structureVisuals";
 
 type FloodHudProps = FloodSimulationState & {
   onStartGame: () => void;
@@ -10,6 +12,7 @@ const phaseLabel = {
   preparation: "準備",
   disaster: "大雨",
   result: "結果",
+  review: "プレビュー",
 } as const;
 
 export function FloodHud({
@@ -32,6 +35,7 @@ export function FloodHud({
   const overflows = overflowSites ?? [];
   const heldSites = bankSites.filter((site) => !site.overflowing).length;
   const safeMitigation = sanitizeMitigation(mitigation);
+  const hazardSummary = summarizeHazards(overflows);
 
   return (
     <section className={`flood-hud flood-hud--${phase}`} aria-label="災害状況">
@@ -46,7 +50,7 @@ export function FloodHud({
         <>
           <strong className="flood-hud__title">阿武隈川・大雨シナリオ</strong>
           <p>
-            低い河岸ほど氾濫しやすく、施設は河岸の位置・向き・標高で効き方が変わります。弱点を押さえて浸水を5%未満に抑えてください。
+            弱点には種別があります（越水・侵食・内水）。堤防は越水、護岸は侵食、排水機場は内水、掘削・遊水地は流下不足向き。種類を合わせて配置してください。
           </p>
           <button className="flood-hud__primary" type="button" onClick={onStartGame}>
             ゲーム開始
@@ -55,6 +59,9 @@ export function FloodHud({
       ) : (
         <>
           <MitigationPanel mitigation={safeMitigation} heldSites={heldSites} />
+          {hazardSummary !== "" ? (
+            <p className="flood-hud__hazard-tip">{hazardSummary}</p>
+          ) : null}
           <div className="flood-hud__metrics">
             <FloodMetric
               label="雨量"
@@ -152,6 +159,10 @@ function MitigationPanel({
             <strong>{mitigation.drainageCapacity.toFixed(1)}</strong>
           </li>
           <li>
+            <span>河岸保護</span>
+            <strong>{Math.round(mitigation.bankProtection * 100)}%</strong>
+          </li>
+          <li>
             <span>弱点を抑制</span>
             <strong>{heldSites} 箇所</strong>
           </li>
@@ -214,4 +225,21 @@ function sanitizeMitigation(mitigation: MitigationSummary | undefined): Mitigati
     activeStructureCount: Math.max(0, Math.round(finiteOr(mitigation?.activeStructureCount, 0))),
     averageEffectiveness: finiteOr(mitigation?.averageEffectiveness, 0),
   };
+}
+
+function summarizeHazards(
+  sites: FloodSimulationState["overflowSites"],
+): string {
+  if (sites.length === 0) {
+    return "";
+  }
+  const counts = new Map<HazardKind, number>();
+  for (const site of sites) {
+    const key = site.primaryHazard;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const parts = [...counts.entries()].map(
+    ([kind, count]) => `${getHazardLabel(kind)} ${count}`,
+  );
+  return `発生中の弱点: ${parts.join(" / ")}（対策の種類を合わせて）`;
 }

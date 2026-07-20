@@ -1,5 +1,5 @@
 export { FloodHud } from "./components/FloodHud";
-export { FloodResultPanel } from "./components/FloodResultPanel";
+export { FloodResultPanel, ReviewModeBar } from "./components/FloodResultPanel";
 export { useFloodSimulation } from "./hooks/useFloodSimulation";
 export {
   calculateFloodplainExtent,
@@ -16,3 +16,12 @@ export type {
   ProtectedBankSite,
   StructureInfluence,
 } from "./services/floodSimulation";
+export {
+  advanceInundationField,
+  resetInundationField,
+} from "./services/inundationField";
+export type {
+  InundationFieldSnapshot,
+  InundationSeed,
+  InundationSiteField,
+} from "./services/inundationField";

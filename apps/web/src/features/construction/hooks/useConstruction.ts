@@ -1,20 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { loadStructures } from "@civilcraft/game-data/load";
 import {
+  applyDisasterStartGrant,
+  formatBudgetRate,
   INITIAL_BUDGET,
+  MAX_BUDGET,
   normalizeHeadingDegrees,
   placeStructure,
+  tickBudgetEconomy,
+  type BudgetEconomyPhase,
 } from "../services/constructionService";
 import { getStructureEffectLabel } from "../structureVisuals";
 import type { GeoPosition, PlacedStructure, StructureDefinition } from "../types/construction";
 
 const structures: StructureDefinition[] = loadStructures().map(
-  ({ id, displayName, description, constructionCost, constructionTimeSeconds }) => ({
+  ({
     id,
     displayName,
     description,
     constructionCost,
     constructionTimeSeconds,
+    maintenanceCostPerSecond,
+    role,
+    hazardAffinity,
+  }) => ({
+    id,
+    displayName,
+    description,
+    constructionCost,
+    constructionTimeSeconds,
+    maintenanceCostPerSecond,
+    role,
+    hazardAffinity,
   }),
 );
 
@@ -31,6 +48,9 @@ function createPlacementId(): string {
 
 export function useConstruction() {
   const [budget, setBudget] = useState(INITIAL_BUDGET);
+  const [spentBudget, setSpentBudget] = useState(0);
+  const [economyPhase, setEconomyPhaseState] = useState<BudgetEconomyPhase>("idle");
+  const [netIncomePerSecond, setNetIncomePerSecond] = useState(0);
   const [selectedStructureId, setSelectedStructureId] = useState(structures[0]?.id ?? "");
   const [placements, setPlacements] = useState<PlacedStructure[]>([]);
   const [pendingPlacement, setPendingPlacement] = useState<PlacedStructure | null>(null);
@@ -40,6 +60,11 @@ export function useConstruction() {
   /** 連続ドロップで同じ予算を二重に読まないための同期ソース。 */
   const budgetRef = useRef(budget);
   budgetRef.current = budget;
+  const placementsRef = useRef(placements);
+  placementsRef.current = placements;
+  const economyPhaseRef = useRef(economyPhase);
+  economyPhaseRef.current = economyPhase;
+  const disasterGrantAppliedRef = useRef(false);
 
   const clearHideTimer = useCallback(() => {
     if (hideTimerRef.current !== null) {
@@ -64,6 +89,64 @@ export function useConstruction() {
   );
 
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
+
+  /** 洪水フェーズに合わせて予算経済を同期する。 */
+  const setEconomyPhase = useCallback(
+    (phase: BudgetEconomyPhase) => {
+      const previous = economyPhaseRef.current;
+      economyPhaseRef.current = phase;
+      setEconomyPhaseState(phase);
+
+      if (
+        phase === "preparation" &&
+        (previous === "idle" || previous === "result" || previous === "review")
+      ) {
+        disasterGrantAppliedRef.current = false;
+      }
+
+      if (phase === "disaster" && previous !== "disaster" && !disasterGrantAppliedRef.current) {
+        disasterGrantAppliedRef.current = true;
+        const granted = applyDisasterStartGrant(budgetRef.current);
+        budgetRef.current = granted;
+        setBudget(granted);
+        setMessage("災害対応の緊急予算が支給されました");
+      }
+
+      if (phase !== "preparation" && phase !== "disaster") {
+        setNetIncomePerSecond(0);
+      }
+    },
+    [setMessage],
+  );
+
+  // 準備／災害中は補給 − 維持費で予算を更新する。
+  useEffect(() => {
+    if (economyPhase !== "preparation" && economyPhase !== "disaster") {
+      return;
+    }
+    let frameId = 0;
+    let lastAt = performance.now();
+    const tick = (now: number) => {
+      const deltaSeconds = Math.min(0.05, Math.max(0, (now - lastAt) / 1000));
+      lastAt = now;
+      if (deltaSeconds > 0) {
+        const result = tickBudgetEconomy({
+          currentBudget: budgetRef.current,
+          deltaSeconds,
+          phase: economyPhaseRef.current,
+          placedStructureIds: placementsRef.current.map((placement) => placement.structureId),
+        });
+        if (Math.abs(result.budget - budgetRef.current) >= 0.05) {
+          budgetRef.current = result.budget;
+          setBudget(result.budget);
+        }
+        setNetIncomePerSecond(result.netIncomePerSecond);
+      }
+      frameId = window.requestAnimationFrame(tick);
+    };
+    frameId = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [economyPhase]);
 
   const selectedStructure = useMemo(
     () => structures.find(({ id }) => id === selectedStructureId),
@@ -158,6 +241,7 @@ export function useConstruction() {
     };
     budgetRef.current = result.remainingBudget;
     setBudget(result.remainingBudget);
+    setSpentBudget((current) => current + structure.constructionCost);
     setPlacements((current) => [...current, confirmed]);
     setPendingPlacement(null);
     setSelectedStructureId(structure.id);
@@ -180,6 +264,23 @@ export function useConstruction() {
     });
   }, []);
 
+  /** 仮配置の位置を配置可能域内で更新する（確定前の微調整用）。 */
+  const movePendingPlacement = useCallback((placementId: string, position: GeoPosition) => {
+    setPendingPlacement((current) => {
+      if (current === null || current.id !== placementId) {
+        return current;
+      }
+      return {
+        ...current,
+        position: {
+          longitude: position.longitude,
+          latitude: position.latitude,
+          height: position.height,
+        },
+      };
+    });
+  }, []);
+
   const rotatePlacementBy = useCallback(
     (placementId: string, deltaDegrees: number) => {
       if (pendingPlacement === null || pendingPlacement.id !== placementId) {
@@ -197,8 +298,37 @@ export function useConstruction() {
     return [...placements, pendingPlacement];
   }, [pendingPlacement, placements]);
 
+  /** 新規ゲーム開始用。配置・予算・選択状態を初期化する。 */
+  const resetSession = useCallback(() => {
+    clearHideTimer();
+    budgetRef.current = INITIAL_BUDGET;
+    setBudget(INITIAL_BUDGET);
+    setSpentBudget(0);
+    setNetIncomePerSecond(0);
+    disasterGrantAppliedRef.current = false;
+    economyPhaseRef.current = "idle";
+    setEconomyPhaseState("idle");
+    setPlacements([]);
+    setPendingPlacement(null);
+    setSelectedPlacementId(null);
+    setSelectedStructureId(structures[0]?.id ?? "");
+    setMessageState("");
+  }, [clearHideTimer]);
+
+  const budgetRatio = Math.max(0, Math.min(1, budget / MAX_BUDGET));
+  const incomeLabel =
+    economyPhase === "preparation" || economyPhase === "disaster"
+      ? formatBudgetRate(netIncomePerSecond)
+      : "";
+
   return {
     budget,
+    budgetRatio,
+    spentBudget,
+    netIncomePerSecond,
+    incomeLabel,
+    economyPhase,
+    setEconomyPhase,
     message,
     placements,
     pendingPlacement,
@@ -212,8 +342,10 @@ export function useConstruction() {
     cancelPendingPlacement,
     rotatePlacement,
     rotatePlacementBy,
+    movePendingPlacement,
     selectStructure,
     setSelectedPlacementId,
     setMessage,
+    resetSession,
   };
 }

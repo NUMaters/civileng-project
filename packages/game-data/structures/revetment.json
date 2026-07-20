@@ -1,17 +1,39 @@
 {
   "id": "revetment",
   "displayName": "護岸",
-  "description": "河岸の侵食や崩壊を防ぐ。川岸や構造物付近の保護に有効。",
-  "constructionCost": 1800,
+  "description": "湾曲・洗掘しやすい河岸を固め、侵食による決壊を抑える。越水そのものや内水には弱い。",
+  "constructionCost": 1600,
   "constructionTimeSeconds": 10,
   "maintenanceCostPerSecond": 1,
-  "allowedTerrains": ["riverBank", "riverChannel"],
-  "supportedDisasters": ["heavy-rain"],
+  "allowedTerrains": [
+    "riverBank",
+    "riverChannel"
+  ],
+  "supportedDisasters": [
+    "heavy-rain"
+  ],
   "effects": {
     "waterLevelReduction": 0,
     "overflowPrevention": 0.05,
     "drainageCapacity": 0,
     "bankProtection": 0.75,
     "channelCapacityIncrease": 0.05
+  },
+  "role": {
+    "primaryHazard": "erosion",
+    "strengths": [
+      "湾曲部・洗掘しやすい岸の侵食崩壊を抑える",
+      "安価に弱点をピンポイント補強できる"
+    ],
+    "weaknesses": [
+      "水位が天端を超える越水自体はほとんど止められない",
+      "市街地側の内水には効かない"
+    ]
+  },
+  "hazardAffinity": {
+    "overtopping": 0.2,
+    "erosion": 1,
+    "inlandPonding": 0.05,
+    "capacityShortage": 0.1
   }
 }

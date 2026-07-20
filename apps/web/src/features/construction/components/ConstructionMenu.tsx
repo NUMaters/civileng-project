@@ -1,3 +1,4 @@
+import { getHazardKindLabel } from "@civilcraft/game-data/types";
 import type { StructureDefinition } from "../types/construction";
 import { StructureCard } from "./StructureCard";
 
@@ -26,9 +27,26 @@ export function ConstructionMenu({
           <strong>カードを河道・河岸（薄い青い帯）へドラッグして配置</strong>
         </div>
         {selected !== undefined ? (
-          <p className="construction-menu__hint" key={selected.id}>
-            {selected.description}
-          </p>
+          <div className="construction-menu__detail" key={selected.id}>
+            <p className="construction-menu__hint">{selected.description}</p>
+            <div className="construction-menu__role">
+              <span className="construction-menu__role-chip">
+                得意: {getHazardKindLabel(selected.role.primaryHazard)}
+              </span>
+            </div>
+            <ul className="construction-menu__bullets">
+              {selected.role.strengths.slice(0, 2).map((line) => (
+                <li key={`s-${line}`} className="is-strength">
+                  {line}
+                </li>
+              ))}
+              {selected.role.weaknesses.slice(0, 2).map((line) => (
+                <li key={`w-${line}`} className="is-weakness">
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
           <small>タップでは配置されません。ドックからドラッグしてください</small>
         )}

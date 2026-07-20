@@ -49,6 +49,13 @@ export function StructureCard({
       <span className="structure-card__body">
         <strong>{structure.displayName}</strong>
         <small>{formatBudget(structure.constructionCost)}</small>
+        <em className="structure-card__role">{structure.role.primaryHazard === "overtopping"
+          ? "越水対策"
+          : structure.role.primaryHazard === "erosion"
+            ? "侵食対策"
+            : structure.role.primaryHazard === "inlandPonding"
+              ? "内水対策"
+              : "流下対策"}</em>
       </span>
       {selected ? <span className="structure-card__check" aria-hidden="true" /> : null}
     </button>

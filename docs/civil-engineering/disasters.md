@@ -76,9 +76,24 @@ MVP で実装する唯一の災害種別です。上記「現象」のうち ○
 | 高低差 | 弱点候補の岸標高を DEM サンプリング。低い岸ほど越水しやすい |
 | 配置の有効性 | 河岸距離・施設向き（川沿い）・設置標高で効果係数が変わる |
 | 氾濫しやすい箇所 | キャンパス周辺の既知弱点＋中心線沿いの湾曲・低岸サンプル |
+| **弱点の種類 (HazardKind)** | 越水 / 侵食 / 内水 / 流下不足。施設の `hazardAffinity` と一致しないと局所効果が薄い |
 | 浸水の広がり | 水深に加え、決壊地点の数と強度で浸水面積・被災度が増える |
+| **高さ場による溢れ** | 決壊点を種に簡易浅水（格子上の水位伝播）で低地へ広がる様子を描く。水深バンドと流向ストリークで可視化 |
 
-実装の中核は `apps/web/src/features/disaster/services/floodSimulation.ts`、`hydraulicPlacement.ts`、`overflowBankSites.ts`。
+完全な Navier–Stokes／SPH などの流体物理はブラウザ上のリアルタイムには向かないため採用しない。代わりに **浅水方程式の考え方（水面標高差で隣セルへ流す）** を粗い格子で近似し、教育用に「水が低い方へ溢れる」ことを見せる。
+
+実装の中核は `apps/web/src/features/disaster/services/floodSimulation.ts`、`hydraulicPlacement.ts`、`overflowBankSites.ts`、溢れ可視化の `inundationField.ts` / `inundationVisualization.ts`。
+
+### HazardKind と圧力
+
+| Kind | 局所圧力の主な入力 | 有効な施設例 |
+|------|-------------------|--------------|
+| overtopping | 越水量 | 堤防 |
+| erosion | 越水量＋水深（湾曲） | 護岸（河道掘削は悪化しうる） |
+| inlandPonding | 浸水深 | 排水機場 |
+| capacityShortage | 越水・水位全体 | 河道掘削・遊水地（主にグローバル効果） |
+
+プレイヤーは HUD の「発生中の弱点」表示と、ドックの得意分野・強み／弱みを見て対策を選ぶ。
 
 以下の重要処理には Integration Test を追加する（[テスト規約](../development/testing.md) 参照）。
 

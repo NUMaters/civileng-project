@@ -6,7 +6,8 @@ type FloodResultPanelProps = Pick<
 > & {
   usedBudget: number;
   placementCount: number;
-  onRestart: () => void;
+  onEnterReview: () => void;
+  onStartNewGame: () => void;
 };
 
 export function FloodResultPanel({
@@ -18,7 +19,8 @@ export function FloodResultPanel({
   score,
   usedBudget,
   placementCount,
-  onRestart,
+  onEnterReview,
+  onStartNewGame,
 }: FloodResultPanelProps) {
   if (phase !== "result") {
     return null;
@@ -33,8 +35,8 @@ export function FloodResultPanel({
         <h2>{isClear ? "まちを守りました" : "浸水被害が発生しました"}</h2>
         <p>
           {isClear
-            ? "配置した土木技術が越水と浸水を抑えました。"
-            : "施設の種類や配置場所を変えて、被災度5%未満を目指しましょう。"}
+            ? "配置した土木技術が越水と浸水を抑えました。地図を自由に見渡すか、新しく挑戦できます。"
+            : "施設の種類や配置場所を変えて、被災度5%未満を目指しましょう。結果の地図を確認してから再挑戦もできます。"}
         </p>
 
         <div className="result-panel__score">
@@ -65,10 +67,51 @@ export function FloodResultPanel({
           </div>
         </dl>
 
-        <button type="button" onClick={onRestart}>
-          配置を残して再挑戦
-        </button>
+        <div className="result-panel__actions">
+          <button type="button" className="result-panel__primary" onClick={onEnterReview}>
+            結果を自由に見る
+          </button>
+          <button type="button" className="result-panel__secondary" onClick={onStartNewGame}>
+            新しくゲームを開始
+          </button>
+        </div>
       </section>
+    </div>
+  );
+}
+
+type ReviewModeBarProps = {
+  isClear: boolean | null;
+  score: number;
+  onShowResult: () => void;
+  onStartNewGame: () => void;
+};
+
+/** 結果プレビュー中の操作バー。地図操作を邪魔しないよう画面下に置く。 */
+export function ReviewModeBar({
+  isClear,
+  score,
+  onShowResult,
+  onStartNewGame,
+}: ReviewModeBarProps) {
+  return (
+    <div className="review-mode-bar" role="region" aria-label="結果プレビュー">
+      <div className="review-mode-bar__meta">
+        <span className={`review-mode-bar__badge ${isClear ? "is-clear" : "is-failure"}`}>
+          {isClear ? "CLEAR" : "FAILED"}
+        </span>
+        <strong>結果プレビュー</strong>
+        <span className="review-mode-bar__score">{score.toLocaleString("ja-JP")} pt</span>
+      </div>
+      <p className="review-mode-bar__hint">カメラを動かして浸水の様子を確認できます</p>
+      <div className="review-mode-bar__actions">
+        <button type="button" className="review-mode-bar__ghost" onClick={onShowResult}>
+          結果サマリー
+        </button>
+        <button type="button" className="review-mode-bar__primary" onClick={onStartNewGame}>
+          新しくゲームを開始
+        </button>
+      </div>
     </div>
   );
 }

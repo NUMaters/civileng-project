@@ -201,7 +201,8 @@ a {
 
 .orientation-slider {
   display: block;
-  padding: 4px 8px;
+  min-width: 168px;
+  padding: 10px 14px;
   border: 1px solid rgb(240 180 41 / 40%);
   border-radius: 999px;
   background: rgb(22 18 8 / 78%);
@@ -217,7 +218,7 @@ a {
 .orientation-slider__input {
   display: block;
   width: 100%;
-  height: 18px;
+  height: 28px;
   margin: 0;
   accent-color: #f0b429;
   cursor: pointer;
@@ -259,24 +260,6 @@ a {
   background: rgba(12, 58, 78, 0.9);
   border-color: rgba(94, 200, 255, 0.55);
   border-style: dashed;
-}
-
-.cesium-map-label.is-breach {
-  background: rgba(92, 24, 12, 0.92);
-  border-color: rgba(255, 120, 72, 0.75);
-  color: #ffe8de;
-  font-size: 12px;
-  animation: breach-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes breach-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgb(255 90 60 / 35%);
-  }
-  50% {
-    box-shadow: 0 0 0 8px rgb(255 90 60 / 0%);
-  }
 }
 
 .cesium-game-map__status {
@@ -475,7 +458,7 @@ a {
 }
 
 .budget-panel {
-  min-width: 124px;
+  min-width: 148px;
   padding: 9px 12px 10px;
   border-radius: 18px;
 }
@@ -502,6 +485,23 @@ a {
   font-weight: 600;
   letter-spacing: -0.03em;
   animation: budget-pop 320ms ease-out;
+}
+
+.budget-panel__rate {
+  color: #7dcf9a;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.budget-panel__rate.is-drain {
+  color: #ef9a7a;
+}
+
+.budget-panel__cap {
+  display: none;
 }
 
 .budget-panel__track {
@@ -653,6 +653,44 @@ a {
   font-size: 11px;
   line-height: 1.4;
   animation: hud-fade-in 220ms ease-out;
+}
+
+.construction-menu__detail {
+  display: grid;
+  gap: 6px;
+}
+
+.construction-menu__role-chip {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(31 170 116 / 16%);
+  color: #9de8c2;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.construction-menu__bullets {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-muted);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.construction-menu__bullets .is-strength::before {
+  content: "＋ ";
+  color: #7fd9ad;
+}
+
+.construction-menu__bullets .is-weakness::before {
+  content: "− ";
+  color: #ffb089;
 }
 
 .construction-menu__heading small {
@@ -841,6 +879,14 @@ a {
   font-weight: 500;
 }
 
+.structure-card__role {
+  color: #9ec9b8;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .structure-card__check {
   position: absolute;
   top: 7px;
@@ -909,6 +955,17 @@ a {
   font-size: 14px;
 }
 
+.flood-hud__hazard-tip {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid rgb(255 176 120 / 28%);
+  border-radius: 10px;
+  background: rgb(80 40 20 / 35%);
+  color: #ffd4bc;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
 .mitigation-panel {
   margin-top: 10px;
   padding: 8px 9px;
@@ -975,15 +1032,13 @@ a {
 
 .flood-hud__primary,
 .flood-hud__rain-button,
-.result-panel > button {
+.result-panel > button,
+.result-panel__primary,
+.result-panel__secondary {
   width: 100%;
   margin-top: 10px;
   padding: 9px 12px;
-  border: 0;
   border-radius: 12px;
-  background: linear-gradient(135deg, #1faa74, #13724f);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
-  color: white;
   font: inherit;
   font-family: var(--font-display);
   font-size: 11px;
@@ -991,8 +1046,137 @@ a {
   cursor: pointer;
 }
 
+.result-panel__actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.result-panel__actions > button {
+  margin-top: 0;
+}
+
+.result-panel__primary {
+  border: 0;
+  background: linear-gradient(135deg, #1faa74, #13724f);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
+  color: white;
+}
+
+.result-panel__secondary {
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: rgb(255 255 255 / 6%);
+  color: var(--ink);
+}
+
+.review-mode-bar {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  bottom: 18px;
+  display: grid;
+  gap: 8px;
+  width: min(520px, calc(100% - 28px));
+  padding: 12px 14px;
+  border: 1px solid var(--panel-border);
+  border-radius: 18px;
+  background: rgb(6 22 18 / 92%);
+  box-shadow: 0 16px 40px rgb(0 0 0 / 45%);
+  backdrop-filter: blur(10px);
+  transform: translateX(-50%);
+  animation: hud-fade-in 260ms ease-out;
+}
+
+.review-mode-bar__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.review-mode-bar__badge {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.review-mode-bar__badge.is-clear {
+  background: rgb(31 170 116 / 20%);
+  color: #9de8c2;
+}
+
+.review-mode-bar__badge.is-failure {
+  background: rgb(239 107 74 / 20%);
+  color: #ffb4a4;
+}
+
+.review-mode-bar__meta strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+
+.review-mode-bar__score {
+  margin-left: auto;
+  color: var(--accent-hot);
+  font-family: var(--font-mono);
+  font-size: 14px;
+}
+
+.review-mode-bar__hint {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 12px;
+}
+
+.review-mode-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.review-mode-bar__ghost,
+.review-mode-bar__primary {
+  flex: 1 1 140px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.review-mode-bar__ghost {
+  border: 1px solid rgb(255 255 255 / 16%);
+  background: transparent;
+  color: var(--ink);
+}
+
+.review-mode-bar__primary {
+  border: 0;
+  background: linear-gradient(135deg, #1faa74, #13724f);
+  color: white;
+}
+
+.game-shell.is-reviewing .game-shell__veil--bottom {
+  opacity: 0.35;
+}
+
+.flood-hud__primary {
+  border: 0;
+  background: linear-gradient(135deg, #1faa74, #13724f);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
+  color: white;
+}
+
 .flood-hud__rain-button {
+  border: 0;
   background: linear-gradient(135deg, #338fc2, #1c648f);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 18%);
+  color: white;
 }
 
 .flood-hud__metrics {

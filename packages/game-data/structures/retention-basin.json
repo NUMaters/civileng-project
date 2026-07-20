@@ -1,17 +1,39 @@
 {
   "id": "retention-basin",
   "displayName": "遊水地",
-  "description": "一時的に水を貯める。広い土地が必要だが、水位上昇を抑えられる。",
-  "constructionCost": 2800,
+  "description": "氾濫原・低地に水を逃がして水位ピークを削る。決壊口の直近より上流・低地向き。侵食は止められない。",
+  "constructionCost": 2500,
   "constructionTimeSeconds": 20,
   "maintenanceCostPerSecond": 2,
-  "allowedTerrains": ["lowland", "floodPlain"],
-  "supportedDisasters": ["heavy-rain"],
+  "allowedTerrains": [
+    "lowland",
+    "floodPlain"
+  ],
+  "supportedDisasters": [
+    "heavy-rain"
+  ],
   "effects": {
     "waterLevelReduction": 0.15,
     "overflowPrevention": 0.1,
     "drainageCapacity": 0,
     "bankProtection": 0,
     "channelCapacityIncrease": 0
+  },
+  "role": {
+    "primaryHazard": "capacityShortage",
+    "strengths": [
+      "河道の流下不足を緩和し、広域の水位ピークを下げる",
+      "内水の一時貯留にもある程度効く"
+    ],
+    "weaknesses": [
+      "決壊口そのものを塞ぐ力は弱い",
+      "河岸の侵食にはほぼ無効"
+    ]
+  },
+  "hazardAffinity": {
+    "overtopping": 0.45,
+    "erosion": 0.05,
+    "inlandPonding": 0.55,
+    "capacityShortage": 0.9
   }
 }

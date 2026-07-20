@@ -7,7 +7,9 @@ import {
   calculateOverflowSites,
   calculatePlacementEffectiveness,
   createInitialFloodState,
+  enterReview,
   refreshPlacementEffects,
+  reopenResult,
 } from "./floodSimulation";
 
 /** キャンパスコア弱点の河岸に、川沿い向きの堤防を置く。 */
@@ -132,5 +134,78 @@ describe("floodSimulation", () => {
       headingDegrees: CORE.headingDegrees + 90,
     });
     expect(aligned).toBeGreaterThan(skewed);
+  });
+
+  it("結果からプレビューへ遷移でき、プレビュー中は状態が凍結される", () => {
+    let state = beginDisaster(createInitialFloodState());
+    for (let second = 0; second < 90; second += 1) {
+      state = advanceFloodSimulation(state, []);
+    }
+    expect(state.phase).toBe("result");
+    const damage = state.damagePercent;
+
+    state = enterReview(state);
+    expect(state.phase).toBe("review");
+    expect(state.damagePercent).toBe(damage);
+
+    state = advanceFloodSimulation(state, [], 5);
+    expect(state.phase).toBe("review");
+    expect(state.damagePercent).toBe(damage);
+
+    state = reopenResult(state);
+    expect(state.phase).toBe("result");
+  });
+
+  it("越水点には堤防が効き、排水機場だけでは抑えきれない", () => {
+    const leveeAtCore: PlacedStructure = {
+      id: "levee-core",
+      structureId: "levee",
+      position: { longitude: 140.37776, latitude: 37.359853, height: 22 },
+      headingDegrees: 50,
+    };
+    const pumpAtCore: PlacedStructure = {
+      id: "pump-core",
+      structureId: "drainage-pump",
+      position: { longitude: 140.37776, latitude: 37.359853, height: 18 },
+      headingDegrees: 50,
+    };
+
+    let withLevee = beginDisaster(createInitialFloodState());
+    let withPump = beginDisaster(createInitialFloodState());
+    for (let second = 0; second < 90; second += 1) {
+      withLevee = advanceFloodSimulation(withLevee, [leveeAtCore]);
+      withPump = advanceFloodSimulation(withPump, [pumpAtCore]);
+    }
+
+    const leveeCore = withLevee.overflowSites.find((site) => site.id === "campus-core");
+    const pumpCore = withPump.overflowSites.find((site) => site.id === "campus-core");
+    expect(pumpCore?.intensity ?? 0).toBeGreaterThan(leveeCore?.intensity ?? 0);
+    expect(withLevee.damagePercent).toBeLessThan(withPump.damagePercent);
+  });
+
+  it("侵食点には護岸が効き、堤防だけでは抑えきれない", () => {
+    const revetmentAtBend: PlacedStructure = {
+      id: "rev-bend",
+      structureId: "revetment",
+      position: { longitude: 140.385275, latitude: 37.371045, height: 21 },
+      headingDegrees: 20,
+    };
+    const leveeAtBend: PlacedStructure = {
+      id: "levee-bend",
+      structureId: "levee",
+      position: { longitude: 140.385275, latitude: 37.371045, height: 21 },
+      headingDegrees: 20,
+    };
+
+    let withRevetment = beginDisaster(createInitialFloodState());
+    let withLevee = beginDisaster(createInitialFloodState());
+    for (let second = 0; second < 90; second += 1) {
+      withRevetment = advanceFloodSimulation(withRevetment, [revetmentAtBend]);
+      withLevee = advanceFloodSimulation(withLevee, [leveeAtBend]);
+    }
+
+    const revSite = withRevetment.overflowSites.find((site) => site.id === "north-bend");
+    const leveeSite = withLevee.overflowSites.find((site) => site.id === "north-bend");
+    expect(leveeSite?.intensity ?? 0).toBeGreaterThanOrEqual(revSite?.intensity ?? 0);
   });
 });

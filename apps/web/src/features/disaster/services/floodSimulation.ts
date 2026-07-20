@@ -1,5 +1,5 @@
 import { loadRules, loadStructures } from "@civilcraft/game-data/load";
-import type { StructureEffects } from "@civilcraft/game-data/types";
+import type { HazardKind, StructureEffects } from "@civilcraft/game-data/types";
 import type { PlacedStructure } from "../../construction";
 import { getStructureEffectLabel } from "../../construction/structureVisuals";
 import { calculateFloodplainExtent } from "./floodplainExtent";
@@ -12,11 +12,12 @@ import {
   applyOverflowTerrainElevations,
   listOverflowCandidates,
   resolveCandidateVulnerability,
+  type OverflowCandidate,
 } from "./overflowBankSites";
 
-export type GamePhase = "idle" | "preparation" | "disaster" | "result";
+export type GamePhase = "idle" | "preparation" | "disaster" | "result" | "review";
 
-/** 局所越水地点（岸から市街地側へ水が溢れるポイント）。 */
+/** 局所越水／侵食／内水地点。 */
 export type OverflowSite = {
   id: string;
   longitude: number;
@@ -25,6 +26,8 @@ export type OverflowSite = {
   outflowHeadingDegrees: number;
   /** 0〜1。越水量・標高弱点・防護施設で決まる。 */
   intensity: number;
+  /** この地点の主たる災害種別。 */
+  primaryHazard: HazardKind;
 };
 
 /** 弱点地点の防護状態（施設効果の可視化用）。 */
@@ -36,6 +39,7 @@ export type ProtectedBankSite = {
   protectionStrength: number;
   /** true なら越水プルームが出ている。false なら施設が抑え込み中。 */
   overflowing: boolean;
+  primaryHazard: HazardKind;
 };
 
 /** 施設1基の川への影響範囲（地図表示用）。 */
@@ -141,7 +145,32 @@ export function beginDisaster(current: FloodSimulationState): FloodSimulationSta
     phase: "disaster",
     phaseRemainingSeconds: rules.timing.phases.disasterSeconds,
     disasterElapsedSeconds: 0,
-    rainfallIntensity: 0.2,
+    // 降雨は advance 側で progress から連続計算する。開始瞬間の段差を避ける。
+    rainfallIntensity: 0.25,
+  };
+}
+
+/** 結果画面を閉じ、最終状態のまま地図を自由に見られるプレビューへ。 */
+export function enterReview(current: FloodSimulationState): FloodSimulationState {
+  if (current.phase !== "result" && current.phase !== "review") {
+    return current;
+  }
+  return {
+    ...current,
+    phase: "review",
+    phaseRemainingSeconds: 0,
+  };
+}
+
+/** 結果サマリーを再度モーダル表示する。 */
+export function reopenResult(current: FloodSimulationState): FloodSimulationState {
+  if (current.phase !== "review" && current.phase !== "result") {
+    return current;
+  }
+  return {
+    ...current,
+    phase: "result",
+    phaseRemainingSeconds: rules.timing.phases.resultSeconds,
   };
 }
 
@@ -150,7 +179,7 @@ export function advanceFloodSimulation(
   placements: PlacedStructure[],
   deltaSeconds = 1,
 ): FloodSimulationState {
-  if (current.phase === "idle" || current.phase === "result") {
+  if (current.phase === "idle" || current.phase === "result" || current.phase === "review") {
     return current;
   }
 
@@ -300,47 +329,36 @@ function calculateBankEffects(
   overflowMeters: number,
   floodDepthMeters: number,
 ): { overflowSites: OverflowSite[]; protectedBankSites: ProtectedBankSite[] } {
-  const protective = placements.filter(
-    (placement) =>
-      placement.preview !== true &&
-      (placement.structureId === "levee" ||
-        placement.structureId === "revetment" ||
-        placement.structureId === "retention-basin"),
-  );
-
-  const basePressure = clamp(overflowMeters / 1.8 + floodDepthMeters * 0.55, 0, 1.4);
+  const activePlacements = placements.filter((placement) => placement.preview !== true);
   const overflowSites: OverflowSite[] = [];
   const protectedBankSites: ProtectedBankSite[] = [];
 
   for (const candidate of listOverflowCandidates()) {
     const vulnerability = resolveCandidateVulnerability(candidate);
+    const hazardPressure = resolveHazardPressure(
+      candidate.primaryHazard,
+      overflowMeters,
+      floodDepthMeters,
+    );
     let protection = 0;
-    for (const placement of protective) {
-      const distance = distanceInMeters(
-        placement.position.longitude,
-        placement.position.latitude,
-        candidate.longitude,
-        candidate.latitude,
-      );
-      const coverageRadius =
-        placement.structureId === "levee"
-          ? 280
-          : placement.structureId === "revetment"
-            ? 220
-            : 360;
-      const coverage =
-        Math.exp(-distance / coverageRadius) *
-        (placement.structureId === "retention-basin" ? 0.7 : 0.85) *
-        protectionHeadingBonus(placement, candidate.outflowHeadingDegrees) *
-        calculateHydraulicEffectiveness(placement);
-      protection = combineProtection(protection, coverage);
+    let erosionStress = 0;
+
+    for (const placement of activePlacements) {
+      const contribution = evaluateLocalContribution(placement, candidate);
+      if (contribution >= 0) {
+        protection = combineProtection(protection, contribution);
+      } else {
+        // 河道掘削などが侵食点で負の相性になる場合、圧力を押し上げる。
+        erosionStress += Math.abs(contribution);
+      }
     }
 
     const intensity =
-      overflowMeters <= 0.02 && floodDepthMeters <= 0.01
+      hazardPressure <= 0.01
         ? 0
         : clamp(
-            (basePressure * vulnerability - protection * 1.2) * (0.55 + basePressure * 0.5),
+            (hazardPressure * vulnerability + erosionStress * 0.55 - protection * 1.25) *
+              (0.5 + hazardPressure * 0.55),
             0,
             1,
           );
@@ -353,22 +371,106 @@ function calculateBankEffects(
         latitude: candidate.latitude,
         outflowHeadingDegrees: candidate.outflowHeadingDegrees,
         intensity,
+        primaryHazard: candidate.primaryHazard,
       });
     }
 
-    if (protection >= 0.12 || overflowing) {
+    if (protection >= 0.12 || overflowing || erosionStress >= 0.08) {
       protectedBankSites.push({
         id: candidate.id,
         longitude: candidate.longitude,
         latitude: candidate.latitude,
         protectionStrength: clamp(protection, 0, 1),
         overflowing,
+        primaryHazard: candidate.primaryHazard,
       });
     }
   }
 
   overflowSites.sort((left, right) => right.intensity - left.intensity);
   return { overflowSites, protectedBankSites };
+}
+
+/**
+ * 災害種別ごとの局所圧力。
+ * 越水は overflow、侵食は overflow＋水深、内水は水深主導。
+ */
+function resolveHazardPressure(
+  hazard: HazardKind,
+  overflowMeters: number,
+  floodDepthMeters: number,
+): number {
+  switch (hazard) {
+    case "overtopping":
+      return clamp(overflowMeters / 1.6 + floodDepthMeters * 0.15, 0, 1.4);
+    case "erosion":
+      return clamp(overflowMeters / 2.1 + floodDepthMeters * 0.35, 0, 1.35);
+    case "inlandPonding":
+      return clamp(floodDepthMeters * 0.95 + Math.max(0, overflowMeters - 0.15) * 0.25, 0, 1.4);
+    case "capacityShortage":
+      return clamp(overflowMeters / 1.9 + floodDepthMeters * 0.2, 0, 1.2);
+    default:
+      return clamp(overflowMeters / 1.8 + floodDepthMeters * 0.55, 0, 1.4);
+  }
+}
+
+/**
+ * 施設×弱点種別の局所寄与。相性が低い／負だとほぼ効かない／悪化する。
+ */
+function evaluateLocalContribution(
+  placement: PlacedStructure,
+  candidate: OverflowCandidate,
+): number {
+  const definition = structureById.get(placement.structureId);
+  if (definition === undefined) {
+    return 0;
+  }
+  const affinity = definition.hazardAffinity[candidate.primaryHazard] ?? 0;
+  if (Math.abs(affinity) < 0.04) {
+    return 0;
+  }
+
+  const distance = distanceInMeters(
+    placement.position.longitude,
+    placement.position.latitude,
+    candidate.longitude,
+    candidate.latitude,
+  );
+  const radius = getStructureInfluenceRadiusMeters(placement.structureId);
+  const effectWeight = localEffectWeight(definition.effects, candidate.primaryHazard);
+  if (effectWeight <= 0.02 && affinity > 0) {
+    return 0;
+  }
+
+  const heading =
+    candidate.primaryHazard === "inlandPonding" || candidate.primaryHazard === "capacityShortage"
+      ? 1
+      : protectionHeadingBonus(placement, candidate.outflowHeadingDegrees);
+  const hydraulic = calculateHydraulicEffectiveness(placement);
+  const magnitude =
+    Math.exp(-distance / radius) *
+    Math.abs(affinity) *
+    Math.max(effectWeight, affinity < 0 ? 0.55 : 0) *
+    heading *
+    hydraulic *
+    (affinity < 0 ? 0.7 : 0.95);
+
+  return affinity < 0 ? -magnitude : magnitude;
+}
+
+function localEffectWeight(effects: StructureEffects, hazard: HazardKind): number {
+  switch (hazard) {
+    case "overtopping":
+      return effects.overflowPrevention;
+    case "erosion":
+      return effects.bankProtection;
+    case "inlandPonding":
+      return effects.drainageCapacity;
+    case "capacityShortage":
+      return Math.max(effects.channelCapacityIncrease, effects.waterLevelReduction);
+    default:
+      return 0;
+  }
 }
 
 /** 施設ごとの川への影響半径（可視化・説明用）。 */
@@ -476,8 +578,16 @@ export function calculatePlacementEffectiveness(placement: PlacedStructure): num
 }
 
 function nearestWeaknessBoost(placement: PlacedStructure): number {
+  const definition = structureById.get(placement.structureId);
+  if (definition === undefined) {
+    return 0;
+  }
   let best = 0;
   for (const candidate of listOverflowCandidates()) {
+    const affinity = definition.hazardAffinity[candidate.primaryHazard] ?? 0;
+    if (affinity <= 0.08) {
+      continue;
+    }
     const distance = distanceInMeters(
       placement.position.longitude,
       placement.position.latitude,
@@ -485,7 +595,7 @@ function nearestWeaknessBoost(placement: PlacedStructure): number {
       candidate.latitude,
     );
     const vulnerability = resolveCandidateVulnerability(candidate);
-    const cover = Math.exp(-distance / 320) * vulnerability;
+    const cover = Math.exp(-distance / 320) * vulnerability * affinity;
     best = Math.max(best, cover);
   }
   return clamp(best, 0, 1);

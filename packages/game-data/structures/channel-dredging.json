@@ -1,17 +1,38 @@
 {
   "id": "channel-dredging",
   "displayName": "河道掘削",
-  "description": "川を流れる水の量を増やす。広い範囲に効果があるが、施工費用が高い。",
-  "constructionCost": 4000,
+  "description": "本川の流下能力を上げて水位を下げる。広域に効くが、湾曲部の侵食を悪化させうる。",
+  "constructionCost": 3400,
   "constructionTimeSeconds": 22,
   "maintenanceCostPerSecond": 2,
-  "allowedTerrains": ["riverChannel"],
-  "supportedDisasters": ["heavy-rain"],
+  "allowedTerrains": [
+    "riverChannel"
+  ],
+  "supportedDisasters": [
+    "heavy-rain"
+  ],
   "effects": {
     "waterLevelReduction": 0.2,
     "overflowPrevention": 0.1,
     "drainageCapacity": 0,
     "bankProtection": 0,
     "channelCapacityIncrease": 0.5
+  },
+  "role": {
+    "primaryHazard": "capacityShortage",
+    "strengths": [
+      "本川の流下能力を上げ、全体の水位・越水圧力を下げる",
+      "局所の堤防がなくても広域に効く"
+    ],
+    "weaknesses": [
+      "湾曲部では流速増で侵食リスクを上げることがある",
+      "内水の排水や決壊口の直接封鎖はできない"
+    ]
+  },
+  "hazardAffinity": {
+    "overtopping": 0.35,
+    "erosion": -0.35,
+    "inlandPonding": 0.1,
+    "capacityShortage": 1
   }
 }

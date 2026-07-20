@@ -46,8 +46,12 @@ import {
   syncNearOverflowFloodplain,
 } from "./nearOverflowFloodplain";
 import {
+  destroyInundationVisualization,
+  syncInundationVisualization,
+} from "./inundationVisualization";
+import {
   clearLegacyFloodZones,
-  getBreachDisplayName,
+  destroyOverflowVisualization,
   syncOverflowVisualization,
 } from "./overflowVisualization";
 import { createPlaceableZone } from "./placeableZone";
@@ -128,14 +132,12 @@ const PLATEAU_TERRAIN_URL = "https://tile.plateauview.mlit.go.jp/terrain/";
 const GSI_SEAMLESS_PHOTO_URL = import.meta.env.DEV
   ? "/gsi-tiles/seamlessphoto/{z}/{x}/{y}.jpg"
   : "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
-/** 施設回転ドラッグを開始する画面移動量（CSS px）。 */
-const ROTATE_START_MOVE_PX = 8;
-/** 左右ドラッグ 1px あたりの回転角（度）。タッチでも扱いやすい感度。 */
-const ROTATE_DEGREES_PER_PX = 0.55;
+/** 施設ドラッグ移設を開始する画面移動量（CSS px）。 */
+const MOVE_START_MOVE_PX = 6;
 /** モデルを直接拾えなくても中心付近なら選択できる半径（CSS px）。 */
 const PLACEMENT_PICK_RADIUS_PX = 64;
-/** 回転終了時に揃える角度刻み（度）。 */
-const ROTATE_SNAP_DEGREES = 5;
+/** 仮配置の矢印キー微調整量（m）。 */
+const NUDGE_METERS = 2.5;
 /** 地形高が取れないとき・NaN のときのフォールバック標高（楕円体高 m）。 */
 const FALLBACK_GROUND_HEIGHT_M = 18;
 
@@ -164,6 +166,8 @@ type CesiumGameMapProps = {
   selectedPlacementId: string | null;
   onDropPlace: (structureId: string, position: GeoPosition, headingDegrees: number) => void;
   onRotatePlacement: (placementId: string, headingDegrees: number) => void;
+  /** 仮配置の位置微調整（確定前）。 */
+  onMovePendingPlacement: (placementId: string, position: GeoPosition) => void;
   onSelectPlacement: (placementId: string | null) => void;
   onInvalidPosition: (message: string) => void;
   /** 仮配置の確定（施設上のチェック）。 */
@@ -188,6 +192,26 @@ type CesiumGameMapProps = {
     /** 0〜1。施設の治水で水面を穏やかに見せる。 */
     mitigationCalm: number;
   };
+  /**
+   * 毎フレームの最新洪水状態。指定時は本川・氾濫原の目標値を React 再描画より高頻度で更新する。
+   */
+  getLatestFloodState?: () => {
+    phase: string;
+    rainfallIntensity: number;
+    riverLevelMeters: number;
+    overflowMeters: number;
+    floodDepthMeters: number;
+    floodedAreaPercent: number;
+    overflowLevelMeters: number;
+    overflowSites: OverflowSite[];
+    mitigation: {
+      overflowPrevention: number;
+      waterLevelReduction: number;
+      channelCapacityIncrease: number;
+    };
+  };
+  /** 結果プレビュー中など、川周辺へのカメラ拘束を外して自由に見回せる。 */
+  freeCameraLook?: boolean;
 };
 
 export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>(
@@ -198,12 +222,15 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       selectedPlacementId,
       onDropPlace,
       onRotatePlacement,
+      onMovePendingPlacement,
       onSelectPlacement,
       onInvalidPosition,
       onConfirmPendingPlacement,
       onCancelPendingPlacement,
       onCameraFocusChange,
       floodState,
+      getLatestFloodState,
+      freeCameraLook = false,
     },
     ref,
   ) {
@@ -213,6 +240,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const riverWaterRef = useRef<RiverWaterSurfaceController | null>(null);
     const placeableZoneRef = useRef<{ destroy: () => void } | null>(null);
     const floodStateRef = useRef(floodState);
+    const getLatestFloodStateRef = useRef(getLatestFloodState);
+    const freeCameraLookRef = useRef(freeCameraLook);
     const labelElementRefs = useRef(new Map<string, HTMLDivElement>());
     const orientationHudRef = useRef<HTMLDivElement | null>(null);
     const confirmHudRef = useRef<HTMLDivElement | null>(null);
@@ -220,6 +249,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const structuresRef = useRef(structures);
     const onDropPlaceRef = useRef(onDropPlace);
     const onRotatePlacementRef = useRef(onRotatePlacement);
+    const onMovePendingPlacementRef = useRef(onMovePendingPlacement);
     const onSelectPlacementRef = useRef(onSelectPlacement);
     const onInvalidPositionRef = useRef(onInvalidPosition);
     const onCameraFocusChangeRef = useRef(onCameraFocusChange);
@@ -258,42 +288,30 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       [placements],
     );
 
-    const breachLabels = useMemo(() => {
-      if (floodState?.active !== true) {
-        return [];
-      }
-      return (floodState.overflowSites ?? []).map((site) => ({
-        id: site.id,
-        kind: "breach" as const,
-        text: getBreachDisplayName(site.id),
-        selected: false,
-        preview: false,
-        longitude: site.longitude,
-        latitude: site.latitude,
-        height: 2,
-      }));
-    }, [floodState?.active, floodState?.overflowSites]);
-
-    const mapLabels = useMemo(
-      () => [...facilityLabels, ...breachLabels],
-      [breachLabels, facilityLabels],
-    );
+    // 決壊はオレンジ楕円・浸水プルームだけで示し、地点名ラベルは出さない。
+    const mapLabels = facilityLabels;
 
     useEffect(() => {
       placementsRef.current = placements;
       structuresRef.current = structures;
       onDropPlaceRef.current = onDropPlace;
       onRotatePlacementRef.current = onRotatePlacement;
+      onMovePendingPlacementRef.current = onMovePendingPlacement;
       onSelectPlacementRef.current = onSelectPlacement;
       onInvalidPositionRef.current = onInvalidPosition;
       onCameraFocusChangeRef.current = onCameraFocusChange;
       selectedPlacementIdRef.current = selectedPlacementId;
       floodStateRef.current = floodState;
+      getLatestFloodStateRef.current = getLatestFloodState;
+      freeCameraLookRef.current = freeCameraLook;
     }, [
       floodState,
+      freeCameraLook,
+      getLatestFloodState,
       onCameraFocusChange,
       onDropPlace,
       onInvalidPosition,
+      onMovePendingPlacement,
       onRotatePlacement,
       onSelectPlacement,
       placements,
@@ -572,11 +590,63 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.camera.lookAtTransform(Matrix4.IDENTITY);
 
         // 水面の Water マテリアル／流向ストリークは毎フレーム更新が必要なので描画を継続する。
+        // 最新水位もここで渡し、React の間引き更新だけでは増水が階段状に見えないようにする。
+        let lastVisualKey = "";
         const keepWaterAnimating = () => {
           if (disposed || mapViewer.isDestroyed()) {
             return;
           }
           if (!document.hidden) {
+            const latest = getLatestFloodStateRef.current?.();
+            if (latest !== undefined) {
+              const active =
+                latest.phase === "disaster" ||
+                latest.phase === "result" ||
+                latest.phase === "review";
+              const mitigationCalm = Math.min(
+                1,
+                latest.mitigation.overflowPrevention * 0.65 +
+                  latest.mitigation.waterLevelReduction * 0.5 +
+                  latest.mitigation.channelCapacityIncrease * 0.2,
+              );
+              riverWaterRef.current?.setHydraulics({
+                riverLevelMeters: latest.riverLevelMeters,
+                rainfallIntensity: latest.rainfallIntensity,
+                overflowMeters: latest.overflowMeters,
+                activeFlood: active,
+                mitigationCalm,
+              });
+              // 氾濫原・越水は目標の変化時だけ更新（描画側で補間する）。
+              const visualKey = [
+                active ? 1 : 0,
+                latest.riverLevelMeters.toFixed(3),
+                latest.overflowMeters.toFixed(3),
+                latest.floodDepthMeters.toFixed(3),
+                latest.floodedAreaPercent.toFixed(2),
+                latest.overflowSites.map((site) => `${site.id}:${site.intensity.toFixed(3)}`).join(","),
+              ].join("|");
+              if (visualKey !== lastVisualKey) {
+                lastVisualKey = visualKey;
+                syncNearOverflowFloodplain(mapViewer, {
+                  active,
+                  riverLevelMeters: latest.riverLevelMeters,
+                  overflowMeters: latest.overflowMeters,
+                  overflowLevelMeters: latest.overflowLevelMeters,
+                });
+                syncOverflowVisualization(
+                  mapViewer,
+                  active ? latest.overflowSites : [],
+                  active ? latest.floodDepthMeters : 0,
+                  active ? latest.floodedAreaPercent : 0,
+                );
+                syncInundationVisualization(
+                  mapViewer,
+                  active ? latest.overflowSites : [],
+                  active ? latest.floodDepthMeters : 0,
+                  active,
+                );
+              }
+            }
             mapViewer.scene.requestRender();
           }
           waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
@@ -612,7 +682,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           if (mapViewer.isDestroyed()) {
             return;
           }
-          constrainCameraFocusNearRiver(mapViewer);
+          if (!freeCameraLookRef.current) {
+            constrainCameraFocusNearRiver(mapViewer);
+          }
           const focus = pickGroundFocus(mapViewer);
           if (focus === undefined) {
             return;
@@ -626,30 +698,35 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         removeCameraMoveEnd = mapViewer.camera.moveEnd.addEventListener(settleCamera);
 
-        // 設置済み施設の選択。向きドラッグ回転は仮配置中のみ。
+        // 仮配置の選択・地図ドラッグ移設。向きは手前のスライダーでライブ調整する。
         const canvas = mapViewer.scene.canvas;
         eventHandler = new ScreenSpaceEventHandler(canvas);
-        type RotateSession = {
+        type MoveSession = {
           placementId: string;
-          startX: number;
-          startHeadingDegrees: number;
+          startPosition: GeoPosition;
+          headingDegrees: number;
           active: boolean;
-          liveHeadingDegrees: number;
+          livePosition: GeoPosition;
+          placeable: boolean;
         };
         let pointerDown: Cartesian2 | undefined;
-        let rotateSession: RotateSession | undefined;
+        let moveSession: MoveSession | undefined;
 
-        const liveRotate = (headingDegrees: number, placementId: string) => {
-          const placement = placementsRef.current.find(({ id }) => id === placementId);
-          if (placement === undefined || placement.preview !== true) {
-            return;
+        const liveUpdatePending = (placement: PlacedStructure, invalid = false) => {
+          for (const entity of [...mapViewer.entities.values]) {
+            if (
+              entity.id === `placement-${placement.id}` ||
+              entity.id.startsWith(`placement-${placement.id}-`)
+            ) {
+              mapViewer.entities.remove(entity);
+            }
           }
-          applyPlacementHeading(
-            mapViewer,
-            { ...placement, headingDegrees },
-            true,
-            true,
-          );
+          try {
+            addCivilEngineeringModel(mapViewer, placement, true, true, { invalid });
+          } catch (error) {
+            console.error("Failed to live-update pending placement", placement.structureId, error);
+            addFallbackStructureMarker(mapViewer, placement, true, true, { invalid });
+          }
           mapViewer.scene.requestRender();
         };
 
@@ -662,66 +739,87 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             PLACEMENT_PICK_RADIUS_PX,
           );
           if (pickedId === undefined) {
-            rotateSession = undefined;
+            moveSession = undefined;
             return;
           }
           const placement = placementsRef.current.find(({ id }) => id === pickedId);
           if (placement === undefined) {
-            rotateSession = undefined;
+            moveSession = undefined;
             return;
           }
           onSelectPlacementRef.current(pickedId);
-          // 確定済みは向き変更不可。選択のみ。
+          // 確定済みは移設不可。選択のみ。
           if (placement.preview !== true) {
-            rotateSession = undefined;
+            moveSession = undefined;
             canvas.style.cursor = "";
             return;
           }
-          canvas.style.cursor = "ew-resize";
-          rotateSession = {
+          canvas.style.cursor = "move";
+          moveSession = {
             placementId: pickedId,
-            startX: event.position.x,
-            startHeadingDegrees: placement.headingDegrees,
+            startPosition: { ...placement.position },
+            headingDegrees: placement.headingDegrees,
             active: false,
-            liveHeadingDegrees: placement.headingDegrees,
+            livePosition: { ...placement.position },
+            placeable: true,
           };
         }, ScreenSpaceEventType.LEFT_DOWN);
 
         eventHandler.setInputAction((event: { endPosition: Cartesian2 }) => {
-          if (pointerDown === undefined || rotateSession === undefined) {
+          if (pointerDown === undefined || moveSession === undefined) {
             return;
           }
           const distance = Cartesian2.distance(pointerDown, event.endPosition);
-          if (!rotateSession.active && distance > ROTATE_START_MOVE_PX) {
-            rotateSession.active = true;
+          if (!moveSession.active && distance > MOVE_START_MOVE_PX) {
+            moveSession.active = true;
             mapViewer.scene.screenSpaceCameraController.enableInputs = false;
           }
-          if (!rotateSession.active) {
+          if (!moveSession.active) {
             return;
           }
-          // 右へドラッグ＝時計回り。円周ドラッグより指先で安定する。
-          const deltaX = event.endPosition.x - rotateSession.startX;
-          const nextHeading = rotateSession.startHeadingDegrees + deltaX * ROTATE_DEGREES_PER_PX;
-          rotateSession.liveHeadingDegrees = nextHeading;
-          liveRotate(nextHeading, rotateSession.placementId);
+          const picked = pickPlacementPosition(mapViewer, event.endPosition);
+          if (picked === undefined) {
+            return;
+          }
+          const placeable = resolvePlaceablePosition(picked);
+          const nextPosition = placeable ?? picked;
+          moveSession.livePosition = nextPosition;
+          moveSession.placeable = placeable !== undefined;
+          const base = placementsRef.current.find(({ id }) => id === moveSession!.placementId);
+          if (base === undefined) {
+            return;
+          }
+          liveUpdatePending(
+            {
+              ...base,
+              headingDegrees: moveSession.headingDegrees,
+              position: nextPosition,
+            },
+            placeable === undefined,
+          );
         }, ScreenSpaceEventType.MOUSE_MOVE);
 
         eventHandler.setInputAction((event: { position: Cartesian2 }) => {
-          const session = rotateSession;
+          const session = moveSession;
           const down = pointerDown;
           pointerDown = undefined;
-          rotateSession = undefined;
+          moveSession = undefined;
           mapViewer.scene.screenSpaceCameraController.enableInputs = true;
           canvas.style.cursor = "";
 
           if (session?.active === true) {
             const target = placementsRef.current.find(({ id }) => id === session.placementId);
             if (target?.preview === true) {
-              const deltaX = event.position.x - session.startX;
-              const rawHeading = session.startHeadingDegrees + deltaX * ROTATE_DEGREES_PER_PX;
-              const snapped =
-                Math.round(rawHeading / ROTATE_SNAP_DEGREES) * ROTATE_SNAP_DEGREES;
-              onRotatePlacementRef.current(session.placementId, snapped);
+              if (session.placeable) {
+                onMovePendingPlacementRef.current(session.placementId, session.livePosition);
+              } else {
+                liveUpdatePending({
+                  ...target,
+                  position: session.startPosition,
+                  headingDegrees: session.headingDegrees,
+                });
+                onInvalidPositionRef.current("河道・河岸の配置可能域内へ移してください");
+              }
             }
             return;
           }
@@ -729,7 +827,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           if (down === undefined) {
             return;
           }
-          if (Cartesian2.distance(down, event.position) > ROTATE_START_MOVE_PX) {
+          if (Cartesian2.distance(down, event.position) > MOVE_START_MOVE_PX) {
             return;
           }
           const pickedId = pickPlacementIdAtScreen(
@@ -776,6 +874,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         clearDragGhostEntities(viewer);
         if (viewer != null && !viewer.isDestroyed()) {
           destroyNearOverflowFloodplain(viewer);
+          destroyOverflowVisualization(viewer);
+          destroyInundationVisualization(viewer);
         }
         viewerRef.current = null;
         buildingTilesetRef.current = null;
@@ -847,6 +947,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         floodState?.floodDepthMeters ?? 0,
         floodState?.floodedAreaPercent ?? 0,
       );
+      syncInundationVisualization(
+        viewer,
+        sites,
+        floodState?.floodDepthMeters ?? 0,
+        floodState?.active === true,
+      );
       // 旧・無関係な固定浸水ゾーンは使わない（決壊地点からの浸水のみ）。
       clearLegacyFloodZones(viewer);
       viewer.scene.requestRender();
@@ -895,13 +1001,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             continue;
           }
           const screen = viewer.scene.cartesianToCanvasCoordinates(
-            Cartesian3.fromDegrees(
-              label.longitude,
-              label.latitude,
-              label.height + (label.kind === "breach" ? 14 : 8),
-            ),
+            Cartesian3.fromDegrees(label.longitude, label.latitude, label.height + 8),
           );
-          applyScreenLabelPosition(element, screen, 0, label.kind === "breach" ? -36 : -28);
+          applyScreenLabelPosition(element, screen, 0, -28);
         }
 
         const target = orientationTarget;
@@ -941,6 +1043,67 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       };
     }, [isMapReady, mapLabels, orientationTarget, visibilityEpoch]);
 
+    // 仮配置中は矢印キーで位置を微調整（河道・河岸内のみ）。
+    useEffect(() => {
+      if (orientationTarget === null || orientationTarget.preview !== true) {
+        return;
+      }
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (
+          event.key !== "ArrowUp" &&
+          event.key !== "ArrowDown" &&
+          event.key !== "ArrowLeft" &&
+          event.key !== "ArrowRight"
+        ) {
+          return;
+        }
+        const target = event.target;
+        if (
+          target instanceof HTMLElement &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.isContentEditable)
+        ) {
+          return;
+        }
+        event.preventDefault();
+        const east =
+          event.key === "ArrowRight" ? NUDGE_METERS : event.key === "ArrowLeft" ? -NUDGE_METERS : 0;
+        const north =
+          event.key === "ArrowUp" ? NUDGE_METERS : event.key === "ArrowDown" ? -NUDGE_METERS : 0;
+        const nudged = offsetLonLatMeters(
+          orientationTarget.position.longitude,
+          orientationTarget.position.latitude,
+          east,
+          north,
+          0,
+        );
+        const candidate: GeoPosition = {
+          longitude: nudged.longitude,
+          latitude: nudged.latitude,
+          height: orientationTarget.position.height,
+        };
+        const placeable = resolvePlaceablePosition(candidate);
+        if (placeable === undefined) {
+          onInvalidPositionRef.current("河道・河岸の配置可能域内でのみ微調整できます");
+          return;
+        }
+        const viewer = viewerRef.current;
+        if (viewer !== null && !viewer.isDestroyed()) {
+          applyPlacementHeading(
+            viewer,
+            { ...orientationTarget, position: placeable },
+            true,
+            true,
+          );
+          viewer.scene.requestRender();
+        }
+        onMovePendingPlacementRef.current(orientationTarget.id, placeable);
+      };
+      window.addEventListener("keydown", onKeyDown);
+      return () => window.removeEventListener("keydown", onKeyDown);
+    }, [orientationTarget]);
+
     const setLabelElementRef = (id: string, element: HTMLDivElement | null) => {
       if (element === null) {
         labelElementRefs.current.delete(id);
@@ -959,7 +1122,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               ref={(element) => {
                 setLabelElementRef(`${label.kind}-${label.id}`, element);
               }}
-              className={`cesium-map-label${label.selected ? " is-selected" : ""}${label.preview ? " is-preview" : ""}${label.kind === "breach" ? " is-breach" : ""}`}
+              className={`cesium-map-label${label.selected ? " is-selected" : ""}${label.preview ? " is-preview" : ""}`}
             >
               {label.text}
             </div>
@@ -1002,6 +1165,19 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               <RotationControls
                 floating
                 headingDegrees={orientationTarget.headingDegrees}
+                onLiveChange={(headingDegrees) => {
+                  const viewer = viewerRef.current;
+                  if (viewer === null || viewer.isDestroyed()) {
+                    return;
+                  }
+                  applyPlacementHeading(
+                    viewer,
+                    { ...orientationTarget, headingDegrees },
+                    true,
+                    true,
+                  );
+                  viewer.scene.requestRender();
+                }}
                 onChange={(headingDegrees) =>
                   onRotatePlacement(orientationTarget.id, headingDegrees)
                 }
@@ -1038,7 +1214,7 @@ function applyScreenLabelPosition(
   element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) translate(-50%, -100%)`;
 }
 
-/** 施設の手前など、アンカー点の下に UI を置く。 */
+/** 施設の手前など、アンカー点の下に UI を置く。画面端でははみ出さないようクランプする。 */
 function applyScreenHudPosition(
   element: HTMLDivElement,
   screen: Cartesian2 | undefined,
@@ -1051,8 +1227,22 @@ function applyScreenHudPosition(
     return;
   }
   element.style.visibility = "visible";
+  const parent = element.offsetParent as HTMLElement | null;
+  const viewWidth = parent?.clientWidth ?? window.innerWidth;
+  const viewHeight = parent?.clientHeight ?? window.innerHeight;
+  const pad = 12;
+  const halfWidth = Math.max(element.offsetWidth, 120) / 2;
+  const height = Math.max(element.offsetHeight, 28);
+  let x = screen.x + offsetX;
+  let y = screen.y + offsetY;
+  x = Math.min(viewWidth - pad - halfWidth, Math.max(pad + halfWidth, x));
+  if (anchor === "above") {
+    y = Math.min(viewHeight - pad, Math.max(pad + height, y));
+  } else {
+    y = Math.min(viewHeight - pad - height, Math.max(pad, y));
+  }
   const anchorTransform = anchor === "above" ? "translate(-50%, -100%)" : "translate(-50%, 0)";
-  element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) ${anchorTransform}`;
+  element.style.transform = `translate(${x}px, ${y}px) ${anchorTransform}`;
 }
 
 async function loadAlignedTerrain(viewer: Viewer, isDisposed: () => boolean): Promise<void> {

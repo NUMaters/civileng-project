@@ -1,4 +1,7 @@
 import { ABUKUMA_RIVER_CENTERLINE } from "../../../components/GameCanvas/abukumaRiverGeometry";
+import type { HazardKind } from "@civilcraft/game-data/types";
+
+export type { HazardKind };
 
 export type OverflowCandidate = {
   id: string;
@@ -12,6 +15,8 @@ export type OverflowCandidate = {
   bankElevationMeters: number;
   /** 湾曲・歴史的弱点などの基礎係数。 */
   structuralVulnerability: number;
+  /** この地点で主に発生する災害・弱点の種類。 */
+  primaryHazard: HazardKind;
 };
 
 /**
@@ -26,6 +31,7 @@ const MANUAL_CANDIDATES: OverflowCandidate[] = [
     outflowHeadingDegrees: 156,
     bankElevationMeters: 19.2,
     structuralVulnerability: 1.05,
+    primaryHazard: "overtopping",
   },
   {
     id: "campus-core",
@@ -34,6 +40,7 @@ const MANUAL_CANDIDATES: OverflowCandidate[] = [
     outflowHeadingDegrees: 141,
     bankElevationMeters: 18.4,
     structuralVulnerability: 1.25,
+    primaryHazard: "overtopping",
   },
   {
     id: "campus-north",
@@ -42,6 +49,7 @@ const MANUAL_CANDIDATES: OverflowCandidate[] = [
     outflowHeadingDegrees: 129,
     bankElevationMeters: 20.1,
     structuralVulnerability: 0.95,
+    primaryHazard: "overtopping",
   },
   {
     id: "mid-east",
@@ -50,6 +58,7 @@ const MANUAL_CANDIDATES: OverflowCandidate[] = [
     outflowHeadingDegrees: 120,
     bankElevationMeters: 19.8,
     structuralVulnerability: 0.85,
+    primaryHazard: "overtopping",
   },
   {
     id: "north-bend",
@@ -58,6 +67,26 @@ const MANUAL_CANDIDATES: OverflowCandidate[] = [
     outflowHeadingDegrees: 111,
     bankElevationMeters: 21.2,
     structuralVulnerability: 0.8,
+    primaryHazard: "erosion",
+  },
+  // 市街地側の内水点（越水後に水が溜まる想定）。排水機場の主戦場。
+  {
+    id: "inland-campus",
+    longitude: 140.3791,
+    latitude: 37.36035,
+    outflowHeadingDegrees: 141,
+    bankElevationMeters: 17.8,
+    structuralVulnerability: 1.1,
+    primaryHazard: "inlandPonding",
+  },
+  {
+    id: "inland-south",
+    longitude: 140.3762,
+    latitude: 37.3584,
+    outflowHeadingDegrees: 150,
+    bankElevationMeters: 18.1,
+    structuralVulnerability: 0.95,
+    primaryHazard: "inlandPonding",
   },
 ];
 
@@ -66,7 +95,7 @@ const terrainElevationOverrides = new Map<string, number>();
 
 /**
  * 中心線から右岸（市街地方向）へ約 52 m オフセットした追加弱点候補。
- * 湾曲部は structuralVulnerability を上げる。
+ * 湾曲部は侵食、直線低岸は越水として分類する。
  */
 function buildSampledBankCandidates(): OverflowCandidate[] {
   const samples: OverflowCandidate[] = [];
@@ -91,6 +120,7 @@ function buildSampledBankCandidates(): OverflowCandidate[] {
       outflowHeadingDegrees: normalizeDegrees((bearing * 180) / Math.PI + 90),
       bankElevationMeters,
       structuralVulnerability: bendFactor,
+      primaryHazard: bendFactor >= 0.85 ? "erosion" : "overtopping",
     });
   }
   return samples;
@@ -152,13 +182,13 @@ function bearingRadians(
 
 function offsetMeters(
   point: { lon: number; lat: number },
-  bearing: number,
+  bearingRadiansValue: number,
   distanceMeters: number,
 ): { lon: number; lat: number } {
   const metersPerDegreeLat = 110_540;
   const metersPerDegreeLon = 111_320 * Math.cos((point.lat * Math.PI) / 180);
-  const north = Math.cos(bearing) * distanceMeters;
-  const east = Math.sin(bearing) * distanceMeters;
+  const north = Math.cos(bearingRadiansValue) * distanceMeters;
+  const east = Math.sin(bearingRadiansValue) * distanceMeters;
   return {
     lon: point.lon + east / metersPerDegreeLon,
     lat: point.lat + north / metersPerDegreeLat,
@@ -166,7 +196,8 @@ function offsetMeters(
 }
 
 function normalizeDegrees(degrees: number): number {
-  return ((degrees % 360) + 360) % 360;
+  const value = degrees % 360;
+  return value < 0 ? value + 360 : value;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

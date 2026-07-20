@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { CesiumGameMap, type CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
 import { ConstructionMenu, useConstruction } from "./features/construction";
-import { formatBudget, INITIAL_BUDGET } from "./features/construction/services/constructionService";
+import { formatBudget } from "./features/construction/services/constructionService";
 import type { GeoPosition } from "./features/construction/types/construction";
-import { FloodHud, FloodResultPanel, useFloodSimulation } from "./features/disaster";
+import { FloodHud, FloodResultPanel, ReviewModeBar, useFloodSimulation } from "./features/disaster";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
 type DockDragState = {
@@ -41,7 +41,10 @@ export function App() {
   const dragRef = useRef<DockDragState | null>(null);
   const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
-  const budgetRatio = Math.max(0, Math.min(1, construction.budget / INITIAL_BUDGET));
+
+  useEffect(() => {
+    construction.setEconomyPhase(flood.phase);
+  }, [flood.phase, construction.setEconomyPhase]);
 
   const beginDockDrag = useCallback(
     (structureId: string, clientX: number, clientY: number) => {
@@ -124,7 +127,14 @@ export function App() {
     [socket],
   );
 
+  const handleStartNewGame = useCallback(() => {
+    construction.resetSession();
+    flood.startFreshGame();
+  }, [construction.resetSession, flood.startFreshGame]);
+
   const isDockDragging = drag !== null;
+  const isReviewing = flood.phase === "review";
+  const hideConstructionUi = flood.phase === "result" || isReviewing;
 
   useEffect(() => {
     if (!isDockDragging) {
@@ -191,7 +201,9 @@ export function App() {
   }, [isDockDragging]);
 
   return (
-    <main className={`game-shell${drag !== null ? " is-dock-dragging" : ""}`}>
+    <main
+      className={`game-shell${drag !== null ? " is-dock-dragging" : ""}${isReviewing ? " is-reviewing" : ""}`}
+    >
       <div className="game-shell__veil game-shell__veil--top" aria-hidden="true" />
       <div className="game-shell__veil game-shell__veil--bottom" aria-hidden="true" />
 
@@ -202,14 +214,19 @@ export function App() {
         selectedPlacementId={construction.selectedPlacementId}
         onDropPlace={handleDropPlace}
         onRotatePlacement={construction.rotatePlacement}
+        onMovePendingPlacement={construction.movePendingPlacement}
         onSelectPlacement={construction.setSelectedPlacementId}
         onInvalidPosition={construction.setMessage}
         onConfirmPendingPlacement={handleConfirmPlacement}
         onCancelPendingPlacement={construction.cancelPendingPlacement}
         onCameraFocusChange={handleCameraFocusChange}
+        freeCameraLook={isReviewing}
         floodState={{
-          // 準備中も影響圏を出す。越水プルーム等は災害中のみ。
-          active: flood.phase === "disaster" || flood.phase === "result",
+          // 結果・プレビュー中も最終の浸水状態を残す。
+          active:
+            flood.phase === "disaster" ||
+            flood.phase === "result" ||
+            flood.phase === "review",
           rainfallIntensity: flood.rainfallIntensity,
           riverLevelMeters: flood.riverLevelMeters,
           overflowMeters: flood.overflowMeters,
@@ -228,45 +245,86 @@ export function App() {
               flood.mitigation.channelCapacityIncrease * 0.2,
           ),
         }}
+        getLatestFloodState={flood.getLatestState}
       />
 
-      <FloodHud {...flood} onStartGame={flood.startGame} onStartRainNow={flood.startRainNow} />
+      {!hideConstructionUi ? (
+        <FloodHud
+          phase={flood.phase}
+          phaseRemainingSeconds={flood.phaseRemainingSeconds}
+          disasterElapsedSeconds={flood.disasterElapsedSeconds}
+          rainfallIntensity={flood.rainfallIntensity}
+          riverLevelMeters={flood.riverLevelMeters}
+          overflowMeters={flood.overflowMeters}
+          overflowLevelMeters={flood.overflowLevelMeters}
+          floodDepthMeters={flood.floodDepthMeters}
+          floodedAreaPercent={flood.floodedAreaPercent}
+          floodplainFillRatio={flood.floodplainFillRatio}
+          floodplainHalfWidthMeters={flood.floodplainHalfWidthMeters}
+          damagePercent={flood.damagePercent}
+          score={flood.score}
+          isClear={flood.isClear}
+          overflowSites={flood.overflowSites}
+          mitigation={flood.mitigation}
+          protectedBankSites={flood.protectedBankSites}
+          structureInfluences={flood.structureInfluences}
+          onStartGame={flood.startGame}
+          onStartRainNow={flood.startRainNow}
+        />
+      ) : null}
 
-      <header className="game-header game-header--budget-only">
-        <div className="game-header__row">
-          <div className="budget-panel" aria-label="残り予算">
-            <div className="budget-panel__meta">
-              <span>BUDGET</span>
-              <strong key={construction.budget}>{formatBudget(construction.budget)}</strong>
+      {!hideConstructionUi ? (
+        <header className="game-header game-header--budget-only">
+          <div className="game-header__row">
+            <div className="budget-panel" aria-label="残り予算">
+              <div className="budget-panel__meta">
+                <span>BUDGET</span>
+                <strong key={Math.round(construction.budget)}>
+                  {formatBudget(construction.budget)}
+                </strong>
+                {construction.incomeLabel !== "" ? (
+                  <em
+                    className={`budget-panel__rate${construction.netIncomePerSecond < 0 ? " is-drain" : ""}`}
+                    title="補給 − 維持費"
+                  >
+                    {construction.incomeLabel}
+                  </em>
+                ) : null}
+              </div>
+              <div className="budget-panel__track" aria-hidden="true">
+                <div
+                  className="budget-panel__fill"
+                  style={{ width: `${construction.budgetRatio * 100}%` }}
+                />
+              </div>
             </div>
-            <div className="budget-panel__track" aria-hidden="true">
-              <div className="budget-panel__fill" style={{ width: `${budgetRatio * 100}%` }} />
+            <div
+              className={`socket-status socket-status--${socket.status}`}
+              role="status"
+              title={socket.playerId ?? undefined}
+            >
+              <span className="socket-status__dot" aria-hidden="true" />
+              <span>{statusLabel[socket.status] ?? socket.status}</span>
             </div>
           </div>
-          <div
-            className={`socket-status socket-status--${socket.status}`}
-            role="status"
-            title={socket.playerId ?? undefined}
-          >
-            <span className="socket-status__dot" aria-hidden="true" />
-            <span>{statusLabel[socket.status] ?? socket.status}</span>
-          </div>
-        </div>
-      </header>
+        </header>
+      ) : null}
 
-      {construction.message !== "" ? (
+      {construction.message !== "" && !hideConstructionUi ? (
         <p key={construction.message} className="game-toast" role="status">
           {construction.message}
         </p>
       ) : null}
 
-      <ConstructionMenu
-        budget={construction.budget}
-        selectedStructureId={construction.selectedStructureId}
-        structures={construction.structures}
-        onSelect={construction.selectStructure}
-        onDragStart={beginDockDrag}
-      />
+      {!hideConstructionUi ? (
+        <ConstructionMenu
+          budget={construction.budget}
+          selectedStructureId={construction.selectedStructureId}
+          structures={construction.structures}
+          onSelect={construction.selectStructure}
+          onDragStart={beginDockDrag}
+        />
+      ) : null}
 
       {drag !== null && !drag.overMap ? (
         <div
@@ -289,11 +347,26 @@ export function App() {
       ) : null}
 
       <FloodResultPanel
-        {...flood}
-        usedBudget={INITIAL_BUDGET - construction.budget}
+        phase={flood.phase}
+        isClear={flood.isClear}
+        damagePercent={flood.damagePercent}
+        floodedAreaPercent={flood.floodedAreaPercent}
+        floodDepthMeters={flood.floodDepthMeters}
+        score={flood.score}
+        usedBudget={construction.spentBudget}
         placementCount={construction.placements.length}
-        onRestart={flood.restart}
+        onEnterReview={flood.enterReviewMode}
+        onStartNewGame={handleStartNewGame}
       />
+
+      {isReviewing ? (
+        <ReviewModeBar
+          isClear={flood.isClear}
+          score={flood.score}
+          onShowResult={flood.reopenResultPanel}
+          onStartNewGame={handleStartNewGame}
+        />
+      ) : null}
     </main>
   );
 }

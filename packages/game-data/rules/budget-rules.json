@@ -1,5 +1,9 @@
 {
-  "initialBudgetSolo": 10000,
-  "initialBudgetMultiplayerPerPlayer": 8000,
-  "description": "ソロは initialBudgetSolo、マルチはプレイヤーごとに initialBudgetMultiplayerPerPlayer を付与"
+  "initialBudgetSolo": 12000,
+  "initialBudgetMultiplayerPerPlayer": 9000,
+  "incomePerSecondPreparation": 80,
+  "incomePerSecondDisaster": 110,
+  "disasterStartGrant": 2000,
+  "maxBudget": 24000,
+  "description": "初期予算＋準備／災害中の補給で複数施設を置ける。維持費は毎秒差し引き、上限 maxBudget で貯めすぎを防ぐ。災害開始時に緊急予算を付与する。"
 }

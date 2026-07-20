@@ -1,17 +1,39 @@
 {
   "id": "levee",
   "displayName": "堤防",
-  "description": "河川から市街地への越水を防ぐ。防御力が高いが、設置費用が大きい。",
-  "constructionCost": 3500,
+  "description": "越水点の河岸に並べて、河川水の市街地への溢れを防ぐ。内水や湾曲侵食には向かない。",
+  "constructionCost": 3000,
   "constructionTimeSeconds": 18,
   "maintenanceCostPerSecond": 3,
-  "allowedTerrains": ["riverBank", "leveeLine"],
-  "supportedDisasters": ["heavy-rain"],
+  "allowedTerrains": [
+    "riverBank",
+    "leveeLine"
+  ],
+  "supportedDisasters": [
+    "heavy-rain"
+  ],
   "effects": {
     "waterLevelReduction": 0,
     "overflowPrevention": 0.85,
     "drainageCapacity": 0,
     "bankProtection": 0.2,
     "channelCapacityIncrease": 0
+  },
+  "role": {
+    "primaryHazard": "overtopping",
+    "strengths": [
+      "低岸・越水点の直近で堤防線を作り、溢れを止める",
+      "流出方向に正対する向きだと局所防護が強い"
+    ],
+    "weaknesses": [
+      "低地にたまった内水は排水できない",
+      "湾曲部の侵食崩壊には護岸より効果が薄い"
+    ]
+  },
+  "hazardAffinity": {
+    "overtopping": 1,
+    "erosion": 0.3,
+    "inlandPonding": 0.05,
+    "capacityShortage": 0.15
   }
 }

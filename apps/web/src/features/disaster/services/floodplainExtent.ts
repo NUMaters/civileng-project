@@ -36,16 +36,21 @@ export function calculateFloodplainExtent(input: {
     (input.riverLevelMeters - FLOODPLAIN_WARN_LEVEL_METERS) / approachSpan,
   );
   const overflowBoost = clamp01(input.overflowMeters / 1.4);
-  const fillRatio = clamp01(
-    Math.max(approachRatio, overflowBoost > 0 ? 0.55 + overflowBoost * 0.45 : 0),
-  );
+  // 越水開始で 0.55 へ跳ねないよう、接近度と越水量を連続合成する。
+  const fillRatio = clamp01(approachRatio * (1 - overflowBoost * 0.25) + overflowBoost);
   const halfWidthMeters =
     NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M +
     (FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M - NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M) *
-      overflowBoost;
+      smoothstep(overflowBoost);
   return { fillRatio, halfWidthMeters };
 }
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
+}
+
+/** 端の立ち上がりを緩やかにする（0〜1）。 */
+function smoothstep(t: number): number {
+  const x = clamp01(t);
+  return x * x * (3 - 2 * x);
 }

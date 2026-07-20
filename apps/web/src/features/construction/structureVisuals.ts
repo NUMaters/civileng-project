@@ -1,3 +1,8 @@
+import {
+  getHazardKindLabel,
+  type HazardKind,
+} from "@civilcraft/game-data/types";
+
 export type StructureTone = "amber" | "river" | "ember" | "slate" | "moss";
 
 export type StructureVisual = {
@@ -52,14 +57,34 @@ export function getStructureEffectLabel(structureId: string): string {
     case "levee":
       return "越水を抑える";
     case "revetment":
-      return "護岸を守る";
+      return "侵食を防ぐ";
     case "retention-basin":
-      return "水位を貯留";
+      return "水位ピークを削る";
     case "drainage-pump":
-      return "浸水を排水";
+      return "内水を排水";
     case "channel-dredging":
       return "流下能力アップ";
     default:
       return "治水効果";
+  }
+}
+
+export function getHazardLabel(kind: HazardKind): string {
+  return getHazardKindLabel(kind);
+}
+
+/** 弱点マーカー色（種別ごと）。 */
+export function getHazardMarkerColor(kind: HazardKind): { fill: string; outline: string } {
+  switch (kind) {
+    case "overtopping":
+      return { fill: "#ff6b4a", outline: "#ffd0c4" };
+    case "erosion":
+      return { fill: "#e0a03a", outline: "#ffe2a8" };
+    case "inlandPonding":
+      return { fill: "#4aa3e0", outline: "#b8e0ff" };
+    case "capacityShortage":
+      return { fill: "#6bc4a0", outline: "#c8f0de" };
+    default:
+      return { fill: "#ff8b6b", outline: "#ffd0c4" };
   }
 }
