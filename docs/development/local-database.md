@@ -47,7 +47,7 @@ PostgreSQL のデータは Docker ボリューム `postgres_data` に保存さ�
 
 ## 環境変数
 
-`.env.example` をコピーして `.env` を作成する。
+`.env.example` をコピーして `.env` を作成する。サーバー／Web を含む全体一覧は [environment-variables.md](./environment-variables.md)。
 
 ```bash
 cp .env.example .env
