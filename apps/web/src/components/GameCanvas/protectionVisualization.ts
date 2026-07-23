@@ -21,10 +21,15 @@ import {
   stripCenterlineDegrees,
   type InfluenceZone,
 } from "../../features/disaster/services/influenceZones";
+import {
+  listOverflowCandidates,
+  type OverflowCandidate,
+} from "../../features/disaster/services/overflowBankSites";
 
 const ZONE_PREFIX = "protect-zone-";
 const ZONE_AXIS_PREFIX = "protect-zone-axis-";
 const BANK_PREFIX = "protect-bank-";
+const TARGET_PREFIX = "weakness-target-";
 
 const STRUCTURE_ZONE_COLOR: Record<string, string> = {
   levee: "#3ecf8e",
@@ -32,6 +37,12 @@ const STRUCTURE_ZONE_COLOR: Record<string, string> = {
   "retention-basin": "#3aa8d8",
   "drainage-pump": "#5b9cf0",
   "channel-dredging": "#2db89a",
+};
+
+const COVERAGE_ZONE_COLOR: Record<StructureInfluence["coverageTone"], string> = {
+  good: "#3ecf8e",
+  warn: "#e0b040",
+  bad: "#e07060",
 };
 
 /**
@@ -42,14 +53,23 @@ export function syncProtectionVisualization(
   viewer: Viewer,
   influences: readonly StructureInfluence[],
   bankSites: readonly ProtectedBankSite[],
-  options: { showBankSites: boolean },
+  options: {
+    showBankSites: boolean;
+    /** 準備中も弱点の位置を示し、影響圏の狙いを分かりやすくする。 */
+    showWeaknessTargets: boolean;
+  },
 ): void {
   const keepBankIds = new Set(
     options.showBankSites ? bankSites.map((site) => `${BANK_PREFIX}${site.id}`) : [],
   );
+  const coveredIds = new Set(influences.flatMap((item) => item.coveredSiteIds));
 
   for (const entity of [...viewer.entities.values]) {
-    if (entity.id.startsWith(ZONE_PREFIX) || entity.id.startsWith(ZONE_AXIS_PREFIX)) {
+    if (
+      entity.id.startsWith(ZONE_PREFIX) ||
+      entity.id.startsWith(ZONE_AXIS_PREFIX) ||
+      entity.id.startsWith(TARGET_PREFIX)
+    ) {
       viewer.entities.remove(entity);
     }
     if (entity.id.startsWith(BANK_PREFIX) && !keepBankIds.has(entity.id)) {
@@ -57,11 +77,16 @@ export function syncProtectionVisualization(
     }
   }
 
+  if (options.showWeaknessTargets) {
+    for (const candidate of listOverflowCandidates()) {
+      addWeaknessTargetMarker(viewer, candidate, coveredIds.has(candidate.id));
+    }
+  }
+
   for (const influence of influences) {
     if (!Number.isFinite(influence.longitude) || !Number.isFinite(influence.latitude)) {
       continue;
     }
-    // zone.heading と influence.heading を一致させて向きズレを防ぐ。
     const zone: InfluenceZone = {
       ...influence.zone,
       headingDegrees: influence.headingDegrees,
@@ -117,15 +142,51 @@ export function syncProtectionVisualization(
   }
 }
 
+/** 弱点の位置マーカー。影響圏に入ると強調する。 */
+function addWeaknessTargetMarker(
+  viewer: Viewer,
+  candidate: OverflowCandidate,
+  covered: boolean,
+): void {
+  const hazardColor = getHazardMarkerColor(candidate.primaryHazard);
+  const fill = covered
+    ? Color.fromCssColorString("#3ecf8e").withAlpha(0.42)
+    : Color.fromCssColorString(hazardColor.fill).withAlpha(0.22);
+  const outline = covered
+    ? Color.fromCssColorString("#b8ffe0").withAlpha(0.95)
+    : Color.fromCssColorString(hazardColor.outline).withAlpha(0.7);
+  viewer.entities.add({
+    id: `${TARGET_PREFIX}${candidate.id}`,
+    position: Cartesian3.fromDegrees(candidate.longitude, candidate.latitude),
+    ellipse: {
+      semiMajorAxis: covered ? 34 : 26,
+      semiMinorAxis: covered ? 26 : 20,
+      height: 0.4,
+      heightReference: HeightReference.RELATIVE_TO_GROUND,
+      material: fill,
+      outline: true,
+      outlineColor: outline,
+      outlineWidth: covered ? 2.5 : 1.5,
+    },
+  });
+}
+
 function addInfluenceZoneEntity(
   viewer: Viewer,
   influence: StructureInfluence,
   preview: boolean,
 ): void {
   const id = `${ZONE_PREFIX}${influence.placementId}`;
-  const colorHex = STRUCTURE_ZONE_COLOR[influence.structureId] ?? "#58d5a1";
-  const fillAlpha = preview ? 0.1 : 0.17;
-  const outlineAlpha = preview ? 0.45 : 0.75;
+  const colorHex =
+    influence.preview === true || influence.coverageTone !== "good"
+      ? COVERAGE_ZONE_COLOR[influence.coverageTone]
+      : (STRUCTURE_ZONE_COLOR[influence.structureId] ?? "#58d5a1");
+  const fillAlpha = preview
+    ? influence.coverageTone === "good"
+      ? 0.16
+      : 0.12
+    : 0.17;
+  const outlineAlpha = preview ? 0.55 : 0.75;
   const fill = Color.fromCssColorString(colorHex).withAlpha(fillAlpha);
   const outline = Color.fromCssColorString(colorHex).withAlpha(outlineAlpha);
   const zone = influence.zone;
@@ -169,7 +230,6 @@ function addInfluenceZoneEntity(
 
   const major = zone.kind === "ellipse" ? zone.majorMeters : influence.radiusMeters;
   const minor = zone.kind === "ellipse" ? zone.minorMeters : influence.radiusMeters;
-  // Cesium ellipse.rotation は北から反時計回り。施設 heading は北から時計回り。
   const rotation = -CesiumMath.toRadians(zone.headingDegrees);
   viewer.entities.add({
     id,
@@ -188,7 +248,6 @@ function addInfluenceZoneEntity(
   });
 }
 
-/** 向きの主軸を細い線で示し、影響圏が施設向きに連動していることを明示する。 */
 function addHeadingAxis(
   viewer: Viewer,
   influence: StructureInfluence,
@@ -213,7 +272,10 @@ function addHeadingAxis(
     Math.sin(heading) * length,
     Math.cos(heading) * length,
   );
-  const colorHex = STRUCTURE_ZONE_COLOR[influence.structureId] ?? "#58d5a1";
+  const colorHex =
+    influence.preview === true
+      ? COVERAGE_ZONE_COLOR[influence.coverageTone]
+      : (STRUCTURE_ZONE_COLOR[influence.structureId] ?? "#58d5a1");
   viewer.entities.add({
     id: `${ZONE_AXIS_PREFIX}${influence.placementId}`,
     polyline: {

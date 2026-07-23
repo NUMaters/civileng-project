@@ -1,7 +1,10 @@
 import { loadRules, loadStructures } from "@civilcraft/game-data/load";
-import type { HazardKind, StructureEffects } from "@civilcraft/game-data/types";
+import { getHazardKindLabel, type HazardKind, type StructureEffects } from "@civilcraft/game-data/types";
 import type { PlacedStructure } from "../../construction";
-import { getStructureEffectLabel } from "../../construction/structureVisuals";
+import {
+  getStructureEffectLabel,
+  getStructureZoneMeaning,
+} from "../../construction/structureVisuals";
 import { calculateFloodplainExtent } from "./floodplainExtent";
 import {
   calculateHydraulicEffectiveness,
@@ -60,6 +63,14 @@ export type StructureInfluence = {
   zone: InfluenceZone;
   /** 短い効果ラベル。 */
   effectLabel: string;
+  /** 影響圏の形の意味（配置判断用）。 */
+  zoneMeaning: string;
+  /** 近傍弱点へのカバー状態。 */
+  coverageTone: "good" | "warn" | "bad";
+  /** プレイヤー向けの短いカバー説明。 */
+  coverageHint: string;
+  /** 影響圏内で相性の良い弱点 ID。 */
+  coveredSiteIds: string[];
   /** 位置・向き・標高から見た配置有効率 0〜1。 */
   effectiveness: number;
   /** 仮配置のプレビュー影響圏。 */
@@ -98,13 +109,19 @@ export type MitigationSummary = StructureEffects & {
   activeStructureCount: number;
   /** 配置有効率の平均 0〜1。 */
   averageEffectiveness: number;
+  /**
+   * 誤配置・同地点の過密による悪化 0〜1。
+   * 流入増・越水開始水位低下に使う（置けば置くほど得、を防ぐ）。
+   */
+  placementInterference: number;
 };
 
 const rules = loadRules();
 const structureById = new Map(loadStructures().map((structure) => [structure.id, structure]));
 
 const INITIAL_RIVER_LEVEL_METERS = 2.2;
-const BASE_OVERFLOW_LEVEL_METERS = 4.9;
+/** 計画高水位相当。低いほど早く越水し、難易度が上がる。 */
+const BASE_OVERFLOW_LEVEL_METERS = 4.7;
 
 export { applyOverflowTerrainElevations };
 
@@ -140,6 +157,7 @@ function emptyMitigation(): MitigationSummary {
     channelCapacityIncrease: 0,
     activeStructureCount: 0,
     averageEffectiveness: 0,
+    placementInterference: 0,
   };
 }
 
@@ -209,19 +227,29 @@ export function advanceFloodSimulation(
   const progress = elapsed / rules.timing.phases.disasterSeconds;
   const mitigation = calculateMitigation(placements);
   const rainfallIntensity = calculateRainfallIntensity(progress);
+  // 外力は強めだが、適所混成なら抑えきれるラインに調整する。
   const unmitigatedRiverLevel =
-    INITIAL_RIVER_LEVEL_METERS + progress * 4.3 + rainfallIntensity * 0.35;
+    INITIAL_RIVER_LEVEL_METERS + progress * 4.35 + rainfallIntensity * 0.38;
   const riverLevelMeters = Math.max(
     INITIAL_RIVER_LEVEL_METERS,
-    unmitigatedRiverLevel - mitigation.waterLevelReduction * 2.3,
+    unmitigatedRiverLevel -
+      mitigation.waterLevelReduction * 2.05 +
+      mitigation.placementInterference * 0.4,
   );
-  const overflowLevelMeters =
+  const overflowLevelMeters = Math.max(
+    INITIAL_RIVER_LEVEL_METERS + 0.8,
     BASE_OVERFLOW_LEVEL_METERS +
-    mitigation.overflowPrevention * 1.8 +
-    mitigation.channelCapacityIncrease * 1.1;
+      mitigation.overflowPrevention * 1.85 +
+      mitigation.channelCapacityIncrease * 1.1 -
+      mitigation.placementInterference * 0.35,
+  );
   const overflowMeters = Math.max(0, riverLevelMeters - overflowLevelMeters);
-  const inflowPerSecond = overflowMeters * (1 - mitigation.overflowPrevention * 0.35) * 0.045;
-  const drainagePerSecond = mitigation.drainageCapacity * 0.025;
+  const inflowPerSecond =
+    overflowMeters *
+    (1 - mitigation.overflowPrevention * 0.36) *
+    (1 + mitigation.placementInterference * 0.4) *
+    0.036;
+  const drainagePerSecond = mitigation.drainageCapacity * 0.032;
   const floodDepthMeters = Math.max(
     0,
     current.floodDepthMeters + (inflowPerSecond - drainagePerSecond) * deltaSeconds,
@@ -232,14 +260,15 @@ export function advanceFloodSimulation(
     .slice(0, 5)
     .reduce((sum, site) => sum + site.intensity, 0);
   const floodedAreaPercent = clamp(
-    floodDepthMeters * 22 + Math.min(2.2, breachLoad) * 14 + Math.max(0, overflowMeters) * 5,
+    floodDepthMeters * 18 + Math.min(2.2, breachLoad) * 9.5 + Math.max(0, overflowMeters) * 4.2,
     0,
     100,
   );
   const damagePercent = clamp(
     floodedAreaPercent *
-      (1 - mitigation.bankProtection * 0.4) *
-      (1 - Math.min(0.35, bankEffects.protectedBankSites.filter((s) => !s.overflowing).length * 0.04)),
+      (1 - mitigation.bankProtection * 0.38) *
+      (1 -
+        Math.min(0.32, bankEffects.protectedBankSites.filter((s) => !s.overflowing).length * 0.04)),
     0,
     100,
   );
@@ -248,14 +277,15 @@ export function advanceFloodSimulation(
     overflowMeters,
     overflowLevelMeters,
   });
+  // 施設数ボーナスは出さない。配置の質（有効率）と干渉の少なさで加点する。
   const score = Math.max(
     0,
     Math.round(
       1_000 -
-        damagePercent * 9 -
-        floodDepthMeters * 40 +
-        mitigation.activeStructureCount * 8 +
-        mitigation.averageEffectiveness * 40,
+        damagePercent * 10 -
+        floodDepthMeters * 45 +
+        mitigation.averageEffectiveness * 55 -
+        mitigation.placementInterference * 120,
     ),
   );
   const remaining = Math.max(0, rules.timing.phases.disasterSeconds - elapsed);
@@ -368,7 +398,7 @@ function calculateBankEffects(
       hazardPressure <= 0.01
         ? 0
         : clamp(
-            (hazardPressure * vulnerability + erosionStress * 0.55 - protection * 1.25) *
+            (hazardPressure * vulnerability + erosionStress * 0.9 - protection * 1.55) *
               (0.5 + hazardPressure * 0.55),
             0,
             1,
@@ -467,10 +497,10 @@ function evaluateLocalContribution(
     shapeStrength *
     Math.exp(-distance / Math.max(radius * 1.8, 80)) *
     Math.abs(affinity) *
-    Math.max(effectWeight, affinity < 0 ? 0.55 : 0) *
+    Math.max(effectWeight, affinity < 0 ? 0.7 : 0) *
     heading *
     hydraulic *
-    (affinity < 0 ? 0.7 : 0.95);
+    (affinity < 0 ? 1.05 : 0.92);
 
   return affinity < 0 ? -magnitude : magnitude;
 }
@@ -508,7 +538,7 @@ export function getStructureInfluenceRadiusMeters(structureId: string): number {
   }
 }
 
-export { getStructureEffectLabel, getRiverPlacementContext };
+export { getStructureEffectLabel, getStructureZoneMeaning, getRiverPlacementContext };
 
 export function calculateStructureInfluences(
   placements: PlacedStructure[],
@@ -518,6 +548,7 @@ export function calculateStructureInfluences(
   return placements.map((placement) => {
     const effectiveness = calculatePlacementEffectiveness(placement);
     const zone = resolveInfluenceZone(placement, effectiveness);
+    const coverage = resolveInfluenceCoverage(placement, zone);
     return {
       placementId: placement.id,
       structureId: placement.structureId,
@@ -527,62 +558,250 @@ export function calculateStructureInfluences(
       radiusMeters: zone.extentMeters,
       zone,
       effectLabel: getStructureEffectLabel(placement.structureId),
+      zoneMeaning: getStructureZoneMeaning(placement.structureId),
+      coverageTone: coverage.tone,
+      coverageHint: coverage.hint,
+      coveredSiteIds: coverage.coveredSiteIds,
       effectiveness,
       preview: placement.preview === true,
     };
   });
 }
 
-export function calculateMitigation(placements: PlacedStructure[]): MitigationSummary {
-  const combined: MitigationSummary = {
-    waterLevelReduction: 0,
-    overflowPrevention: 0,
-    drainageCapacity: 0,
-    bankProtection: 0,
-    channelCapacityIncrease: 0,
-    activeStructureCount: 0,
-    averageEffectiveness: 0,
-  };
+/**
+ * 影響圏が近傍の弱点をどうカバーしているかを評価する。
+ * 範囲内かつ相性が良い弱点があるほど good。
+ */
+function resolveInfluenceCoverage(
+  placement: PlacedStructure,
+  zone: InfluenceZone,
+): { tone: "good" | "warn" | "bad"; hint: string; coveredSiteIds: string[] } {
+  const definition = structureById.get(placement.structureId);
+  if (definition === undefined) {
+    return { tone: "warn", hint: "影響範囲を弱点へ合わせる", coveredSiteIds: [] };
+  }
 
-  let effectivenessSum = 0;
+  let bestGood = 0;
+  let bestGoodHazard: HazardKind | null = null;
+  let bestMismatch = 0;
+  const coveredSiteIds: string[] = [];
 
-  for (const placement of placements) {
-    if (placement.preview === true) {
+  for (const candidate of listOverflowCandidates()) {
+    const strength = influenceStrengthAt(zone, candidate.longitude, candidate.latitude);
+    if (strength < 0.08) {
       continue;
     }
+    const affinity = definition.hazardAffinity[candidate.primaryHazard] ?? 0;
+    if (affinity >= 0.35) {
+      coveredSiteIds.push(candidate.id);
+      const score = affinity * strength;
+      if (score > bestGood) {
+        bestGood = score;
+        bestGoodHazard = candidate.primaryHazard;
+      }
+    } else if (affinity < 0.15) {
+      bestMismatch = Math.max(bestMismatch, strength * (affinity < 0 ? 1.2 : 0.7));
+    }
+  }
+
+  if (bestGood >= 0.18 && bestGoodHazard !== null) {
+    return {
+      tone: "good",
+      hint: `${getHazardKindLabel(bestGoodHazard)}の弱点をカバー`,
+      coveredSiteIds,
+    };
+  }
+  if (bestMismatch >= 0.12) {
+    return {
+      tone: "bad",
+      hint: "相性の悪い弱点に当たっている",
+      coveredSiteIds,
+    };
+  }
+  return {
+    tone: "warn",
+    hint: "弱点が範囲外 — 位置・向きを調整",
+    coveredSiteIds,
+  };
+}
+
+export function calculateMitigation(placements: PlacedStructure[]): MitigationSummary {
+  const combined = emptyMitigation();
+  let effectivenessSum = 0;
+  let interferenceSum = 0;
+  const typeCounts = new Map<string, number>();
+  /** 弱点地点ごとの防護寄与回数（過密逓減用）。 */
+  const coverCounts = new Map<string, number>();
+
+  const active = placements.filter((placement) => placement.preview !== true);
+
+  for (const placement of active) {
     const definition = structureById.get(placement.structureId);
     if (definition === undefined) {
       continue;
     }
+
+    const typeIndex = (typeCounts.get(placement.structureId) ?? 0) + 1;
+    typeCounts.set(placement.structureId, typeIndex);
+    // 同種を重ねるほど全球寄与を落とす（2基目 70%、3基目以降 40%）。
+    const stackScale = typeIndex === 1 ? 1 : typeIndex === 2 ? 0.7 : 0.4;
+
     const effectiveness = calculatePlacementEffectiveness(placement);
+    const roleFit = resolveRoleFit(placement);
+    const mismatch = resolveMismatchPenalty(placement);
+    interferenceSum += mismatch;
+
+    // 近い弱点への重複カバーも逓減する。
+    let siteStackScale = 1;
+    const nearest = nearestCandidate(placement);
+    if (nearest !== null) {
+      const coverIndex = (coverCounts.get(nearest.id) ?? 0) + 1;
+      coverCounts.set(nearest.id, coverIndex);
+      siteStackScale = coverIndex === 1 ? 1 : coverIndex === 2 ? 0.62 : 0.3;
+    }
+
+    const scale = effectiveness * stackScale * siteStackScale * (0.4 + roleFit * 0.6);
     effectivenessSum += effectiveness;
-    combined.waterLevelReduction += definition.effects.waterLevelReduction * effectiveness;
+
+    const effects = definition.effects;
+    const affinity = definition.hazardAffinity;
+    combined.waterLevelReduction +=
+      effects.waterLevelReduction *
+      scale *
+      affinityGate(affinity.capacityShortage, affinity.overtopping, 0.35);
     combined.overflowPrevention = combineProtection(
       combined.overflowPrevention,
-      definition.effects.overflowPrevention * effectiveness,
+      effects.overflowPrevention * scale * Math.max(0, affinity.overtopping),
     );
-    combined.drainageCapacity += definition.effects.drainageCapacity * effectiveness;
+    combined.drainageCapacity +=
+      effects.drainageCapacity * scale * Math.max(0, affinity.inlandPonding);
     combined.bankProtection = combineProtection(
       combined.bankProtection,
-      definition.effects.bankProtection * effectiveness,
+      effects.bankProtection * scale * Math.max(0, affinity.erosion),
     );
     combined.channelCapacityIncrease +=
-      definition.effects.channelCapacityIncrease * effectiveness;
+      effects.channelCapacityIncrease *
+      scale *
+      Math.max(0, affinity.capacityShortage);
     combined.activeStructureCount += 1;
   }
 
+  // 施設が多いほど干渉が残りやすい（スパム抑制）。適所混成の 4〜5 基は許容する。
+  const spamPressure =
+    active.length <= 4 ? 0 : clamp((active.length - 4) * 0.07, 0, 0.3);
+  const placementInterference = clamp(
+    interferenceSum / Math.max(1, active.length) + spamPressure,
+    0,
+    1,
+  );
+
   return {
-    ...combined,
-    waterLevelReduction: clamp(combined.waterLevelReduction, 0, 0.65),
-    overflowPrevention: clamp(combined.overflowPrevention, 0, 0.95),
-    drainageCapacity: clamp(combined.drainageCapacity, 0, 2),
-    bankProtection: clamp(combined.bankProtection, 0, 0.95),
-    channelCapacityIncrease: clamp(combined.channelCapacityIncrease, 0, 1.5),
+    waterLevelReduction: softCap(combined.waterLevelReduction, 0.58, 1.7),
+    overflowPrevention: clamp(combined.overflowPrevention, 0, 0.84),
+    drainageCapacity: softCap(combined.drainageCapacity, 1.45, 1.35),
+    bankProtection: clamp(combined.bankProtection, 0, 0.88),
+    channelCapacityIncrease: softCap(combined.channelCapacityIncrease, 1.0, 1.45),
+    activeStructureCount: combined.activeStructureCount,
     averageEffectiveness:
       combined.activeStructureCount > 0
         ? effectivenessSum / combined.activeStructureCount
         : 0,
+    placementInterference,
   };
+}
+
+/** 効果種別が想定する弱点相性。低いと全球寄与が薄くなる。 */
+function affinityGate(primary: number, secondary: number, secondaryWeight: number): number {
+  return clamp(Math.max(0, primary) + Math.max(0, secondary) * secondaryWeight, 0, 1.15);
+}
+
+/**
+ * 施設の得意分野と、近傍弱点の一致度 0〜1。
+ * 合わない場所に置くと全球効果が大きく落ちる。
+ */
+function resolveRoleFit(placement: PlacedStructure): number {
+  const definition = structureById.get(placement.structureId);
+  if (definition === undefined) {
+    return 0;
+  }
+  const primary = definition.role.primaryHazard;
+  let best = 0;
+  for (const candidate of listOverflowCandidates()) {
+    const distance = distanceInMeters(
+      placement.position.longitude,
+      placement.position.latitude,
+      candidate.longitude,
+      candidate.latitude,
+    );
+    if (distance > 420) {
+      continue;
+    }
+    const affinity = definition.hazardAffinity[candidate.primaryHazard] ?? 0;
+    const proximity = Math.exp(-distance / 260);
+    if (candidate.primaryHazard === primary) {
+      best = Math.max(best, clamp(affinity, 0, 1) * proximity);
+    } else {
+      best = Math.max(best, clamp(affinity, 0, 1) * proximity * 0.55);
+    }
+  }
+  return clamp(best, 0, 1);
+}
+
+/**
+ * 誤配置ペナルティ 0〜1。
+ * 近傍弱点との相性が悪い／負だと、かえって流域を悪化させる。
+ */
+function resolveMismatchPenalty(placement: PlacedStructure): number {
+  const definition = structureById.get(placement.structureId);
+  if (definition === undefined) {
+    return 0;
+  }
+  const nearest = nearestCandidate(placement);
+  if (nearest === null) {
+    // 弱点から遠いだけの配置は効果薄＋軽い無駄置きペナルティ。
+    return 0.22;
+  }
+  const affinity = definition.hazardAffinity[nearest.primaryHazard] ?? 0;
+  if (affinity < 0) {
+    return clamp(0.32 + Math.abs(affinity) * 0.8, 0, 1);
+  }
+  if (affinity < 0.15) {
+    return clamp(0.22 + (0.15 - affinity) * 1.2, 0, 0.75);
+  }
+  const roleMismatch =
+    nearest.primaryHazard !== definition.role.primaryHazard && affinity < 0.4
+      ? 0.12
+      : 0;
+  return roleMismatch;
+}
+
+function nearestCandidate(placement: PlacedStructure): OverflowCandidate | null {
+  let best: OverflowCandidate | null = null;
+  let bestDistance = Number.POSITIVE_INFINITY;
+  for (const candidate of listOverflowCandidates()) {
+    const distance = distanceInMeters(
+      placement.position.longitude,
+      placement.position.latitude,
+      candidate.longitude,
+      candidate.latitude,
+    );
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = candidate;
+    }
+  }
+  if (best === null || bestDistance > 480) {
+    return null;
+  }
+  return best;
+}
+
+/** 線形加算を頭打ちにして「同じ効果の積み上げ」を抑える。 */
+function softCap(value: number, cap: number, steepness: number): number {
+  if (value <= 0) {
+    return 0;
+  }
+  return cap * (1 - Math.exp((-steepness * value) / Math.max(cap, 0.01)));
 }
 
 /**
@@ -591,11 +810,14 @@ export function calculateMitigation(placements: PlacedStructure[]): MitigationSu
 export function calculatePlacementEffectiveness(placement: PlacedStructure): number {
   const hydraulic = calculateHydraulicEffectiveness(placement);
   const weaknessBoost = nearestWeaknessBoost(placement);
-  const combined = hydraulic * 0.82 + weaknessBoost * 0.18;
+  const roleFit = resolveRoleFit(placement);
+  const mismatch = resolveMismatchPenalty(placement);
+  const combined =
+    hydraulic * 0.62 + weaknessBoost * 0.22 + roleFit * 0.28 - mismatch * 0.35;
   if (!Number.isFinite(combined)) {
-    return 0.35;
+    return 0.3;
   }
-  return clamp(combined, 0.15, 1);
+  return clamp(combined, 0.08, 1);
 }
 
 function nearestWeaknessBoost(placement: PlacedStructure): number {

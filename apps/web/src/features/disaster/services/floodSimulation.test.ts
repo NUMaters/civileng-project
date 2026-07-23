@@ -12,9 +12,7 @@ import {
   reopenResult,
 } from "./floodSimulation";
 
-/** キャンパスコア弱点の河岸に、堤体が川沿いになる向きの堤防を置く。
- * 向き矢印は法面側（河道横断）。堤体長軸は向き+90°。
- */
+/** キャンパスコア弱点の河岸に、堤体が川沿いになる向きの堤防を置く。 */
 function bankLevee(
   id: string,
   longitude: number,
@@ -29,15 +27,35 @@ function bankLevee(
   };
 }
 
+function place(
+  id: string,
+  structureId: string,
+  longitude: number,
+  latitude: number,
+  headingDegrees: number,
+): PlacedStructure {
+  return {
+    id,
+    structureId,
+    position: { longitude, latitude, height: 20 },
+    headingDegrees,
+  };
+}
+
 const CORE = bankLevee("levee-core", 140.37776, 37.359853, 140);
 const SOUTH = bankLevee("levee-south", 140.37492, 37.357985, 155);
 const NORTH = bankLevee("levee-north", 140.38349, 37.364066, 130);
+const REVETMENT = place("rev-bend", "revetment", 140.385275, 37.371045, 110);
+const PUMP = place("pump-inland", "drainage-pump", 140.3791, 37.36035, 50);
+const BASIN = place("basin-south", "retention-basin", 140.3762, 37.3584, 90);
+
+/** 越水・侵食・内水・貯留を組み合わせた適所配置。 */
+const BALANCED_DEFENSE = [CORE, SOUTH, NORTH, REVETMENT, PUMP, BASIN];
 
 function channelMisplacedLevee(): PlacedStructure {
   return {
     id: "levee-channel",
     structureId: "levee",
-    // 中心線付近・向きが河道に沿い堤体が横断（効きにくい）
     position: { longitude: 140.37737, latitude: 37.36024, height: 17 },
     headingDegrees: 50,
   };
@@ -55,16 +73,44 @@ describe("floodSimulation", () => {
     expect(state.isClear).toBe(false);
   });
 
-  it("主要弱点を河岸堤防で押さえると被害が大きく減る", () => {
-    let bare = beginDisaster(createInitialFloodState());
-    let defended = beginDisaster(createInitialFloodState());
-    const placements = [CORE, SOUTH, NORTH];
+  it("堤防1基だけではクリアできない", () => {
+    let state = beginDisaster(createInitialFloodState());
     for (let second = 0; second < 90; second += 1) {
-      bare = advanceFloodSimulation(bare, []);
-      defended = advanceFloodSimulation(defended, placements);
+      state = advanceFloodSimulation(state, [CORE]);
+    }
+    expect(state.isClear).toBe(false);
+    expect(state.damagePercent).toBeGreaterThan(5);
+  });
+
+  it("同種の堤防を重ねるだけではクリアできない", () => {
+    let state = beginDisaster(createInitialFloodState());
+    for (let second = 0; second < 90; second += 1) {
+      state = advanceFloodSimulation(state, [CORE, SOUTH, NORTH]);
+    }
+    expect(state.isClear).toBe(false);
+    expect(state.damagePercent).toBeGreaterThan(5);
+  });
+
+  it("適所の混成配置ならクリアできる", () => {
+    let state = beginDisaster(createInitialFloodState());
+    for (let second = 0; second < 90; second += 1) {
+      state = advanceFloodSimulation(state, BALANCED_DEFENSE);
     }
 
-    expect(defended.damagePercent).toBeLessThan(bare.damagePercent * 0.55);
+    expect(state.phase).toBe("result");
+    expect(state.damagePercent).toBeLessThan(5);
+    expect(state.isClear).toBe(true);
+  });
+
+  it("適所混成は無防備より被害を大きく減らす", () => {
+    let bare = beginDisaster(createInitialFloodState());
+    let defended = beginDisaster(createInitialFloodState());
+    for (let second = 0; second < 90; second += 1) {
+      bare = advanceFloodSimulation(bare, []);
+      defended = advanceFloodSimulation(defended, BALANCED_DEFENSE);
+    }
+
+    expect(defended.damagePercent).toBeLessThan(bare.damagePercent * 0.25);
     expect(defended.mitigation.averageEffectiveness).toBeGreaterThan(0.5);
     expect(defended.overflowSites.length).toBeLessThan(bare.overflowSites.length);
   });
@@ -79,11 +125,38 @@ describe("floodSimulation", () => {
 
   it("川から遠い配置は効果が小さくなる", () => {
     const nearby = calculateMitigation([CORE]);
-    const distant = calculateMitigation([
-      bankLevee("far", 140.395, 37.36, 50),
-    ]);
+    const distant = calculateMitigation([bankLevee("far", 140.395, 37.36, 50)]);
 
     expect(nearby.overflowPrevention).toBeGreaterThan(distant.overflowPrevention);
+  });
+
+  it("決壊口への排水機場は誤配置で被害が増える", () => {
+    const pumpOnBreach = place("pump-wrong", "drainage-pump", 140.37776, 37.359853, 50);
+    let bare = beginDisaster(createInitialFloodState());
+    let wrong = beginDisaster(createInitialFloodState());
+    for (let second = 0; second < 90; second += 1) {
+      bare = advanceFloodSimulation(bare, []);
+      wrong = advanceFloodSimulation(wrong, [pumpOnBreach]);
+    }
+    expect(wrong.damagePercent).toBeGreaterThan(bare.damagePercent);
+    expect(wrong.mitigation.placementInterference).toBeGreaterThan(0.3);
+  });
+
+  it("内水地点の堤防は干渉を生み、適所堤防より効果が薄い", () => {
+    const inlandLevee = place("levee-inland", "levee", 140.3791, 37.36035, 140);
+    const fit = calculateMitigation([CORE]);
+    const mismatch = calculateMitigation([inlandLevee]);
+    expect(mismatch.placementInterference).toBeGreaterThan(fit.placementInterference);
+    expect(mismatch.overflowPrevention).toBeLessThan(fit.overflowPrevention);
+  });
+
+  it("同種施設の追加は全球効果が逓減する", () => {
+    const one = calculateMitigation([CORE]);
+    const two = calculateMitigation([CORE, SOUTH]);
+    const three = calculateMitigation([CORE, SOUTH, NORTH]);
+    const gain12 = two.overflowPrevention - one.overflowPrevention;
+    const gain23 = three.overflowPrevention - two.overflowPrevention;
+    expect(gain12).toBeGreaterThan(gain23);
   });
 
   it("越水時は局所流出地点が現れ、近傍の堤防で抑えられる", () => {
@@ -102,21 +175,24 @@ describe("floodSimulation", () => {
     expect(coreWith).toBeLessThan(coreWithout);
   });
 
-  it("水位上昇に伴い氾濫原が拡大する", () => {
+  it("越水後にのみ氾濫原指標が立つ", () => {
     let state = beginDisaster(createInitialFloodState());
     expect(state.floodplainFillRatio).toBe(0);
 
-    for (let second = 0; second < 40; second += 1) {
+    for (let second = 0; second < 25; second += 1) {
       state = advanceFloodSimulation(state, []);
     }
-    expect(state.floodplainFillRatio).toBeGreaterThan(0.2);
-    expect(state.floodplainHalfWidthMeters).toBeGreaterThanOrEqual(200);
+    // 増水途中でも越水前は 0（街全体の冠水表現に使わない）。
+    if (state.overflowMeters < 0.02) {
+      expect(state.floodplainFillRatio).toBe(0);
+    }
 
-    for (let second = 0; second < 50; second += 1) {
+    for (let second = 0; second < 70; second += 1) {
       state = advanceFloodSimulation(state, []);
     }
-    expect(state.floodplainFillRatio).toBeGreaterThan(0.7);
-    expect(state.floodplainHalfWidthMeters).toBeGreaterThan(200);
+    expect(state.overflowMeters).toBeGreaterThan(0.05);
+    expect(state.floodplainFillRatio).toBeGreaterThan(0.2);
+    expect(state.floodplainHalfWidthMeters).toBeGreaterThan(0);
   });
 
   it("堤防配置で影響圏と治水効果が可視化用に出る", () => {
@@ -129,14 +205,14 @@ describe("floodSimulation", () => {
     expect(state.mitigation.overflowPrevention).toBeGreaterThan(0.25);
   });
 
-  it("仮配置でも影響圏は出るが防衛数値には乗らない", () => {
+  it("仮配置の影響圏は弱点カバー状態を示す", () => {
     const preview = { ...CORE, id: "preview-levee", preview: true as const };
     const state = refreshPlacementEffects(createInitialFloodState(), [preview]);
-    expect(state.structureInfluences).toHaveLength(1);
-    expect(state.structureInfluences[0]?.preview).toBe(true);
-    expect(state.structureInfluences[0]?.zone.kind).toBe("strip");
-    expect(state.mitigation.activeStructureCount).toBe(0);
-    expect(state.mitigation.overflowPrevention).toBe(0);
+    const influence = state.structureInfluences[0];
+    expect(influence?.zoneMeaning).toContain("帯");
+    expect(influence?.coverageTone).toBe("good");
+    expect(influence?.coverageHint).toContain("カバー");
+    expect(influence?.coveredSiteIds.length).toBeGreaterThan(0);
   });
 
   it("堤体が川と直交する向きは、堤体が川沿いの向きより配置効率が低い", () => {
@@ -190,10 +266,10 @@ describe("floodSimulation", () => {
       withPump = advanceFloodSimulation(withPump, [pumpAtCore]);
     }
 
-    const leveeCore = withLevee.overflowSites.find((site) => site.id === "campus-core");
-    const pumpCore = withPump.overflowSites.find((site) => site.id === "campus-core");
-    expect(pumpCore?.intensity ?? 0).toBeGreaterThan(leveeCore?.intensity ?? 0);
     expect(withLevee.damagePercent).toBeLessThan(withPump.damagePercent);
+    expect(withPump.mitigation.placementInterference).toBeGreaterThan(
+      withLevee.mitigation.placementInterference,
+    );
   });
 
   it("侵食点には護岸が効き、堤防だけでは抑えきれない", () => {

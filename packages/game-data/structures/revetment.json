@@ -1,10 +1,10 @@
 {
   "id": "revetment",
   "displayName": "護岸",
-  "description": "湾曲の岸を固める。",
-  "constructionCost": 1600,
+  "description": "湾曲の岸を固める。溢れそのものは止められない。",
+  "constructionCost": 1800,
   "constructionTimeSeconds": 10,
-  "maintenanceCostPerSecond": 1,
+  "maintenanceCostPerSecond": 2,
   "allowedTerrains": [
     "riverBank",
     "riverChannel"
@@ -14,10 +14,10 @@
   ],
   "effects": {
     "waterLevelReduction": 0,
-    "overflowPrevention": 0.05,
+    "overflowPrevention": 0.04,
     "drainageCapacity": 0,
-    "bankProtection": 0.75,
-    "channelCapacityIncrease": 0.05
+    "bankProtection": 0.7,
+    "channelCapacityIncrease": 0.04
   },
   "role": {
     "primaryHazard": "erosion",
@@ -29,9 +29,9 @@
     ]
   },
   "hazardAffinity": {
-    "overtopping": 0.2,
+    "overtopping": 0.18,
     "erosion": 1,
-    "inlandPonding": 0.05,
+    "inlandPonding": -0.08,
     "capacityShortage": 0.1
   }
 }

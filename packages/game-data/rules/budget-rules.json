@@ -1,9 +1,9 @@
 {
-  "initialBudgetSolo": 12000,
-  "initialBudgetMultiplayerPerPlayer": 9000,
-  "incomePerSecondPreparation": 80,
-  "incomePerSecondDisaster": 110,
-  "disasterStartGrant": 2000,
-  "maxBudget": 24000,
-  "description": "初期予算＋準備／災害中の補給で複数施設を置ける。維持費は毎秒差し引き、上限 maxBudget で貯めすぎを防ぐ。災害開始時に緊急予算を付与する。"
+  "initialBudgetSolo": 7800,
+  "initialBudgetMultiplayerPerPlayer": 6000,
+  "incomePerSecondPreparation": 45,
+  "incomePerSecondDisaster": 65,
+  "disasterStartGrant": 900,
+  "maxBudget": 15000,
+  "description": "予算は絞りめ。全部屋はできず、弱点に合う施設を選ぶ必要がある。維持費は毎秒差し引き。災害開始時にわずかな緊急予算を付与する。"
 }

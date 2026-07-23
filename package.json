@@ -8,7 +8,9 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "dev:web": "pnpm --filter @civilcraft/web dev"
+    "dev:web": "pnpm --filter @civilcraft/web dev:ensure",
+    "dev:web:fg": "pnpm --filter @civilcraft/web dev",
+    "stop:web": "pnpm --filter @civilcraft/web stop:dev"
   },
   "devDependencies": {
     "prettier": "^3.5.3"

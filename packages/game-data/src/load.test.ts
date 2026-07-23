@@ -21,13 +21,13 @@ describe("loadGameData", () => {
 
   it("loads solo budget and phase timing", () => {
     const rules = loadRules();
-    expect(rules.budget.initialBudgetSolo).toBe(12_000);
-    expect(rules.budget.incomePerSecondPreparation).toBe(80);
-    expect(rules.budget.incomePerSecondDisaster).toBe(110);
-    expect(rules.budget.disasterStartGrant).toBe(2_000);
-    expect(rules.budget.maxBudget).toBe(24_000);
-    expect(rules.timing.totalPlayTimeSeconds).toBe(100);
-    expect(rules.timing.phases.preparationSeconds).toBe(20);
+    expect(rules.budget.initialBudgetSolo).toBe(7_800);
+    expect(rules.budget.incomePerSecondPreparation).toBe(45);
+    expect(rules.budget.incomePerSecondDisaster).toBe(65);
+    expect(rules.budget.disasterStartGrant).toBe(900);
+    expect(rules.budget.maxBudget).toBe(15_000);
+    expect(rules.timing.totalPlayTimeSeconds).toBe(90);
+    expect(rules.timing.phases.preparationSeconds).toBe(10);
     expect(rules.timing.phases.disasterSeconds).toBe(60);
     expect(rules.victory.clearThresholdPercent).toBe(5);
   });

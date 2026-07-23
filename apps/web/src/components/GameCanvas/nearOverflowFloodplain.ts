@@ -7,7 +7,6 @@ import {
   HeightReference,
   Viewer,
 } from "cesium";
-import { calculateFloodplainExtent } from "../../features/disaster/services/floodplainExtent";
 import {
   ABUKUMA_RIVER_CENTERLINE,
   NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
@@ -109,19 +108,20 @@ function createFloodplainController(viewer: Viewer): FloodplainController {
   });
 
   const applyColors = (fill: number, overflow: number) => {
-    const alpha = Math.max(0, 0.05 + fill * 0.26 + Math.min(0.22, overflow * 0.14));
-    // 平常時は薄い水色、越水時は濁った氾濫水へ寄せる。
+    // 増水〜氾濫で岸沿いの冠水帯がはっきり見えるよう、不透明度を強めに取る。
+    const alpha = Math.max(0, 0.12 + fill * 0.42 + Math.min(0.28, overflow * 0.2));
+    // 立ち上がりは水色、越水時は濁った氾濫水へ寄せる。
     Color.lerp(
-      Color.fromCssColorString("#2a9bc4"),
-      Color.fromCssColorString("#0b5f86"),
-      Math.min(1, fill * 0.55 + overflow * 1.1),
+      Color.fromCssColorString("#3ab0d4"),
+      Color.fromCssColorString("#184858"),
+      Math.min(1, fill * 0.7 + overflow * 1.15),
       fillColor,
     );
     fillColor.alpha = alpha;
-    edgeColor.red = 0.55;
-    edgeColor.green = 0.86;
-    edgeColor.blue = 0.95;
-    edgeColor.alpha = 0.08 + fill * 0.22 + Math.min(0.12, overflow * 0.1);
+    edgeColor.red = 0.72;
+    edgeColor.green = 0.94;
+    edgeColor.blue = 1;
+    edgeColor.alpha = 0.16 + fill * 0.34 + Math.min(0.18, overflow * 0.14);
   };
 
   const removePreUpdate = viewer.scene.preUpdate.addEventListener(() => {
@@ -161,20 +161,12 @@ function createFloodplainController(viewer: Viewer): FloodplainController {
 
   return {
     setTarget: (input) => {
-      if (!input.active) {
-        targetFill = 0;
-        targetOverflow = 0;
-        viewer.scene.requestRender();
-        return;
-      }
-      const extent = calculateFloodplainExtent({
-        riverLevelMeters: input.riverLevelMeters,
-        overflowMeters: input.overflowMeters,
-        overflowLevelMeters: input.overflowLevelMeters,
-      });
-      targetFill = extent.fillRatio;
-      targetWidth = extent.halfWidthMeters * 2;
-      targetOverflow = Math.max(0, input.overflowMeters);
+      // 河道沿いの広域水色帯は「街が浸水」に見えるため描画しない。
+      // 浸水表現は決壊地点の overflow / inundation 可視化に限定する。
+      void input;
+      targetFill = 0;
+      targetOverflow = 0;
+      targetWidth = 0;
       viewer.scene.requestRender();
     },
     destroy: () => {

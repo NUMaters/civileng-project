@@ -51,7 +51,7 @@ export function getStructureVisual(structureId: string): StructureVisual {
   return STRUCTURE_VISUALS[structureId] ?? FALLBACK_VISUAL;
 }
 
-/** 配備トースト・影響圏説明用の短い効果ラベル。 */
+/** 配置トースト・影響圏説明用の短い効果ラベル。 */
 export function getStructureEffectLabel(structureId: string): string {
   switch (structureId) {
     case "levee":
@@ -65,7 +65,25 @@ export function getStructureEffectLabel(structureId: string): string {
     case "channel-dredging":
       return "川通し強化";
     default:
-      return "防衛効果";
+      return "治水効果";
+  }
+}
+
+/** 影響圏の形が何を意味するか（配置判断用）。 */
+export function getStructureZoneMeaning(structureId: string): string {
+  switch (structureId) {
+    case "levee":
+      return "帯＝堤沿いの溢れを抑える範囲";
+    case "revetment":
+      return "帯＝護岸が固める岸の範囲";
+    case "retention-basin":
+      return "楕円＝水位を削る貯留の範囲";
+    case "drainage-pump":
+      return "扇＝排水が届く市街地方向";
+    case "channel-dredging":
+      return "帯＝掘削で水通しが良くなる範囲";
+    default:
+      return "色付きの範囲内の弱点に効く";
   }
 }
 

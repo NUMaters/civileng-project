@@ -75,16 +75,15 @@ describe("resolvePlaceablePosition", () => {
     }
   });
 
-  it("市街地側（片岸 150 m・氾濫原内）には置けない", () => {
+  it("市街地側（片岸 150 m）には置けない", () => {
     const urban = offsetFromCenterline(150);
     const nearest = nearestPointOnRiverCenterline(urban.longitude, urban.latitude);
     expect(nearest.distanceMeters).toBeGreaterThan(PLACEABLE_CORRIDOR_HALF_WIDTH_M);
-    expect(nearest.distanceMeters).toBeLessThan(NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
     expect(resolvePlaceablePosition(urban)).toBeUndefined();
     expect(isInPlaceableRiverZone(urban)).toBe(false);
   });
 
-  it("配置可能半幅は氾濫原より狭い", () => {
+  it("配置可能半幅は決壊近傍の影響目安より狭い", () => {
     expect(PLACEABLE_CORRIDOR_HALF_WIDTH_M).toBeLessThan(NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
   });
 });

@@ -38,7 +38,7 @@ export function placeStructure(
   if (currentBudget < structure.constructionCost) {
     return {
       ok: false,
-      reason: `${structure.displayName}まであと${formatBudget(structure.constructionCost - currentBudget)}不足`,
+      reason: `あと ${formatBudget(structure.constructionCost - currentBudget)}`,
     };
   }
 

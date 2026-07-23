@@ -11,6 +11,7 @@ import {
   type BudgetEconomyPhase,
 } from "../services/constructionService";
 import type { GeoPosition, PlacedStructure, StructureDefinition } from "../types/construction";
+import { calculateMitigation } from "../../disaster/services/floodSimulation";
 
 const structures: StructureDefinition[] = loadStructures().map(
   ({
@@ -208,12 +209,12 @@ export function useConstruction() {
     ): PlacedStructure | null => {
       const structure = structures.find(({ id }) => id === structureId);
       if (structure === undefined) {
-        setMessage("先にドックで施設を選べ");
+        setMessage("施設を選択");
         return null;
       }
       if (budgetRef.current < structure.constructionCost) {
         setMessage(
-          `${structure.displayName}まであと${(structure.constructionCost - budgetRef.current).toLocaleString("ja-JP")} pt不足`,
+          `あと ${(structure.constructionCost - budgetRef.current).toLocaleString("ja-JP")} pt`,
         );
         return null;
       }
@@ -254,7 +255,7 @@ export function useConstruction() {
     const structure = structures.find(({ id }) => id === pending.structureId);
     if (structure === undefined) {
       setPendingPlacement(null);
-      setMessage("先にドックで施設を選べ");
+      setMessage("施設を選択");
       return null;
     }
 
@@ -278,12 +279,23 @@ export function useConstruction() {
     budgetRef.current = result.remainingBudget;
     setBudget(result.remainingBudget);
     setSpentBudget((current) => current + structure.constructionCost);
-    setPlacements((current) => [...current, confirmed]);
+    setPlacements((current) => {
+      const next = [...current, confirmed];
+      const mitigation = calculateMitigation(next);
+      if (mitigation.placementInterference >= 0.28) {
+        setMessage(
+          `${structure.displayName} を配置（相性が悪い — 状況が悪化しうる）`,
+          "warn",
+        );
+      } else {
+        setMessage(`${structure.displayName} を配置`, "success");
+      }
+      return next;
+    });
     setPendingPlacement(null);
     setSelectedStructureId(structure.id);
     // 確定後は向き変更 UI を出さない（選択ハイライトも外す）。
     setSelectedPlacementId(null);
-    setMessage(`${structure.displayName}を配備完了`, "success");
     return confirmed;
   }, [pendingPlacement, setMessage]);
 
@@ -349,6 +361,44 @@ export function useConstruction() {
     setMessageState("");
   }, [clearHideTimer]);
 
+  /**
+   * E2E / 開発用: 仮配置を経ずに確定配置する。
+   * 本番 UI からは呼ばない。
+   */
+  const placeConfirmedForTest = useCallback(
+    (
+      structureId: string,
+      position: GeoPosition,
+      headingDegrees: number,
+    ): PlacedStructure | null => {
+      const structure = structures.find(({ id }) => id === structureId);
+      if (structure === undefined) {
+        return null;
+      }
+      const confirmedId = `${structure.id}-${createPlacementId()}`;
+      const result = placeStructure(
+        structure,
+        position,
+        budgetRef.current,
+        confirmedId,
+        headingDegrees,
+      );
+      if (!result.ok) {
+        setMessage(result.reason);
+        return null;
+      }
+      const confirmed: PlacedStructure = { ...result.placement, preview: false };
+      budgetRef.current = result.remainingBudget;
+      setBudget(result.remainingBudget);
+      setSpentBudget((current) => current + structure.constructionCost);
+      setPlacements((current) => [...current, confirmed]);
+      setPendingPlacement(null);
+      setSelectedPlacementId(null);
+      return confirmed;
+    },
+    [setMessage],
+  );
+
   const budgetRatio = Math.max(0, Math.min(1, budget / MAX_BUDGET));
   const incomeLabel =
     economyPhase === "preparation" || economyPhase === "disaster"
@@ -382,5 +432,6 @@ export function useConstruction() {
     setSelectedPlacementId,
     setMessage,
     resetSession,
+    placeConfirmedForTest,
   };
 }

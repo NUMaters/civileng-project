@@ -33,8 +33,10 @@ describe("FloodHud render after placement", () => {
           onStartRainNow: () => undefined,
         }),
       );
-      expect(html).toContain("配備");
-      expect(html).toContain("雨勢");
+      expect(html).toContain("配置");
+      expect(html).toContain("被害度");
+      expect(html).toContain("準備をスキップ");
+      expect(html).not.toContain("雨勢");
     });
   }
 
@@ -55,7 +57,7 @@ describe("FloodHud render after placement", () => {
         onStartRainNow: () => undefined,
       }),
     );
-    expect(html).toContain("配備");
-    expect(html).toContain("雨勢");
+    expect(html).toContain("配置");
+    expect(html).toContain("被害度");
   });
 });

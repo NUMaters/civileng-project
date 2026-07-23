@@ -357,15 +357,15 @@ function ringToHierarchy(
 
 function depthBandColor(band: InundationBand): Color {
   if (band.minDepthMeters >= 1.0) {
-    return Color.fromCssColorString("#0a4f7a").withAlpha(0.55);
+    return Color.fromCssColorString("#0a4f7a").withAlpha(0.68);
   }
   if (band.minDepthMeters >= 0.5) {
-    return Color.fromCssColorString("#1274a8").withAlpha(0.42);
+    return Color.fromCssColorString("#1274a8").withAlpha(0.55);
   }
   if (band.minDepthMeters >= 0.2) {
-    return Color.fromCssColorString("#1c9ccc").withAlpha(0.32);
+    return Color.fromCssColorString("#1c9ccc").withAlpha(0.44);
   }
-  return Color.fromCssColorString("#5ec8e8").withAlpha(0.2);
+  return Color.fromCssColorString("#5ec8e8").withAlpha(0.32);
 }
 
 function depthBandColorByIndex(bandIndex: number): Color {

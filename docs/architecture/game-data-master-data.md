@@ -149,13 +149,13 @@ packages/game-data/structures/<structure-id>.json
 
 ### game-timing.json
 
-1 プレイ約 100 秒のフェーズ配分（準備 20 / 災害 60 / 結果 20）。
+1 プレイ約 90 秒（1 分半）のフェーズ配分（準備 10 / 災害 60 / 結果 20）。
 
 ```json
 {
-  "totalPlayTimeSeconds": 100,
+  "totalPlayTimeSeconds": 90,
   "phases": {
-    "preparationSeconds": 20,
+    "preparationSeconds": 10,
     "disasterSeconds": 60,
     "resultSeconds": 20
   }

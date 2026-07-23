@@ -1,10 +1,10 @@
 {
   "id": "channel-dredging",
   "displayName": "河道掘削",
-  "description": "川の水通しを強化する。",
-  "constructionCost": 3400,
+  "description": "川の水通しを強化する。湾曲部では侵食を悪化させうる。",
+  "constructionCost": 3800,
   "constructionTimeSeconds": 22,
-  "maintenanceCostPerSecond": 2,
+  "maintenanceCostPerSecond": 3,
   "allowedTerrains": [
     "riverChannel"
   ],
@@ -12,25 +12,25 @@
     "heavy-rain"
   ],
   "effects": {
-    "waterLevelReduction": 0.2,
-    "overflowPrevention": 0.1,
+    "waterLevelReduction": 0.14,
+    "overflowPrevention": 0.08,
     "drainageCapacity": 0,
     "bankProtection": 0,
-    "channelCapacityIncrease": 0.5
+    "channelCapacityIncrease": 0.38
   },
   "role": {
     "primaryHazard": "capacityShortage",
     "strengths": [
-      "水通しを上げ水位を下げる"
+      "水位を下げる"
     ],
     "weaknesses": [
-      "湾曲では侵食が増えやすい"
+      "湾曲で侵食増"
     ]
   },
   "hazardAffinity": {
-    "overtopping": 0.35,
-    "erosion": -0.35,
-    "inlandPonding": 0.1,
+    "overtopping": 0.3,
+    "erosion": -0.55,
+    "inlandPonding": 0.08,
     "capacityShortage": 1
   }
 }

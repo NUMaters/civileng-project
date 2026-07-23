@@ -1,23 +1,20 @@
-import { createServer } from "vite";
-import { writeFileSync } from "node:fs";
+/**
+ * 互換エイリアス。実体は自動再起動付きの dev-stable.mjs。
+ * @deprecated Prefer `pnpm --filter @civilcraft/web dev`
+ */
+import { spawn } from "node:child_process";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-console.log("[dev-lan] starting");
-const server = await createServer({
-  configFile: "./vite.config.ts",
-  optimizeDeps: {
-    // cesium の事前バンドルは初回起動を遅く／止めることがあるので空にする
-    noDiscovery: true,
-    include: [],
-  },
-  server: {
-    host: "0.0.0.0",
-    port: 5173,
-    strictPort: true,
-    watch: null,
-  },
+const here = path.dirname(fileURLToPath(import.meta.url));
+const child = spawn(process.execPath, [path.join(here, "dev-stable.mjs")], {
+  stdio: "inherit",
+  env: process.env,
 });
-console.log("[dev-lan] created");
-await server.listen();
-server.printUrls();
-writeFileSync("/tmp/civilcraft-vite.ready", "ok\n");
-console.log("[dev-lan] listening");
+child.on("exit", (code, signal) => {
+  if (signal) {
+    process.kill(process.pid, signal);
+    return;
+  }
+  process.exit(code ?? 0);
+});

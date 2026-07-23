@@ -1,10 +1,10 @@
 {
   "id": "retention-basin",
   "displayName": "遊水地",
-  "description": "水位ピークを削る貯留。",
-  "constructionCost": 2500,
+  "description": "水位ピークを削る貯留。侵食箇所では効果が薄い。",
+  "constructionCost": 2800,
   "constructionTimeSeconds": 20,
-  "maintenanceCostPerSecond": 2,
+  "maintenanceCostPerSecond": 3,
   "allowedTerrains": [
     "lowland",
     "floodPlain"
@@ -13,11 +13,11 @@
     "heavy-rain"
   ],
   "effects": {
-    "waterLevelReduction": 0.15,
-    "overflowPrevention": 0.1,
+    "waterLevelReduction": 0.12,
+    "overflowPrevention": 0.06,
     "drainageCapacity": 0,
     "bankProtection": 0,
-    "channelCapacityIncrease": 0
+    "channelCapacityIncrease": 0.08
   },
   "role": {
     "primaryHazard": "capacityShortage",
@@ -29,9 +29,9 @@
     ]
   },
   "hazardAffinity": {
-    "overtopping": 0.45,
-    "erosion": 0.05,
-    "inlandPonding": 0.55,
-    "capacityShortage": 0.9
+    "overtopping": 0.4,
+    "erosion": -0.12,
+    "inlandPonding": 0.5,
+    "capacityShortage": 0.95
   }
 }

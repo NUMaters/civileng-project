@@ -2,9 +2,8 @@ import type { FloodSimulationState } from "../services/floodSimulation";
 
 type FloodResultPanelProps = Pick<
   FloodSimulationState,
-  "phase" | "isClear" | "damagePercent" | "floodedAreaPercent" | "floodDepthMeters" | "score"
+  "phase" | "isClear" | "damagePercent" | "score"
 > & {
-  usedBudget: number;
   placementCount: number;
   onEnterReview: () => void;
   onStartNewGame: () => void;
@@ -14,10 +13,7 @@ export function FloodResultPanel({
   phase,
   isClear,
   damagePercent,
-  floodedAreaPercent,
-  floodDepthMeters,
   score,
-  usedBudget,
   placementCount,
   onEnterReview,
   onStartNewGame,
@@ -28,16 +24,12 @@ export function FloodResultPanel({
 
   return (
     <div className="result-overlay">
-      <section className="result-panel" role="dialog" aria-modal="true" aria-label="ミッション結果">
+      <section className="result-panel" role="dialog" aria-modal="true" aria-label="結果">
         <span className={`result-panel__badge ${isClear ? "is-clear" : "is-failure"}`}>
-          {isClear ? "MISSION CLEAR" : "MISSION FAILED"}
+          {isClear ? "CLEAR" : "FAILED"}
         </span>
         <h2>{isClear ? "まちを守り切った！" : "まちが水に呑まれた…"}</h2>
-        <p>
-          {isClear
-            ? "配備した施設が溢れを抑え込んだ。メニューから再度チャレンジできる。"
-            : "施設の組み合わせと置き場を変えて、被害度 5% 未満を狙え。メニューから再挑戦しよう。"}
-        </p>
+        <p>{isClear ? "溢れを抑え切った。" : "被害度 5% 未満を目指そう。"}</p>
 
         <div className="result-panel__score">
           <span>SCORE</span>
@@ -50,29 +42,17 @@ export function FloodResultPanel({
             <dd>{damagePercent.toFixed(1)}%</dd>
           </div>
           <div>
-            <dt>浸水面積</dt>
-            <dd>{floodedAreaPercent.toFixed(1)}%</dd>
-          </div>
-          <div>
-            <dt>最大水深</dt>
-            <dd>{floodDepthMeters.toFixed(2)} m</dd>
-          </div>
-          <div>
-            <dt>消費予算</dt>
-            <dd>{usedBudget.toLocaleString("ja-JP")} pt</dd>
-          </div>
-          <div>
-            <dt>配備数</dt>
+            <dt>配置数</dt>
             <dd>{placementCount} 基</dd>
           </div>
         </dl>
 
         <div className="result-panel__actions">
           <button type="button" className="result-panel__primary" onClick={onStartNewGame}>
-            ゲームメニューへ戻る
+            メニューへ
           </button>
           <button type="button" className="result-panel__secondary" onClick={onEnterReview}>
-            戦況マップを見る
+            マップ確認
           </button>
         </div>
       </section>
@@ -95,21 +75,20 @@ export function ReviewModeBar({
   onStartNewGame,
 }: ReviewModeBarProps) {
   return (
-    <div className="review-mode-bar" role="region" aria-label="戦況確認">
+    <div className="review-mode-bar" role="region" aria-label="マップ確認">
       <div className="review-mode-bar__meta">
         <span className={`review-mode-bar__badge ${isClear ? "is-clear" : "is-failure"}`}>
           {isClear ? "CLEAR" : "FAILED"}
         </span>
-        <strong>戦況確認</strong>
-        <span className="review-mode-bar__score">{score.toLocaleString("ja-JP")} pt</span>
+        <strong>マップ確認</strong>
+        <span className="review-mode-bar__score">{score.toLocaleString("ja-JP")}</span>
       </div>
-      <p className="review-mode-bar__hint">カメラを動かして浸水の広がりをチェック</p>
       <div className="review-mode-bar__actions">
         <button type="button" className="review-mode-bar__ghost" onClick={onShowResult}>
-          スコアを見る
+          スコア
         </button>
         <button type="button" className="review-mode-bar__primary" onClick={onStartNewGame}>
-          ゲームメニューへ戻る
+          メニュー
         </button>
       </div>
     </div>

@@ -20,23 +20,23 @@ import { ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
 /** Cesium 同梱の水面法線。開発時は `/cesiumStatic` 経由で配信する。 */
 const WATER_NORMAL_MAP_URL = "/cesiumStatic/Assets/Textures/waterNormalsSmall.jpg";
 
-const FLOW_STREAK_COUNT = 14;
+const FLOW_STREAK_COUNT = 18;
 const FLOW_STREAK_SEGMENT_POINTS = 7;
 /** 平常時の流向周期（秒）。短いほど速く見える。下流方向への流れ。 */
 const BASE_FLOW_PERIOD_SECONDS = 8.5;
 /** ストリーク長（m）。先頭が下流側。 */
-const FLOW_STREAK_LENGTH_M = 120;
-/** 河道横断方向に並べるレーンの半幅（m）。 */
-const FLOW_LANE_HALF_SPAN_M = 22;
+const FLOW_STREAK_LENGTH_M = 140;
+/** 河道横断方向に並べるレーンの半幅（m）。増水時の水量帯に合わせて広め。 */
+const FLOW_LANE_HALF_SPAN_M = 34;
 const RIVER_VOLUME_ENTITY_ID = "river-volume-body";
 const INITIAL_RIVER_LEVEL_METERS = 2.2;
 /** GroundPrimitive は再生成するとチラつくため固定幅にする。 */
 const BASE_WATER_PRIMITIVE_WIDTH_M = 88;
 /**
  * 表示値を目標へ寄せる速さ（1/s）。
- * 速すぎると目標の微振動が目立ち、遅すぎると遅れが段差に見えるため中庸にする。
+ * 増水の立ち上がりを分かりやすくするため、やや速めに追従させる。
  */
-const VISUAL_LERP_RATE = 2.4;
+const VISUAL_LERP_RATE = 3.1;
 
 export type RiverHydraulics = {
   riverLevelMeters: number;
@@ -150,35 +150,37 @@ export async function createRiverWaterSurface(
   const applyDisplayed = (visual: VisualHydraulics) => {
     const { levelRatio, rain, overflow, activeFlood, calm } = visual;
     const calmFactor = 1 - calm * 0.55;
+    // 増水で澄んだ水色→濁った暗い青緑へ寄せ、平常時との差をはっきり出す。
+    const muddy = clamp01(levelRatio * 0.85 + overflow * 0.55 + rain * 0.2);
 
     waterMaterial.uniforms.animationSpeed =
-      (0.014 + levelRatio * 0.02 + rain * 0.028 + overflow * 0.018 + activeFlood * 0.012) *
+      (0.016 + levelRatio * 0.032 + rain * 0.034 + overflow * 0.022 + activeFlood * 0.016) *
       calmFactor;
     waterMaterial.uniforms.amplitude =
-      (2.1 + levelRatio * 2.4 + rain * 2.2 + overflow * 2.1) * calmFactor;
+      (2.4 + levelRatio * 3.6 + rain * 2.8 + overflow * 2.8) * calmFactor;
     waterMaterial.uniforms.baseWaterColor = Color.lerp(
       Color.fromCssColorString("#1f96c9"),
-      Color.fromCssColorString("#0c4f7a"),
-      clamp01(levelRatio * 0.75 + overflow * 0.35),
+      Color.fromCssColorString("#1a3d42"),
+      muddy,
       new Color(),
-    ).withAlpha(0.62 + levelRatio * 0.2 + Math.min(0.15, overflow * 0.12));
-    waterMaterial.uniforms.blendColor = Color.fromCssColorString("#06263d").withAlpha(
-      0.28 + rain * 0.12 + Math.min(0.18, overflow * 0.1),
+    ).withAlpha(0.68 + levelRatio * 0.22 + Math.min(0.18, overflow * 0.14));
+    waterMaterial.uniforms.blendColor = Color.fromCssColorString("#041820").withAlpha(
+      0.32 + rain * 0.14 + muddy * 0.28 + Math.min(0.2, overflow * 0.12),
     );
-    waterMaterial.uniforms.specularIntensity = 0.45 + levelRatio * 0.2 + overflow * 0.1;
+    waterMaterial.uniforms.specularIntensity = 0.42 + levelRatio * 0.28 + overflow * 0.14;
     flowPeriodSeconds = Math.max(
-      3.8,
-      (BASE_FLOW_PERIOD_SECONDS - levelRatio * 3 - rain * 2.5 - overflow * 2 - activeFlood * 1.5) *
+      2.8,
+      (BASE_FLOW_PERIOD_SECONDS - levelRatio * 4.2 - rain * 3 - overflow * 2.4 - activeFlood * 1.8) *
         (1 + calm * 0.45),
     );
 
     Color.lerp(
-      Color.fromCssColorString("#1280b8"),
-      Color.fromCssColorString("#0d6fa8"),
-      clamp01(overflow * 1.2),
+      Color.fromCssColorString("#1490c8"),
+      Color.fromCssColorString("#163a48"),
+      muddy,
       volumeColor,
     );
-    volumeColor.alpha = 0.3 + levelRatio * 0.28 + Math.min(0.22, overflow * 0.15);
+    volumeColor.alpha = 0.38 + levelRatio * 0.36 + Math.min(0.28, overflow * 0.2);
 
     // ストリークの見た目は細かく変えても差が小さいので間引き更新する。
     const streakStyleKey = `${(levelRatio * 20).toFixed(0)}:${(overflow * 10).toFixed(0)}:${activeFlood.toFixed(0)}`;
@@ -187,13 +189,13 @@ export async function createRiverWaterSurface(
       for (const streak of streaks) {
         if (streak.entity.polyline !== undefined) {
           streak.entity.polyline.width = new ConstantProperty(
-            6 + levelRatio * 5 + overflow * 3 + activeFlood * 2,
+            8 + levelRatio * 10 + overflow * 5 + activeFlood * 3,
           );
           streak.entity.polyline.material = new PolylineGlowMaterialProperty({
-            glowPower: 0.28 + levelRatio * 0.08,
-            taperPower: 0.62,
-            color: Color.fromCssColorString("#eaf8ff").withAlpha(
-              0.42 + levelRatio * 0.2 + overflow * 0.12,
+            glowPower: 0.32 + levelRatio * 0.14,
+            taperPower: 0.55,
+            color: Color.fromCssColorString("#f4fcff").withAlpha(
+              0.5 + levelRatio * 0.32 + overflow * 0.16,
             ),
           });
         }
@@ -295,17 +297,17 @@ function hydraulicsToVisual(hydraulics: RiverHydraulics): VisualHydraulics {
   const activeFlood = hydraulics.activeFlood ? 1 : 0;
   const calm = clamp01(hydraulics.mitigationCalm ?? 0);
   // 災害開始の瞬間に幅が跳ねないよう、activeFlood は水位比率に乗せる。
-  // 幅より押し出し高さで増水を見せると、段差より連続した水位上昇に見えやすい。
+  // 固定幅 Water の外側へ水量帯を広げ、押し出し高さで「川が盛り上がる」感を出す。
   const widthMeters =
-    80 +
-    levelRatio * 36 * (1 - calm * 0.2) +
-    overflow * 12 * (1 - calm * 0.35) +
-    activeFlood * levelRatio * 6;
+    82 +
+    levelRatio * 88 * (1 - calm * 0.2) +
+    overflow * 36 * (1 - calm * 0.35) +
+    activeFlood * levelRatio * 14;
   const extrudeMeters =
-    0.28 +
-    levelRise * 0.85 * (1 - calm * 0.25) +
-    overflow * 1.35 * (1 - calm * 0.3) +
-    activeFlood * levelRatio * 0.22;
+    0.55 +
+    levelRise * 1.95 * (1 - calm * 0.25) +
+    overflow * 2.4 * (1 - calm * 0.3) +
+    activeFlood * levelRatio * 0.55;
   return { levelRatio, rain, overflow, activeFlood, calm, widthMeters, extrudeMeters };
 }
 

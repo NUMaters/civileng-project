@@ -43,13 +43,13 @@ export type InundationFieldSnapshot = {
   updatedAtMs: number;
 };
 
-const CELL_SIZE_M = 22;
-const COLS = 36;
-const ROWS = 28;
+const CELL_SIZE_M = 16;
+const COLS = 14;
+const ROWS = 12;
 /** 1 ステップあたりの移流係数（無次元に近い経験値）。 */
-const CONDUCTIVITY = 1.85;
+const CONDUCTIVITY = 1.55;
 /** 決壊点への注入（m/s 相当）。 */
-const INJECT_RATE = 0.55;
+const INJECT_RATE = 0.48;
 const MIN_WET_DEPTH = 0.04;
 const BAND_THRESHOLDS = [0.08, 0.25, 0.55, 1.1] as const;
 

@@ -69,7 +69,7 @@ const MANUAL_CANDIDATES: OverflowCandidate[] = [
     structuralVulnerability: 0.8,
     primaryHazard: "erosion",
   },
-  // 市街地側の内水点（越水後に水が溜まる想定）。排水機場の主戦場。
+  // 市街地側の内水点（越水後に水が溜まる想定）。排水機場の主な対象。
   {
     id: "inland-campus",
     longitude: 140.3791,

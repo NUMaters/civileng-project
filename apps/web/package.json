@@ -5,7 +5,10 @@
   "scripts": {
     "copy:cesium": "node ./scripts/copy-cesium-assets.mjs",
     "fetch:plateau": "node ./scripts/fetch-plateau-buildings.mjs",
-    "dev": "vite",
+    "dev": "node ./scripts/dev-stable.mjs",
+    "dev:watch": "vite",
+    "dev:ensure": "node ./scripts/ensure-dev.mjs",
+    "stop:dev": "node ./scripts/stop-dev.mjs",
     "build": "tsc --noEmit && vite build",
     "lint": "eslint .",
     "test": "vitest run",

@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react-swc";
 import { createReadStream, cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
@@ -10,6 +11,9 @@ const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const cesiumSource = path.resolve(webRoot, "node_modules/cesium/Build/Cesium");
 const cesiumBaseUrl = "cesiumStatic";
 const cesiumFolders = ["Assets", "Workers", "Widgets", "ThirdParty"] as const;
+/** iCloud Documents 外に置き、キャッシュ読み書きでのハングを避ける。 */
+const viteCacheDir = path.join(homedir(), ".cache", "civilcraft", "vite");
+const stableDev = process.env.CIVILCRAFT_DEV_STABLE === "1";
 
 const MIME: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
@@ -141,6 +145,7 @@ export default defineConfig({
   define: {
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
   },
+  cacheDir: viteCacheDir,
   plugins: [react(), serveCesiumAssets(), proxyGsiTiles()],
   optimizeDeps: {
     // Cesium pulls CommonJS deps (e.g. mersenne-twister). Prebundle them so
@@ -166,6 +171,15 @@ export default defineConfig({
     // 同一 LAN / テザリングのスマホからも届くよう全インターフェースで待ち受ける
     host: "0.0.0.0",
     strictPort: true,
+    // 安定起動（dev-stable）では HMR / 監視を切り、iCloud 起因の停止を防ぐ
+    ...(stableDev
+      ? { hmr: false, watch: null }
+      : {
+          watch: {
+            // Documents/iCloud 配下の巨大ツリー監視で起動・HMR が止まるのを防ぐ
+            ignored: ["**/node_modules/**", "**/dist/**", "**/.git/**", "**/.cache/**"],
+          },
+        }),
     proxy: {
       // ゲームサーバー WebSocket（cmd/game GET /ws）
       "/ws": {
@@ -173,10 +187,6 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
-    },
-    watch: {
-      // Documents/iCloud 配下の巨大ツリー監視で起動・HMR が止まるのを防ぐ
-      ignored: ["**/node_modules/**", "**/dist/**", "**/.git/**"],
     },
   },
   test: {

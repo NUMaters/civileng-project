@@ -127,7 +127,8 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
       }
 
       if (mist !== null) {
-        mist.style.opacity = String(Math.min(0.72, displayedDrama * 0.78));
+        // 暗幕が強すぎると本川の増水・濁りが見えにくくなるため上限を抑える。
+        mist.style.opacity = String(Math.min(0.48, displayedDrama * 0.52));
         mist.style.setProperty("--rain-drama", String(displayedDrama));
       }
 

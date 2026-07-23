@@ -17,7 +17,7 @@ type LoadState = "idle" | "loading" | "ready" | "error";
 export function GameMenuScreen({
   onBackToTitle,
   onStartGame,
-  openHowtoOnMount = true,
+  openHowtoOnMount = false,
 }: GameMenuScreenProps) {
   const [mode, setMode] = useState<PlayMode | null>(null);
   const [loadState, setLoadState] = useState<LoadState>("idle");
@@ -73,20 +73,30 @@ export function GameMenuScreen({
   }, [mode]);
 
   const canStart = mode === "solo" && loadState === "ready";
+  const startLabel =
+    mode === null
+      ? "モードを選択"
+      : loadState === "loading"
+        ? "読み込み中…"
+        : loadState === "error"
+          ? "選び直してください"
+          : canStart
+            ? "ゲームスタート"
+            : "準備中…";
 
   return (
     <section className="game-menu" aria-labelledby={titleId}>
-      <div className="game-menu__atmosphere" aria-hidden="true" />
+      <div className="game-menu__world" aria-hidden="true">
+        <div className="game-menu__sky" />
+        <div className="game-menu__grid" />
+        <div className="game-menu__river-band" />
+      </div>
+
       <header className="game-menu__header">
         <button className="game-menu__back" type="button" onClick={onBackToTitle}>
-          タイトルへ
+          タイトル
         </button>
-        <div>
-          <p className="game-menu__eyebrow">MISSION SELECT</p>
-          <h1 id={titleId} className="game-menu__title">
-            防衛モード選択
-          </h1>
-        </div>
+        <p className="game-menu__brand">CivilCraft</p>
         <button
           className="game-menu__howto-btn"
           type="button"
@@ -96,15 +106,28 @@ export function GameMenuScreen({
         </button>
       </header>
 
+      <div className="game-menu__brief">
+        <p className="game-menu__brief-kicker">阿武隈川 · 治水チャレンジ</p>
+        <h1 id={titleId} className="game-menu__title">
+          モード選択
+        </h1>
+        <p className="game-menu__brief-copy">限られた予算と時間で、川沿いの弱点を対策しよう。</p>
+      </div>
+
       <div className="game-menu__modes" role="group" aria-label="プレイモード">
         <button
           type="button"
           className={`game-menu__mode${mode === "solo" ? " is-selected" : ""}`}
           onClick={() => setMode("solo")}
         >
-          <span className="game-menu__mode-label">シングルプレイ</span>
-          <strong>一人で阿武隈川を防衛</strong>
-          <span className="game-menu__mode-meta">準備 20 秒 · 大雨 60 秒</span>
+          <span className="game-menu__mode-index" aria-hidden="true">
+            01
+          </span>
+          <span className="game-menu__mode-body">
+            <span className="game-menu__mode-label">シングルプレイ</span>
+            <strong>一人で治水に挑戦</strong>
+            <span className="game-menu__mode-meta">準備 10 秒 · 大雨 60 秒 · 被害 5% 未満でクリア</span>
+          </span>
         </button>
         <button
           type="button"
@@ -113,9 +136,14 @@ export function GameMenuScreen({
           aria-disabled="true"
           title="マルチプレイは近日対応"
         >
-          <span className="game-menu__mode-label">マルチプレイ</span>
-          <strong>最大 4 人で共同防衛</strong>
-          <span className="game-menu__mode-meta">準備中 · 選択できません</span>
+          <span className="game-menu__mode-index" aria-hidden="true">
+            02
+          </span>
+          <span className="game-menu__mode-body">
+            <span className="game-menu__mode-label">マルチプレイ</span>
+            <strong>みんなで協力（準備中）</strong>
+            <span className="game-menu__mode-meta">最大 4 人 · 近日開放</span>
+          </span>
         </button>
       </div>
 
@@ -124,12 +152,12 @@ export function GameMenuScreen({
           <p>モードを選んでください</p>
         ) : loadState === "loading" ? (
           <p>
-            戦場データを読み込み中… <strong>{Math.round(loadProgress)}%</strong>
+            マップを読み込み中… <strong>{Math.round(loadProgress)}%</strong>
           </p>
         ) : loadState === "ready" ? (
-          <p>読込完了。防衛を開始できます</p>
+          <p>準備完了。スタートできます</p>
         ) : loadState === "error" ? (
-          <p>読込に失敗しました。シングルを選び直してください</p>
+          <p>読込失敗。シングルを選び直してください</p>
         ) : null}
         {mode === "solo" && loadState === "loading" ? (
           <div className="game-menu__track" aria-hidden="true">
@@ -148,7 +176,7 @@ export function GameMenuScreen({
           }
         }}
       >
-        {canStart ? "ゲームスタート" : "読込完了後にスタート"}
+        {startLabel}
       </button>
 
       {howtoOpen ? (
@@ -181,14 +209,15 @@ function HowToPlayModal({
           </button>
         </header>
         <div className="howto-modal__body">
-          <p>
-            阿武隈川沿いの弱点を読み、堤防・護岸・排水機場・遊水地・河道掘削を配備してまちを守れ。
-          </p>
+          <p>阿武隈川の弱点に合う土木施設を置き、大雨からまちを守ろう。</p>
           <ul>
-            <li>下部ドックから施設をドラッグし、川の青い帯へドロップ</li>
-            <li>仮配置中に向きと位置を調整し、✓ で確定（予算消費）</li>
-            <li>弱点の種類に合う施設を置く（越水→堤防、侵食→護岸など）</li>
-            <li>準備 20 秒のあと大雨 60 秒。被災度 5% 未満でクリア</li>
+            <li>ドックから配置帯（黄色い帯）へドラッグ</li>
+            <li>向き調整 → ✓ で確定</li>
+            <li>色付きの影響範囲内の弱点にだけ効く</li>
+            <li>相性を合わせる（越水→堤防、侵食→護岸、内水→排水）</li>
+            <li>合わない場所への設置は逆効果になる</li>
+            <li>同じ施設の重ね置きだけでは足りない</li>
+            <li>準備 10 秒 · 大雨 60 秒／被害 5% 未満でクリア</li>
           </ul>
         </div>
         <button className="howto-modal__ok" type="button" onClick={onClose}>

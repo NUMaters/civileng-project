@@ -42,20 +42,13 @@ export function StructureCard({
           src={visual.imageSrc}
           alt=""
           draggable={false}
-          width={72}
-          height={72}
+          width={56}
+          height={56}
         />
       </span>
       <span className="structure-card__body">
         <strong>{structure.displayName}</strong>
         <small>{formatBudget(structure.constructionCost)}</small>
-        <em className="structure-card__role">{structure.role.primaryHazard === "overtopping"
-          ? "対・越水"
-          : structure.role.primaryHazard === "erosion"
-            ? "対・侵食"
-            : structure.role.primaryHazard === "inlandPonding"
-              ? "対・内水"
-              : "対・水位"}</em>
       </span>
       {selected ? <span className="structure-card__check" aria-hidden="true" /> : null}
     </button>

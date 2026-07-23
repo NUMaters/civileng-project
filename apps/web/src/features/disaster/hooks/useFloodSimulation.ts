@@ -28,6 +28,11 @@ export type UseFloodSimulationResult = FloodSimulationState & {
   startFreshGame: () => void;
   /** Cesium 描画用。React の間引きに依存せず最新水位を読む。 */
   getLatestState: () => FloodSimulationState;
+  /**
+   * E2E / 開発用: 指定秒数だけシミュレーションを進める。
+   * headless では rAF が止まることがあるため壁時計の代わりに使う。
+   */
+  advanceForTest: (seconds: number) => FloodSimulationState;
 };
 
 export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimulationResult {
@@ -142,6 +147,19 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
 
   const getLatestState = useCallback(() => stateRef.current, []);
 
+  const advanceForTest = useCallback((seconds: number) => {
+    let remaining = Math.max(0, seconds);
+    let next = stateRef.current;
+    while (remaining > 1e-6) {
+      const step = Math.min(MAX_SIM_STEP_SECONDS, remaining);
+      next = advanceFloodSimulation(next, placementsRef.current, step);
+      remaining -= step;
+    }
+    stateRef.current = next;
+    setState(next);
+    return next;
+  }, []);
+
   return {
     ...state,
     startGame,
@@ -151,5 +169,6 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
     enterReviewMode,
     reopenResultPanel,
     getLatestState,
+    advanceForTest,
   };
 }

@@ -24,7 +24,7 @@ export function ConstructionMenu({
       <div className="construction-menu__heading">
         <div>
           <span className="construction-menu__heading-label">建設ドック</span>
-          <strong>施設を川の青い帯へドラッグして配備</strong>
+          <strong>ドラッグして配置</strong>
         </div>
         {selected !== undefined ? (
           <div className="construction-menu__detail" key={selected.id}>
@@ -33,6 +33,9 @@ export function ConstructionMenu({
                 対 {getHazardKindLabel(selected.role.primaryHazard)}
               </span>
             </div>
+            <p className="construction-menu__zone-tip">
+              色付きの影響範囲内の弱点にだけ効く。向きも合わせる。
+            </p>
             <ul className="construction-menu__bullets">
               {selected.role.strengths.slice(0, 1).map((line) => (
                 <li key={`s-${line}`} className="is-strength">
@@ -47,7 +50,7 @@ export function ConstructionMenu({
             </ul>
           </div>
         ) : (
-          <small>タップでは建てられない。ドックから引きずり出せ</small>
+          <small>ドラッグで配置</small>
         )}
       </div>
       <div className="construction-menu__list">

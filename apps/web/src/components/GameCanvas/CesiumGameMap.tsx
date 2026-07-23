@@ -294,6 +294,25 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       [placements],
     );
 
+    const influenceHint = useMemo(() => {
+      if (orientationTarget === null) {
+        return null;
+      }
+      const influence =
+        floodState?.structureInfluences.find(
+          (item) => item.placementId === orientationTarget.id,
+        ) ?? null;
+      if (influence === null) {
+        return null;
+      }
+      return {
+        effectLabel: influence.effectLabel,
+        zoneMeaning: influence.zoneMeaning,
+        coverageHint: influence.coverageHint,
+        coverageTone: influence.coverageTone,
+      };
+    }, [floodState?.structureInfluences, orientationTarget]);
+
     // 決壊はオレンジ楕円・浸水プルームだけで示し、地点名ラベルは出さない。
     const mapLabels = facilityLabels;
 
@@ -359,22 +378,22 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const rect = canvas.getBoundingClientRect();
         const screen = new Cartesian2(clientX - rect.left, clientY - rect.top);
         if (screen.x < 0 || screen.y < 0 || screen.x > rect.width || screen.y > rect.height) {
-          onInvalidPositionRef.current("マップの上にドロップしてくれ");
+          onInvalidPositionRef.current("マップへドロップ");
           return false;
         }
 
         const picked = pickPlacementPosition(viewer, screen);
         if (picked === undefined) {
-          onInvalidPositionRef.current("着地位置が取れなかった。もう一度ドロップしてくれ");
+          onInvalidPositionRef.current("もう一度ドロップ");
           return false;
         }
         if (!isInsidePlayArea(picked)) {
-          onInvalidPositionRef.current("作戦エリア外だ。阿武隈川へ戻ろう");
+          onInvalidPositionRef.current("プレイ範囲外");
           return false;
         }
         const placeable = resolvePlaceablePosition(picked);
         if (placeable === undefined) {
-          onInvalidPositionRef.current("川の青い帯の上だけ建設できる。まちなかには置けない");
+          onInvalidPositionRef.current("配置帯の上だけ");
           return false;
         }
 
@@ -899,7 +918,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                   position: session.startPosition,
                   headingDegrees: session.headingDegrees,
                 });
-                onInvalidPositionRef.current("青い帯の内側へずらしてくれ");
+                onInvalidPositionRef.current("帯の内側へ");
               }
             }
             return;
@@ -1161,7 +1180,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         const placeable = resolvePlaceablePosition(candidate);
         if (placeable === undefined) {
-          onInvalidPositionRef.current("微調整も青い帯の中だけだ");
+          onInvalidPositionRef.current("帯の中で調整");
           return;
         }
         const viewer = viewerRef.current;
@@ -1233,6 +1252,16 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               ref={orientationHudRef}
               className={`cesium-orientation-hud${orientationTarget.preview === true ? " is-preview" : ""}`}
             >
+              {influenceHint !== null ? (
+                <div
+                  className={`influence-placement-hint influence-placement-hint--${influenceHint.coverageTone}`}
+                  role="status"
+                >
+                  <strong>{influenceHint.effectLabel}</strong>
+                  <span>{influenceHint.zoneMeaning}</span>
+                  <em>{influenceHint.coverageHint}</em>
+                </div>
+              ) : null}
               <RotationControls
                 floating
                 headingDegrees={orientationTarget.headingDegrees}
@@ -1848,6 +1877,7 @@ function refreshProtectionWithDragGhost(
     : base;
   syncProtectionVisualization(viewer, influences, floodState?.protectedBankSites ?? [], {
     showBankSites: floodState?.active === true,
+    showWeaknessTargets: true,
   });
 }
 

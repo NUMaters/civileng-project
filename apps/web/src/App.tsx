@@ -45,7 +45,7 @@ const statusLabel: Record<string, string> = {
 export function App() {
   const [lobbyScreen, setLobbyScreen] = useState<LobbyScreen>("title");
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
-  const [menuHowtoOnMount, setMenuHowtoOnMount] = useState(true);
+  const [menuHowtoOnMount, setMenuHowtoOnMount] = useState(false);
   /** 一度ゲームを開始したら Cesium を破棄せず裏に残し、再入場の白画面を防ぐ。 */
   const [gameLayerMounted, setGameLayerMounted] = useState(false);
   const construction = useConstruction();
@@ -67,6 +67,44 @@ export function App() {
     construction.setEconomyPhase(flood.phase);
   }, [inGame, flood.phase, construction.setEconomyPhase]);
 
+  // 開発時のみ E2E から配置・状況取得できるようにする。
+  useEffect(() => {
+    if (!import.meta.env.DEV) {
+      return;
+    }
+    const api = {
+      inGame: () => lobbyScreen === "game",
+      getFlood: () => flood.getLatestState(),
+      startRain: () => {
+        flood.startRainNow();
+      },
+      advance: (seconds: number) => flood.advanceForTest(seconds),
+      place: (
+        structureId: string,
+        longitude: number,
+        latitude: number,
+        headingDegrees: number,
+      ) =>
+        construction.placeConfirmedForTest(
+          structureId,
+          { longitude, latitude, height: 20 },
+          headingDegrees,
+        ),
+      placementCount: () => construction.placements.length,
+    };
+    (window as Window & { __civilcraftE2E?: typeof api }).__civilcraftE2E = api;
+    return () => {
+      delete (window as Window & { __civilcraftE2E?: typeof api }).__civilcraftE2E;
+    };
+  }, [
+    construction.placeConfirmedForTest,
+    construction.placements.length,
+    flood.advanceForTest,
+    flood.getLatestState,
+    flood.startRainNow,
+    lobbyScreen,
+  ]);
+
   const beginDockDrag = useCallback(
     (structureId: string, clientX: number, clientY: number) => {
       const structure = construction.structures.find(({ id }) => id === structureId);
@@ -74,7 +112,7 @@ export function App() {
         return;
       }
       if (construction.budget < structure.constructionCost) {
-        construction.setMessage("予算不足！ポイントを貯めよう");
+        construction.setMessage("予算不足");
         return;
       }
       const next: DockDragState = {
@@ -150,7 +188,7 @@ export function App() {
   );
 
   const enterMenu = useCallback(() => {
-    setMenuHowtoOnMount(true);
+    setMenuHowtoOnMount(false);
     setLobbyScreen("menu");
   }, []);
 
@@ -369,14 +407,16 @@ export function App() {
                     />
                   </div>
                 </div>
-                <div
-                  className={`socket-status socket-status--${socket.status}`}
-                  role="status"
-                  title={socket.playerId ?? undefined}
-                >
-                  <span className="socket-status__dot" aria-hidden="true" />
-                  <span>{statusLabel[socket.status] ?? socket.status}</span>
-                </div>
+                {playMode === "multi" ? (
+                  <div
+                    className={`socket-status socket-status--${socket.status}`}
+                    role="status"
+                    title={socket.playerId ?? undefined}
+                  >
+                    <span className="socket-status__dot" aria-hidden="true" />
+                    <span>{statusLabel[socket.status] ?? socket.status}</span>
+                  </div>
+                ) : null}
               </div>
             </header>
           ) : null}
@@ -401,7 +441,7 @@ export function App() {
               style={{ left: drag.x, top: drag.y }}
               aria-hidden="true"
             >
-              <span className="dock-drag-ghost__hint">川へドロップして配備</span>
+              <span className="dock-drag-ghost__hint">川へドロップ</span>
               <span>{drag.displayName}</span>
             </div>
           ) : null}
@@ -411,7 +451,7 @@ export function App() {
               style={{ left: drag.x, top: drag.y + 56 }}
               aria-hidden="true"
             >
-              <span>{drag.placeable ? `${drag.displayName} OK` : "青い帯の上へ"}</span>
+              <span>{drag.placeable ? `${drag.displayName} OK` : "配置帯の上へ"}</span>
             </div>
           ) : null}
 
@@ -420,10 +460,7 @@ export function App() {
               phase={flood.phase}
               isClear={flood.isClear}
               damagePercent={flood.damagePercent}
-              floodedAreaPercent={flood.floodedAreaPercent}
-              floodDepthMeters={flood.floodDepthMeters}
               score={flood.score}
-              usedBudget={construction.spentBudget}
               placementCount={construction.placements.length}
               onEnterReview={flood.enterReviewMode}
               onStartNewGame={handleReturnToMenu}

@@ -4,7 +4,7 @@ export function MapBootFallback() {
     <div className="map-boot-fallback" role="status" aria-live="polite">
       <div className="map-boot-fallback__panel">
         <strong>3D 地図を準備中…</strong>
-        <p>初回は数十秒かかることがあります。このままお待ちください。</p>
+        <p>初回は数十秒かかることがあります</p>
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
 {
   "id": "levee",
   "displayName": "堤防",
-  "description": "低岸の溢れを止める前線。",
-  "constructionCost": 3000,
+  "description": "低岸の溢れを止める前線。内水地点に置くと排水を妨げる。",
+  "constructionCost": 3600,
   "constructionTimeSeconds": 18,
-  "maintenanceCostPerSecond": 3,
+  "maintenanceCostPerSecond": 4,
   "allowedTerrains": [
     "riverBank",
     "leveeLine"
@@ -14,9 +14,9 @@
   ],
   "effects": {
     "waterLevelReduction": 0,
-    "overflowPrevention": 0.85,
+    "overflowPrevention": 0.58,
     "drainageCapacity": 0,
-    "bankProtection": 0.2,
+    "bankProtection": 0.18,
     "channelCapacityIncrease": 0
   },
   "role": {
@@ -25,13 +25,13 @@
       "低岸の溢れを止める"
     ],
     "weaknesses": [
-      "内水・岸崩れは苦手"
+      "内水地点では排水を妨げる"
     ]
   },
   "hazardAffinity": {
     "overtopping": 1,
-    "erosion": 0.3,
-    "inlandPonding": 0.05,
-    "capacityShortage": 0.15
+    "erosion": 0.25,
+    "inlandPonding": -0.25,
+    "capacityShortage": 0.12
   }
 }

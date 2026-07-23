@@ -1,43 +1,39 @@
 /**
- * 氾濫原（氾濫寸前〜越水）の幅・水位しきい値。
- * 平常時の本川水面幅は `riverWaterSurface` 側のまま変えず、ここは拡大流域専用。
+ * 氾濫原指標（シミュレーション用）。
+ * 画面上の河道沿い広域水色帯には使わない（浸水は決壊地点の可視化のみ）。
  */
 
 /** 平常時本川コリドー片岸幅の目安（m）。参考値。 */
 export const NORMAL_CHANNEL_HALF_WIDTH_M = 42;
 
 /**
- * 氾濫寸前に想定する河道沿い氾濫原の片岸幅（m）。
- * 本川外側の低地・堤内地側の冠水帯を含む。
+ * 越水後に想定する決壊近傍の影響半径の目安（m）。
+ * かつての河道沿い広域帯（200〜320 m）は使わない。
  */
-export const NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M = 200;
+export const NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M = 90;
 
-/** 越水後にさらに広がる最大片岸幅（m）。 */
-export const FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M = 320;
+/** 強い越水時の最大片岸相当（m）。決壊プルーム用の上限目安。 */
+export const FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M = 140;
 
 /**
- * 氾濫原の視認を開始する水位（m）。
- * 計画高水位（約 4.9 m）手前から河道沿い帯を広げ始める。
+ * 指標の立ち上がりに使う水位（m）。描画は overflowMeters が立ってから。
  */
-export const FLOODPLAIN_WARN_LEVEL_METERS = 3.6;
+export const FLOODPLAIN_WARN_LEVEL_METERS = 4.5;
 
 /**
- * 水位・越水量から氾濫原の塗りつぶし率（0〜1）と描画半幅（m）を求める。
- * 通常水位では fillRatio=0。警告水位を超えてから立ち上がり、越水で最大幅へ伸びる。
+ * 越水しているときだけ fillRatio > 0。
+ * 増水だけでは 0（街が冠水しているように見せない）。
  */
 export function calculateFloodplainExtent(input: {
   riverLevelMeters: number;
   overflowMeters: number;
   overflowLevelMeters?: number;
 }): { fillRatio: number; halfWidthMeters: number } {
-  const overflowLevel = input.overflowLevelMeters ?? 4.9;
-  const approachSpan = Math.max(0.5, overflowLevel - FLOODPLAIN_WARN_LEVEL_METERS);
-  const approachRatio = clamp01(
-    (input.riverLevelMeters - FLOODPLAIN_WARN_LEVEL_METERS) / approachSpan,
-  );
-  const overflowBoost = clamp01(input.overflowMeters / 1.4);
-  // 越水開始で 0.55 へ跳ねないよう、接近度と越水量を連続合成する。
-  const fillRatio = clamp01(approachRatio * (1 - overflowBoost * 0.25) + overflowBoost);
+  const overflowBoost = clamp01(input.overflowMeters / 1.2);
+  if (overflowBoost < 0.02) {
+    return { fillRatio: 0, halfWidthMeters: 0 };
+  }
+  const fillRatio = overflowBoost;
   const halfWidthMeters =
     NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M +
     (FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M - NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M) *
@@ -49,7 +45,6 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-/** 端の立ち上がりを緩やかにする（0〜1）。 */
 function smoothstep(t: number): number {
   const x = clamp01(t);
   return x * x * (3 - 2 * x);
