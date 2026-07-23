@@ -22,7 +22,7 @@
 | 型定義         | TypeScript（`packages/game-schema/`）                                                           |
 | インフラ       | Docker, Docker Compose, AWS（ECS, RDS, ElastiCache, S3, CloudFront）, Terraform, GitHub Actions |
 
-起動フローは **タイトル → メニュー（シングル／マルチ・遊び方）→ 読込完了後にゲームスタート → マップ本編**。マルチは UI 上は暗い無効表示（未実装）。本編は準備 20 秒・大雨 60 秒・結果 20 秒（`packages/game-data/rules/game-timing.json`）。
+起動フローは **タイトル → メニュー（シングル／マルチ・遊び方）→ 読込完了後にゲームスタート → マップ本編**。タイトル／メニューでは Cesium を `React.lazy` で遅延読込し、メニューの読込中にチャンクを先読みする。一度マップを開いたあとは破棄せず裏に残し（`visibility: hidden`）、再入場の白画面を防ぐ。マルチは UI 上は暗い無効表示（未実装）。本編は準備 20 秒・大雨 60 秒・結果 20 秒（`packages/game-data/rules/game-timing.json`）。
 
 詳細は [docs/architecture/tech-stack.md](./docs/architecture/tech-stack.md) を参照。
 
@@ -138,7 +138,7 @@ pnpm dev:web
 
 ゲーム中のリアルタイム通信は **WebSocket**（`cmd/game` の `GET /ws`）。開発時フロントは Vite の `/ws` プロキシ経由で接続し、ヘッダーに接続状態（オンライン／オフライン）を表示する。イベント型は `@civilcraft/game-schema`（`packages/game-schema/websocket/`）。Phase 1 ではカメラ注視点移動（`player.move`）と施設配置（`construction.place` / `construction.placed`）を薄く同期する。
 
-Cesium の Worker / Assets は `apps/web/vite.config.ts` で `/cesiumStatic` として配信する（開発時は専用ミドルウェア、ビルド時は `dist/cesiumStatic` へコピー）。`CESIUM_BASE_URL` はサイトルート絶対パス（`/cesiumStatic`）である必要がある。`optimizeDeps.include` に `cesium` と `mersenne-twister` を入れ、CJS 依存の default export エラーで白画面になるのを防ぐ。地図が「Loading…」のまま止まる／真っ白な場合は、ポート 5173 の古い Vite を終了してから `pnpm --filter @civilcraft/web exec vite --force` で依存を再バンドルする。
+Cesium の Worker / Assets は `apps/web/vite.config.ts` で `/cesiumStatic` として配信する（開発時は専用ミドルウェア、ビルド時は `dist/cesiumStatic` へコピー）。`CESIUM_BASE_URL` はサイトルート絶対パス（`/cesiumStatic`）である必要がある。`optimizeDeps.include` に `cesium` と `mersenne-twister` を入れ、CJS 依存の default export エラーで白画面になるのを防ぐ。地図が「Loading…」のまま止まる／真っ白な場合は、ポート 5173 の古い Vite を終了してから `pnpm --filter @civilcraft/web exec vite --force` で依存を再バンドルする。ローカル開発は iCloud Documents 配下だと Vite が落ちやすいため、`apps/web/scripts/dev-lan.mjs`（`0.0.0.0:5173`、watch 無効）での起動を推奨する。
 
 3D 地図は CesiumJS + 国土地理院シームレス写真 + **PLATEAU-Terrain** + 郡山市公式 ZIP の **テクスチャ付き建築物 3D Tiles**（`bldg_texture`）を使う。初回は次で取得する（約 390MB ダウンロード、`public/plateau/` へ展開。Git 管理外）。
 

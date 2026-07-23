@@ -45,6 +45,8 @@ export function GameMenuScreen({
           fetch("/cesiumStatic/Widgets/widgets.css", { cache: "force-cache" }),
           fetch("/manifest.webmanifest", { cache: "force-cache" }),
           import("@civilcraft/game-data/load"),
+          // スタート押下前に Cesium チャンクを温めてゲーム入場の白画面を短縮する。
+          import("../../components/GameCanvas/CesiumGameMap"),
         ]);
         const elapsed = performance.now() - started;
         const wait = Math.max(0, 900 - elapsed);

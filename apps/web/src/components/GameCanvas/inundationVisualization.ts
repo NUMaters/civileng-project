@@ -278,7 +278,8 @@ function createBandVisual(
 function createFlowVisual(viewer: Viewer, index: number, sample: InundationFlowSample): FlowVisual {
   const visual: FlowVisual = {
     entity: undefined as unknown as Entity,
-    phase: Math.random(),
+    // 見た目の位相のみ。セキュリティ用途ではないので決定論的ハッシュを使う。
+    phase: visualUnit(index * 19.17 + sample.longitude * 1_000 + sample.latitude * 1_000),
     alpha: 0,
     targetAlpha: 0.4,
     width: 3,
@@ -393,4 +394,10 @@ function offsetLonLat(
 
 function lerp(from: number, to: number, alpha: number): number {
   return from + (to - from) * alpha;
+}
+
+/** 0..1 の決定論的な擬似乱数（可視化の位相用。暗号用途ではない）。 */
+function visualUnit(seed: number): number {
+  const x = Math.sin(seed) * 43_758.545_312_3;
+  return x - Math.floor(x);
 }

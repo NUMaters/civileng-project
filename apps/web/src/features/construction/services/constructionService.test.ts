@@ -16,6 +16,17 @@ const levee: StructureDefinition = {
   constructionCost: 3_000,
   constructionTimeSeconds: 18,
   maintenanceCostPerSecond: 3,
+  role: {
+    primaryHazard: "overtopping",
+    strengths: ["低岸の溢れを止める"],
+    weaknesses: ["内水・岸崩れは苦手"],
+  },
+  hazardAffinity: {
+    overtopping: 1,
+    erosion: 0.3,
+    inlandPonding: 0.05,
+    capacityShortage: 0.15,
+  },
 };
 
 const position = {

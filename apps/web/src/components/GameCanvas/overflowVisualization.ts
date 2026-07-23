@@ -459,8 +459,8 @@ function createStreakVisual(
     targetStartLat: spec.startLat,
     targetEndLon: spec.endLon,
     targetEndLat: spec.endLat,
-    phase: Math.random(),
-    flowSpeed: 0.55 + Math.random() * 0.45,
+    phase: visualUnit(spec.startLon * 1_031 + spec.startLat * 917 + spec.endLon * 53),
+    flowSpeed: 0.55 + visualUnit(spec.endLon * 811 + spec.endLat * 673 + spec.width * 17) * 0.45,
   };
 
   visual.entity = viewer.entities.add({
@@ -546,4 +546,10 @@ function offsetLonLat(
 
 function lerp(from: number, to: number, t: number): number {
   return from + (to - from) * t;
+}
+
+/** 0..1 の決定論的な擬似乱数（可視化の位相用。暗号用途ではない）。 */
+function visualUnit(seed: number): number {
+  const x = Math.sin(seed) * 43_758.545_312_3;
+  return x - Math.floor(x);
 }

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
-import { CesiumGameMap, type CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
+import type { CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
+import { MapBootFallback } from "./components/GameCanvas/MapBootFallback";
 import { GameToast } from "./components/GameToast";
 import { ConstructionMenu, useConstruction } from "./features/construction";
 import { formatBudget } from "./features/construction/services/constructionService";
@@ -8,6 +9,12 @@ import type { GeoPosition } from "./features/construction/types/construction";
 import { FloodHud, FloodResultPanel, RainOverlay, ReviewModeBar, useFloodSimulation } from "./features/disaster";
 import { GameMenuScreen, TitleScreen, type LobbyScreen, type PlayMode } from "./features/lobby";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
+
+/** タイトル／メニューでは Cesium（約 10MB+）を読まず、真っ白待ちを防ぐ。 */
+const CesiumGameMap = lazy(async () => {
+  const mod = await import("./components/GameCanvas/CesiumGameMap");
+  return { default: mod.CesiumGameMap };
+});
 
 type DockDragState = {
   structureId: string;
@@ -39,6 +46,8 @@ export function App() {
   const [lobbyScreen, setLobbyScreen] = useState<LobbyScreen>("title");
   const [playMode, setPlayMode] = useState<PlayMode | null>(null);
   const [menuHowtoOnMount, setMenuHowtoOnMount] = useState(true);
+  /** 一度ゲームを開始したら Cesium を破棄せず裏に残し、再入場の白画面を防ぐ。 */
+  const [gameLayerMounted, setGameLayerMounted] = useState(false);
   const construction = useConstruction();
   // 仮配置（preview）も含め、設置調整中から影響圏を地図に出す。
   // 数値の治水効果は floodSimulation 側で preview を除外する。
@@ -150,6 +159,7 @@ export function App() {
       setPlayMode(mode);
       construction.resetSession();
       flood.startFreshGame();
+      setGameLayerMounted(true);
       setLobbyScreen("game");
     },
     [construction.resetSession, flood.startFreshGame],
@@ -230,199 +240,206 @@ export function App() {
     };
   }, [inGame, isDockDragging]);
 
-  if (lobbyScreen === "title") {
-    return (
-      <main className="game-shell game-shell--lobby">
-        <TitleScreen onEnter={enterMenu} />
-      </main>
-    );
-  }
-
-  if (lobbyScreen === "menu") {
-    return (
-      <main className="game-shell game-shell--lobby">
-        <GameMenuScreen
-          onBackToTitle={() => setLobbyScreen("title")}
-          onStartGame={handleMenuStart}
-          openHowtoOnMount={menuHowtoOnMount}
-        />
-      </main>
-    );
-  }
-
   return (
-    <main
-      className={`game-shell${drag !== null ? " is-dock-dragging" : ""}${isReviewing ? " is-reviewing" : ""}`}
-    >
-      <div className="game-shell__veil game-shell__veil--top" aria-hidden="true" />
-      <div className="game-shell__veil game-shell__veil--bottom" aria-hidden="true" />
-
-      <RainOverlay
-        active={
-          flood.phase === "disaster" ||
-          flood.phase === "result" ||
-          flood.phase === "review"
-        }
-        getLatestState={flood.getLatestState}
-      />
-
-      <CesiumGameMap
-        ref={mapRef}
-        placements={construction.visiblePlacements}
-        structures={construction.structures}
-        selectedPlacementId={construction.selectedPlacementId}
-        onDropPlace={handleDropPlace}
-        onRotatePlacement={construction.rotatePlacement}
-        onMovePendingPlacement={construction.movePendingPlacement}
-        onSelectPlacement={construction.setSelectedPlacementId}
-        onInvalidPosition={construction.setMessage}
-        onConfirmPendingPlacement={handleConfirmPlacement}
-        onCancelPendingPlacement={construction.cancelPendingPlacement}
-        onCameraFocusChange={handleCameraFocusChange}
-        freeCameraLook={isReviewing}
-        floodState={{
-          active:
-            flood.phase === "disaster" ||
-            flood.phase === "result" ||
-            flood.phase === "review",
-          rainfallIntensity: flood.rainfallIntensity,
-          riverLevelMeters: flood.riverLevelMeters,
-          overflowMeters: flood.overflowMeters,
-          floodDepthMeters: flood.floodDepthMeters,
-          floodedAreaPercent: flood.floodedAreaPercent,
-          floodplainFillRatio: flood.floodplainFillRatio,
-          floodplainHalfWidthMeters: flood.floodplainHalfWidthMeters,
-          overflowLevelMeters: flood.overflowLevelMeters,
-          overflowSites: flood.overflowSites,
-          protectedBankSites: flood.protectedBankSites,
-          structureInfluences: flood.structureInfluences,
-          mitigationCalm: Math.min(
-            1,
-            flood.mitigation.overflowPrevention * 0.65 +
-              flood.mitigation.waterLevelReduction * 0.5 +
-              flood.mitigation.channelCapacityIncrease * 0.2,
-          ),
-        }}
-        getLatestFloodState={flood.getLatestState}
-      />
-
-      {!hideConstructionUi ? (
-        <FloodHud
-          phase={flood.phase}
-          phaseRemainingSeconds={flood.phaseRemainingSeconds}
-          disasterElapsedSeconds={flood.disasterElapsedSeconds}
-          rainfallIntensity={flood.rainfallIntensity}
-          riverLevelMeters={flood.riverLevelMeters}
-          overflowMeters={flood.overflowMeters}
-          overflowLevelMeters={flood.overflowLevelMeters}
-          floodDepthMeters={flood.floodDepthMeters}
-          floodedAreaPercent={flood.floodedAreaPercent}
-          floodplainFillRatio={flood.floodplainFillRatio}
-          floodplainHalfWidthMeters={flood.floodplainHalfWidthMeters}
-          damagePercent={flood.damagePercent}
-          score={flood.score}
-          isClear={flood.isClear}
-          overflowSites={flood.overflowSites}
-          mitigation={flood.mitigation}
-          protectedBankSites={flood.protectedBankSites}
-          structureInfluences={flood.structureInfluences}
-          onStartGame={flood.startGame}
-          onStartRainNow={flood.startRainNow}
-        />
+    <>
+      {lobbyScreen === "title" ? (
+        <main className="game-shell game-shell--lobby">
+          <TitleScreen onEnter={enterMenu} />
+        </main>
       ) : null}
 
-      {!hideConstructionUi ? (
-        <header className="game-header game-header--budget-only">
-          <div className="game-header__row">
-            <div className="budget-panel" aria-label="残り予算">
-              <div className="budget-panel__meta">
-                <span>BUDGET</span>
-                <strong key={Math.round(construction.budget)}>
-                  {formatBudget(construction.budget)}
-                </strong>
-                {construction.incomeLabel !== "" ? (
-                  <em
-                    className={`budget-panel__rate${construction.netIncomePerSecond < 0 ? " is-drain" : ""}`}
-                    title="収入 − 維持コスト"
-                  >
-                    {construction.incomeLabel}
-                  </em>
-                ) : null}
-              </div>
-              <div className="budget-panel__track" aria-hidden="true">
+      {lobbyScreen === "menu" ? (
+        <main className="game-shell game-shell--lobby">
+          <GameMenuScreen
+            onBackToTitle={() => setLobbyScreen("title")}
+            onStartGame={handleMenuStart}
+            openHowtoOnMount={menuHowtoOnMount}
+          />
+        </main>
+      ) : null}
+
+      {gameLayerMounted ? (
+        <main
+          className={`game-shell${drag !== null ? " is-dock-dragging" : ""}${isReviewing ? " is-reviewing" : ""}${inGame ? "" : " is-dormant"}`}
+          aria-hidden={!inGame}
+        >
+          <div className="game-shell__veil game-shell__veil--top" aria-hidden="true" />
+          <div className="game-shell__veil game-shell__veil--bottom" aria-hidden="true" />
+
+          <RainOverlay
+            active={
+              inGame &&
+              (flood.phase === "disaster" ||
+                flood.phase === "result" ||
+                flood.phase === "review")
+            }
+            getLatestState={flood.getLatestState}
+          />
+
+          <Suspense fallback={<MapBootFallback />}>
+            <CesiumGameMap
+              ref={mapRef}
+              mapActive={inGame}
+              placements={construction.visiblePlacements}
+              structures={construction.structures}
+              selectedPlacementId={construction.selectedPlacementId}
+              onDropPlace={handleDropPlace}
+              onRotatePlacement={construction.rotatePlacement}
+              onMovePendingPlacement={construction.movePendingPlacement}
+              onSelectPlacement={construction.setSelectedPlacementId}
+              onInvalidPosition={construction.setMessage}
+              onConfirmPendingPlacement={handleConfirmPlacement}
+              onCancelPendingPlacement={construction.cancelPendingPlacement}
+              onCameraFocusChange={handleCameraFocusChange}
+              freeCameraLook={isReviewing}
+              floodState={{
+                active:
+                  flood.phase === "disaster" ||
+                  flood.phase === "result" ||
+                  flood.phase === "review",
+                rainfallIntensity: flood.rainfallIntensity,
+                riverLevelMeters: flood.riverLevelMeters,
+                overflowMeters: flood.overflowMeters,
+                floodDepthMeters: flood.floodDepthMeters,
+                floodedAreaPercent: flood.floodedAreaPercent,
+                floodplainFillRatio: flood.floodplainFillRatio,
+                floodplainHalfWidthMeters: flood.floodplainHalfWidthMeters,
+                overflowLevelMeters: flood.overflowLevelMeters,
+                overflowSites: flood.overflowSites,
+                protectedBankSites: flood.protectedBankSites,
+                structureInfluences: flood.structureInfluences,
+                mitigationCalm: Math.min(
+                  1,
+                  flood.mitigation.overflowPrevention * 0.65 +
+                    flood.mitigation.waterLevelReduction * 0.5 +
+                    flood.mitigation.channelCapacityIncrease * 0.2,
+                ),
+              }}
+              getLatestFloodState={flood.getLatestState}
+            />
+          </Suspense>
+
+          {inGame && !hideConstructionUi ? (
+            <FloodHud
+              phase={flood.phase}
+              phaseRemainingSeconds={flood.phaseRemainingSeconds}
+              disasterElapsedSeconds={flood.disasterElapsedSeconds}
+              rainfallIntensity={flood.rainfallIntensity}
+              riverLevelMeters={flood.riverLevelMeters}
+              overflowMeters={flood.overflowMeters}
+              overflowLevelMeters={flood.overflowLevelMeters}
+              floodDepthMeters={flood.floodDepthMeters}
+              floodedAreaPercent={flood.floodedAreaPercent}
+              floodplainFillRatio={flood.floodplainFillRatio}
+              floodplainHalfWidthMeters={flood.floodplainHalfWidthMeters}
+              damagePercent={flood.damagePercent}
+              score={flood.score}
+              isClear={flood.isClear}
+              overflowSites={flood.overflowSites}
+              mitigation={flood.mitigation}
+              protectedBankSites={flood.protectedBankSites}
+              structureInfluences={flood.structureInfluences}
+              onStartGame={flood.startGame}
+              onStartRainNow={flood.startRainNow}
+            />
+          ) : null}
+
+          {inGame && !hideConstructionUi ? (
+            <header className="game-header game-header--budget-only">
+              <div className="game-header__row">
+                <div className="budget-panel" aria-label="残り予算">
+                  <div className="budget-panel__meta">
+                    <span>BUDGET</span>
+                    <strong key={Math.round(construction.budget)}>
+                      {formatBudget(construction.budget)}
+                    </strong>
+                    {construction.incomeLabel !== "" ? (
+                      <em
+                        className={`budget-panel__rate${construction.netIncomePerSecond < 0 ? " is-drain" : ""}`}
+                        title="収入 − 維持コスト"
+                      >
+                        {construction.incomeLabel}
+                      </em>
+                    ) : null}
+                  </div>
+                  <div className="budget-panel__track" aria-hidden="true">
+                    <div
+                      className="budget-panel__fill"
+                      style={{ width: `${construction.budgetRatio * 100}%` }}
+                    />
+                  </div>
+                </div>
                 <div
-                  className="budget-panel__fill"
-                  style={{ width: `${construction.budgetRatio * 100}%` }}
-                />
+                  className={`socket-status socket-status--${socket.status}`}
+                  role="status"
+                  title={socket.playerId ?? undefined}
+                >
+                  <span className="socket-status__dot" aria-hidden="true" />
+                  <span>{statusLabel[socket.status] ?? socket.status}</span>
+                </div>
               </div>
-            </div>
+            </header>
+          ) : null}
+
+          {inGame && !hideConstructionUi ? (
+            <GameToast message={construction.message} tone={construction.messageTone} />
+          ) : null}
+
+          {inGame && !hideConstructionUi ? (
+            <ConstructionMenu
+              budget={construction.budget}
+              selectedStructureId={construction.selectedStructureId}
+              structures={construction.structures}
+              onSelect={construction.selectStructure}
+              onDragStart={beginDockDrag}
+            />
+          ) : null}
+
+          {inGame && drag !== null && !drag.overMap ? (
             <div
-              className={`socket-status socket-status--${socket.status}`}
-              role="status"
-              title={socket.playerId ?? undefined}
+              className="dock-drag-ghost dock-drag-ghost--lift"
+              style={{ left: drag.x, top: drag.y }}
+              aria-hidden="true"
             >
-              <span className="socket-status__dot" aria-hidden="true" />
-              <span>{statusLabel[socket.status] ?? socket.status}</span>
+              <span className="dock-drag-ghost__hint">川へドロップして配備</span>
+              <span>{drag.displayName}</span>
             </div>
-          </div>
-        </header>
-      ) : null}
+          ) : null}
+          {inGame && drag !== null && drag.overMap ? (
+            <div
+              className={`dock-drag-ghost dock-drag-ghost--map${drag.placeable ? " is-placeable" : " is-blocked"}`}
+              style={{ left: drag.x, top: drag.y + 56 }}
+              aria-hidden="true"
+            >
+              <span>{drag.placeable ? `${drag.displayName} OK` : "青い帯の上へ"}</span>
+            </div>
+          ) : null}
 
-      {!hideConstructionUi ? (
-        <GameToast message={construction.message} tone={construction.messageTone} />
-      ) : null}
+          {inGame ? (
+            <FloodResultPanel
+              phase={flood.phase}
+              isClear={flood.isClear}
+              damagePercent={flood.damagePercent}
+              floodedAreaPercent={flood.floodedAreaPercent}
+              floodDepthMeters={flood.floodDepthMeters}
+              score={flood.score}
+              usedBudget={construction.spentBudget}
+              placementCount={construction.placements.length}
+              onEnterReview={flood.enterReviewMode}
+              onStartNewGame={handleReturnToMenu}
+            />
+          ) : null}
 
-      {!hideConstructionUi ? (
-        <ConstructionMenu
-          budget={construction.budget}
-          selectedStructureId={construction.selectedStructureId}
-          structures={construction.structures}
-          onSelect={construction.selectStructure}
-          onDragStart={beginDockDrag}
-        />
+          {inGame && isReviewing ? (
+            <ReviewModeBar
+              isClear={flood.isClear}
+              score={flood.score}
+              onShowResult={flood.reopenResultPanel}
+              onStartNewGame={handleReturnToMenu}
+            />
+          ) : null}
+        </main>
       ) : null}
-
-      {drag !== null && !drag.overMap ? (
-        <div
-          className="dock-drag-ghost dock-drag-ghost--lift"
-          style={{ left: drag.x, top: drag.y }}
-          aria-hidden="true"
-        >
-          <span className="dock-drag-ghost__hint">川へドロップして配備</span>
-          <span>{drag.displayName}</span>
-        </div>
-      ) : null}
-      {drag !== null && drag.overMap ? (
-        <div
-          className={`dock-drag-ghost dock-drag-ghost--map${drag.placeable ? " is-placeable" : " is-blocked"}`}
-          style={{ left: drag.x, top: drag.y + 56 }}
-          aria-hidden="true"
-        >
-          <span>{drag.placeable ? `${drag.displayName} OK` : "青い帯の上へ"}</span>
-        </div>
-      ) : null}
-
-      <FloodResultPanel
-        phase={flood.phase}
-        isClear={flood.isClear}
-        damagePercent={flood.damagePercent}
-        floodedAreaPercent={flood.floodedAreaPercent}
-        floodDepthMeters={flood.floodDepthMeters}
-        score={flood.score}
-        usedBudget={construction.spentBudget}
-        placementCount={construction.placements.length}
-        onEnterReview={flood.enterReviewMode}
-        onStartNewGame={handleReturnToMenu}
-      />
-
-      {isReviewing ? (
-        <ReviewModeBar
-          isClear={flood.isClear}
-          score={flood.score}
-          onShowResult={flood.reopenResultPanel}
-          onStartNewGame={handleReturnToMenu}
-        />
-      ) : null}
-    </main>
+    </>
   );
 }

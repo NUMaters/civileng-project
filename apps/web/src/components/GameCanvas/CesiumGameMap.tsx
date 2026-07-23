@@ -205,6 +205,11 @@ type CesiumGameMapProps = {
   };
   /** 結果プレビュー中など、川周辺へのカメラ拘束を外して自由に見回せる。 */
   freeCameraLook?: boolean;
+  /**
+   * ロビーへ戻ったあと地図を破棄せず裏に残すとき false。
+   * 再表示時に resize / requestRender して真っ黒キャンバスを防ぐ。
+   */
+  mapActive?: boolean;
 };
 
 export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>(
@@ -224,6 +229,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       floodState,
       getLatestFloodState,
       freeCameraLook = false,
+      mapActive = true,
     },
     ref,
   ) {
@@ -235,6 +241,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const floodStateRef = useRef(floodState);
     const getLatestFloodStateRef = useRef(getLatestFloodState);
     const freeCameraLookRef = useRef(freeCameraLook);
+    const mapActiveRef = useRef(mapActive);
     const labelElementRefs = useRef(new Map<string, HTMLDivElement>());
     const orientationHudRef = useRef<HTMLDivElement | null>(null);
     const confirmHudRef = useRef<HTMLDivElement | null>(null);
@@ -251,7 +258,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const dragGhostLastKeyRef = useRef("");
     /** ドラッグ中カーソル位置の影響圏（仮配置確定前）。 */
     const dragGhostInfluenceRef = useRef<StructureInfluence | null>(null);
-    const floodStateRef = useRef(floodState);
     floodStateRef.current = floodState;
     const [mapError, setMapError] = useState<string | null>(null);
     const [isMapReady, setIsMapReady] = useState(false);
@@ -304,10 +310,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       floodStateRef.current = floodState;
       getLatestFloodStateRef.current = getLatestFloodState;
       freeCameraLookRef.current = freeCameraLook;
+      mapActiveRef.current = mapActive;
     }, [
       floodState,
       freeCameraLook,
       getLatestFloodState,
+      mapActive,
       onCameraFocusChange,
       onDropPlace,
       onInvalidPosition,
@@ -318,6 +326,27 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       selectedPlacementId,
       structures,
     ]);
+
+    useEffect(() => {
+      if (!mapActive) {
+        return;
+      }
+      const viewer = viewerRef.current;
+      if (viewer === null || viewer.isDestroyed()) {
+        return;
+      }
+      // ロビーから戻った直後はキャンバス寸法が 0 のまま残ることがある。
+      viewer.resize();
+      viewer.scene.requestRender();
+      const retry = window.setTimeout(() => {
+        if (viewer.isDestroyed()) {
+          return;
+        }
+        viewer.resize();
+        viewer.scene.requestRender();
+      }, 120);
+      return () => window.clearTimeout(retry);
+    }, [mapActive]);
 
     useImperativeHandle(ref, () => ({
       tryDropStructure: (structureId: string, clientX: number, clientY: number) => {
@@ -467,6 +496,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       let viewer: Viewer | null = null;
       let removeCameraMoveEnd: (() => void) | undefined;
       let handleVisibilityChange: (() => void) | undefined;
+      let removeContextLost: (() => void) | undefined;
       let waterRenderFrame = 0;
 
       try {
@@ -596,6 +626,20 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         );
         // lookAt のロックを解除し、以降は自由にパン／ズームできるようにする。
         mapViewer.camera.lookAtTransform(Matrix4.IDENTITY);
+        // タイル完了を待たず UI を出し、真っ黒のまま固まるのを防ぐ。
+        mapViewer.resize();
+        mapViewer.scene.requestRender();
+        setIsMapReady(true);
+
+        const canvas = mapViewer.scene.canvas;
+        const onContextLost = (event: Event) => {
+          event.preventDefault();
+          setMapError("描画コンテキストが失われました。ページを再読み込みしてください。");
+        };
+        canvas.addEventListener("webglcontextlost", onContextLost, false);
+        removeContextLost = () => {
+          canvas.removeEventListener("webglcontextlost", onContextLost, false);
+        };
 
         // 水面の Water マテリアル／流向ストリークは毎フレーム更新が必要なので描画を継続する。
         // 最新水位もここで渡し、React の間引き更新だけでは増水が階段状に見えないようにする。
@@ -607,7 +651,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           if (disposed || mapViewer.isDestroyed()) {
             return;
           }
-          if (!document.hidden) {
+          if (!document.hidden && mapActiveRef.current) {
             const latest = getLatestFloodStateRef.current?.();
             if (latest !== undefined) {
               const active =
@@ -737,7 +781,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         removeCameraMoveEnd = mapViewer.camera.moveEnd.addEventListener(settleCamera);
 
         // 仮配置の選択・地図ドラッグ移設。向きは手前のスライダーでライブ調整する。
-        const canvas = mapViewer.scene.canvas;
         eventHandler = new ScreenSpaceEventHandler(canvas);
         type MoveSession = {
           placementId: string;
@@ -901,6 +944,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (handleVisibilityChange !== undefined) {
           document.removeEventListener("visibilitychange", handleVisibilityChange);
         }
+        removeContextLost?.();
         riverWaterRef.current?.destroy();
         riverWaterRef.current = null;
         placeableZoneRef.current?.destroy();

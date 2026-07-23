@@ -75,8 +75,13 @@ export function RotationControls({
           aria-valuetext={`${draftDegrees}度`}
           aria-label="向きスライダー"
           onChange={(event) => {
-            // React の onChange は range ではドラッグ中も発火する → ライブ反映。
-            live(Number(event.target.value));
+            const value = Number(event.target.value);
+            // ポインタドラッグ中はライブ反映のみ。キーボード操作などは即確定する。
+            if (draggingRef.current) {
+              live(value);
+              return;
+            }
+            commit(value);
           }}
         />
       </label>

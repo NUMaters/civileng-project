@@ -347,7 +347,6 @@ function sampleFlows(grid: SiteGrid): InundationFlowSample[] {
       if (d < MIN_WET_DEPTH) {
         continue;
       }
-      const surface = grid.ground[index]! + d;
       const e = grid.ground[index + 1]! + grid.depth[index + 1]!;
       const w = grid.ground[index - 1]! + grid.depth[index - 1]!;
       const n = grid.ground[index - COLS]! + grid.depth[index - COLS]!;
