@@ -56,24 +56,20 @@ import {
 } from "./overflowVisualization";
 import { createPlaceableZone } from "./placeableZone";
 import { syncProtectionVisualization } from "./protectionVisualization";
+import { nearestPointOnPolyline, resolvePlaceablePosition } from "./riverPlacement";
+import { createRiverWaterSurface, type RiverWaterSurfaceController } from "./riverWaterSurface";
+import { createStructureMaterial } from "./structureMaterials";
+import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
 import {
-  nearestPointOnPolyline,
-  resolvePlaceablePosition,
-} from "./riverPlacement";
+  calculateStructureInfluences,
+  type OverflowSite,
+  type ProtectedBankSite,
+  type StructureInfluence,
+} from "../../features/disaster/services/floodSimulation";
+import { resolveRainDrama } from "../../features/disaster/services/rainDrama";
 
 const DRAG_GHOST_ENTITY_PREFIX = "drag-ghost";
 const DRAG_GHOST_PLACEMENT_ID = "cursor";
-import {
-  createRiverWaterSurface,
-  type RiverWaterSurfaceController,
-} from "./riverWaterSurface";
-import { createStructureMaterial } from "./structureMaterials";
-import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
-import type {
-  OverflowSite,
-  ProtectedBankSite,
-  StructureInfluence,
-} from "../../features/disaster/services/floodSimulation";
 
 // Avoid Cesium Ion default basemap requests (we use GSI / PLATEAU tiles).
 Ion.defaultAccessToken = "";
@@ -151,11 +147,7 @@ export type DragGhostStatus = {
 export type CesiumGameMapHandle = {
   tryDropStructure: (structureId: string, clientX: number, clientY: number) => boolean;
   /** ドラッグ中に設置予定モデルをカーソル下の地表へ追従表示する。 */
-  updateDragGhost: (
-    structureId: string,
-    clientX: number,
-    clientY: number,
-  ) => DragGhostStatus;
+  updateDragGhost: (structureId: string, clientX: number, clientY: number) => DragGhostStatus;
   /** ドラッグ終了時にゴーストモデルを消す。 */
   clearDragGhost: () => void;
 };
@@ -202,6 +194,7 @@ type CesiumGameMapProps = {
     overflowMeters: number;
     floodDepthMeters: number;
     floodedAreaPercent: number;
+    damagePercent: number;
     overflowLevelMeters: number;
     overflowSites: OverflowSite[];
     mitigation: {
@@ -256,6 +249,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const selectedPlacementIdRef = useRef(selectedPlacementId);
     const dragGhostRafRef = useRef(0);
     const dragGhostLastKeyRef = useRef("");
+    /** ドラッグ中カーソル位置の影響圏（仮配置確定前）。 */
+    const dragGhostInfluenceRef = useRef<StructureInfluence | null>(null);
+    const floodStateRef = useRef(floodState);
+    floodStateRef.current = floodState;
     const [mapError, setMapError] = useState<string | null>(null);
     const [isMapReady, setIsMapReady] = useState(false);
     const [visibilityEpoch, setVisibilityEpoch] = useState(0);
@@ -276,7 +273,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               preview: false,
               longitude: placement.position.longitude,
               latitude: placement.position.latitude,
-              height: placement.position.height,
+              height:
+                placement.position.height +
+                getStructureFootprintMeters(placement.structureId).height +
+                12,
             };
           }),
       [placements, selectedPlacementId, structures],
@@ -330,24 +330,22 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const rect = canvas.getBoundingClientRect();
         const screen = new Cartesian2(clientX - rect.left, clientY - rect.top);
         if (screen.x < 0 || screen.y < 0 || screen.x > rect.width || screen.y > rect.height) {
-          onInvalidPositionRef.current("地図の上にドロップしてください");
+          onInvalidPositionRef.current("マップの上にドロップしてくれ");
           return false;
         }
 
         const picked = pickPlacementPosition(viewer, screen);
         if (picked === undefined) {
-          onInvalidPositionRef.current("地表を取得できませんでした");
+          onInvalidPositionRef.current("着地位置が取れなかった。もう一度ドロップしてくれ");
           return false;
         }
         if (!isInsidePlayArea(picked)) {
-          onInvalidPositionRef.current("プレイ範囲外です。阿武隈川周辺に戻してください");
+          onInvalidPositionRef.current("作戦エリア外だ。阿武隈川へ戻ろう");
           return false;
         }
         const placeable = resolvePlaceablePosition(picked);
         if (placeable === undefined) {
-          onInvalidPositionRef.current(
-            "阿武隈川の河道または河岸（薄い青い帯）に置いてください。市街地には置けません",
-          );
+          onInvalidPositionRef.current("川の青い帯の上だけ建設できる。まちなかには置けない");
           return false;
         }
 
@@ -366,6 +364,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (screen.x < 0 || screen.y < 0 || screen.x > rect.width || screen.y > rect.height) {
           clearDragGhostEntities(viewer);
           dragGhostLastKeyRef.current = "";
+          dragGhostInfluenceRef.current = null;
+          refreshProtectionWithDragGhost(viewer, floodStateRef.current, null);
           return { overMap: false, placeable: false };
         }
 
@@ -373,6 +373,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (picked === undefined) {
           clearDragGhostEntities(viewer);
           dragGhostLastKeyRef.current = "";
+          dragGhostInfluenceRef.current = null;
+          refreshProtectionWithDragGhost(viewer, floodStateRef.current, null);
           return { overMap: true, placeable: false };
         }
 
@@ -421,6 +423,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               invalid: !placeable,
             });
           }
+          // 設置前から影響圏を見せ、置き場判断を助ける。
+          const influence = calculateStructureInfluences([ghost])[0] ?? null;
+          dragGhostInfluenceRef.current = influence;
+          refreshProtectionWithDragGhost(activeViewer, floodStateRef.current, influence);
           activeViewer.scene.requestRender();
         });
 
@@ -432,7 +438,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           dragGhostRafRef.current = 0;
         }
         dragGhostLastKeyRef.current = "";
+        dragGhostInfluenceRef.current = null;
         clearDragGhostEntities(viewerRef.current);
+        refreshProtectionWithDragGhost(viewerRef.current, floodStateRef.current, null);
         viewerRef.current?.scene.requestRender();
       },
     }));
@@ -592,6 +600,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         // 水面の Water マテリアル／流向ストリークは毎フレーム更新が必要なので描画を継続する。
         // 最新水位もここで渡し、React の間引き更新だけでは増水が階段状に見えないようにする。
         let lastVisualKey = "";
+        let lastStormKey = "";
+        const clearSky = Color.fromCssColorString("#9ec6e0");
+        const stormSky = Color.fromCssColorString("#4a6170");
         const keepWaterAnimating = () => {
           if (disposed || mapViewer.isDestroyed()) {
             return;
@@ -616,6 +627,31 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 activeFlood: active,
                 mitigationCalm,
               });
+
+              const drama = resolveRainDrama({
+                phase: latest.phase,
+                rainfallIntensity: latest.rainfallIntensity,
+                overflowMeters: latest.overflowMeters,
+                floodDepthMeters: latest.floodDepthMeters,
+                damagePercent: latest.damagePercent,
+              });
+              const stormKey = drama.toFixed(2);
+              if (stormKey !== lastStormKey) {
+                lastStormKey = stormKey;
+                Color.lerp(clearSky, stormSky, drama, mapViewer.scene.backgroundColor);
+                if (mapViewer.scene.skyAtmosphere !== undefined) {
+                  mapViewer.scene.skyAtmosphere.hueShift = -0.04 * drama;
+                  mapViewer.scene.skyAtmosphere.saturationShift = -0.3 * drama;
+                  mapViewer.scene.skyAtmosphere.brightnessShift = -0.42 * drama;
+                }
+                mapViewer.scene.fog.enabled = drama > 0.12;
+                mapViewer.scene.fog.density = 0.00015 + drama * 0.00135;
+                mapViewer.scene.fog.minimumBrightness = Math.max(0.08, 0.35 - drama * 0.22);
+                if (mapViewer.scene.light instanceof DirectionalLight) {
+                  mapViewer.scene.light.intensity = 2.2 - drama * 1.15;
+                }
+              }
+
               // 氾濫原・越水は目標の変化時だけ更新（描画側で補間する）。
               const visualKey = [
                 active ? 1 : 0,
@@ -623,7 +659,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 latest.overflowMeters.toFixed(3),
                 latest.floodDepthMeters.toFixed(3),
                 latest.floodedAreaPercent.toFixed(2),
-                latest.overflowSites.map((site) => `${site.id}:${site.intensity.toFixed(3)}`).join(","),
+                latest.overflowSites
+                  .map((site) => `${site.id}:${site.intensity.toFixed(3)}`)
+                  .join(","),
               ].join("|");
               if (visualKey !== lastVisualKey) {
                 lastVisualKey = visualKey;
@@ -818,7 +856,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                   position: session.startPosition,
                   headingDegrees: session.headingDegrees,
                 });
-                onInvalidPositionRef.current("河道・河岸の配置可能域内へ移してください");
+                onInvalidPositionRef.current("青い帯の内側へずらしてくれ");
               }
             }
             return;
@@ -927,14 +965,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return;
       }
 
-      const sites =
-        floodState?.active === true ? (floodState.overflowSites ?? []) : [];
-      syncProtectionVisualization(
-        viewer,
-        floodState?.structureInfluences ?? [],
-        floodState?.protectedBankSites ?? [],
-        { showBankSites: floodState?.active === true },
-      );
+      const sites = floodState?.active === true ? (floodState.overflowSites ?? []) : [];
+      refreshProtectionWithDragGhost(viewer, floodState, dragGhostInfluenceRef.current);
       syncNearOverflowFloodplain(viewer, {
         active: floodState?.active === true,
         riverLevelMeters: floodState?.riverLevelMeters ?? 2.2,
@@ -995,16 +1027,18 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (viewer.isDestroyed()) {
           return;
         }
+        const facilityLabelAnchors: ScreenLabelAnchor[] = [];
         for (const label of mapLabels) {
           const element = labelElementRefs.current.get(`${label.kind}-${label.id}`);
           if (element === undefined) {
             continue;
           }
           const screen = viewer.scene.cartesianToCanvasCoordinates(
-            Cartesian3.fromDegrees(label.longitude, label.latitude, label.height + 8),
+            Cartesian3.fromDegrees(label.longitude, label.latitude, label.height),
           );
-          applyScreenLabelPosition(element, screen, 0, -28);
+          facilityLabelAnchors.push({ element, screen, selected: label.selected });
         }
+        applyDeclutteredScreenLabelPositions(facilityLabelAnchors);
 
         const target = orientationTarget;
         if (target !== null) {
@@ -1060,9 +1094,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const target = event.target;
         if (
           target instanceof HTMLElement &&
-          (target.tagName === "INPUT" ||
-            target.tagName === "TEXTAREA" ||
-            target.isContentEditable)
+          (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)
         ) {
           return;
         }
@@ -1085,17 +1117,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         const placeable = resolvePlaceablePosition(candidate);
         if (placeable === undefined) {
-          onInvalidPositionRef.current("河道・河岸の配置可能域内でのみ微調整できます");
+          onInvalidPositionRef.current("微調整も青い帯の中だけだ");
           return;
         }
         const viewer = viewerRef.current;
         if (viewer !== null && !viewer.isDestroyed()) {
-          applyPlacementHeading(
-            viewer,
-            { ...orientationTarget, position: placeable },
-            true,
-            true,
-          );
+          applyPlacementHeading(viewer, { ...orientationTarget, position: placeable }, true, true);
           viewer.scene.requestRender();
         }
         onMovePendingPlacementRef.current(orientationTarget.id, placeable);
@@ -1166,17 +1193,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 floating
                 headingDegrees={orientationTarget.headingDegrees}
                 onLiveChange={(headingDegrees) => {
-                  const viewer = viewerRef.current;
-                  if (viewer === null || viewer.isDestroyed()) {
-                    return;
-                  }
-                  applyPlacementHeading(
-                    viewer,
-                    { ...orientationTarget, headingDegrees },
-                    true,
-                    true,
-                  );
-                  viewer.scene.requestRender();
+                  // 向き変更は即 state へ反映し、影響圏も同じ向きで追従させる。
+                  onRotatePlacement(orientationTarget.id, headingDegrees);
                 }}
                 onChange={(headingDegrees) =>
                   onRotatePlacement(orientationTarget.id, headingDegrees)
@@ -1199,6 +1217,79 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     );
   },
 );
+
+type ScreenLabelAnchor = {
+  element: HTMLDivElement;
+  screen: Cartesian2 | undefined;
+  selected: boolean;
+};
+
+function applyDeclutteredScreenLabelPositions(anchors: ScreenLabelAnchor[]): void {
+  const visible = anchors
+    .filter(({ screen }) => screen !== undefined)
+    .map(({ element, screen, selected }) => ({
+      element,
+      selected,
+      x: screen!.x,
+      y: screen!.y,
+      width: Math.max(element.offsetWidth, 58),
+      height: Math.max(element.offsetHeight, 24),
+    }))
+    .sort((left, right) => left.y - right.y);
+  const hidden = anchors.filter(({ screen }) => screen === undefined);
+  for (const { element } of hidden) {
+    element.style.visibility = "hidden";
+  }
+
+  const parent = visible[0]?.element.offsetParent as HTMLElement | null;
+  const viewWidth = parent?.clientWidth ?? window.innerWidth;
+  const viewHeight = parent?.clientHeight ?? window.innerHeight;
+  const placed: Array<{ x: number; y: number; width: number; height: number }> = [];
+  const pad = 8;
+
+  for (const label of visible) {
+    const halfWidth = label.width / 2;
+    const x = clampNumber(label.x, pad + halfWidth, viewWidth - pad - halfWidth);
+    const baseY = clampNumber(label.y - 26, pad + label.height, viewHeight - pad);
+    let y = baseY;
+    let attempt = 0;
+
+    while (
+      attempt < 8 &&
+      placed.some((other) => boxesOverlap(x, y, label.width, label.height, other))
+    ) {
+      attempt += 1;
+      const direction = label.selected || attempt % 2 === 1 ? -1 : 1;
+      const row = Math.ceil(attempt / 2);
+      y = clampNumber(
+        baseY + direction * row * (label.height + 5),
+        pad + label.height,
+        viewHeight - pad,
+      );
+    }
+
+    placed.push({ x, y, width: label.width, height: label.height });
+    applyScreenLabelPosition(label.element, new Cartesian2(x, y), 0, 0);
+  }
+}
+
+function boxesOverlap(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  other: { x: number; y: number; width: number; height: number },
+): boolean {
+  const gap = 5;
+  return (
+    Math.abs(x - other.x) * 2 < width + other.width + gap &&
+    Math.abs(y - other.y) * 2 < height + other.height + gap
+  );
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
 
 function applyScreenLabelPosition(
   element: HTMLDivElement,
@@ -1692,6 +1783,30 @@ function applyPlacementHeading(
   }
 }
 
+function refreshProtectionWithDragGhost(
+  viewer: Viewer | null,
+  floodState:
+    | {
+        active: boolean;
+        structureInfluences: StructureInfluence[];
+        protectedBankSites: ProtectedBankSite[];
+      }
+    | null
+    | undefined,
+  dragInfluence: StructureInfluence | null = null,
+): void {
+  if (viewer === null || viewer.isDestroyed()) {
+    return;
+  }
+  const base = floodState?.structureInfluences ?? [];
+  const influences = dragInfluence
+    ? [...base.filter((item) => item.placementId !== dragInfluence.placementId), dragInfluence]
+    : base;
+  syncProtectionVisualization(viewer, influences, floodState?.protectedBankSites ?? [], {
+    showBankSites: floodState?.active === true,
+  });
+}
+
 function clearDragGhostEntities(viewer: Viewer | null): void {
   if (viewer === null || viewer.isDestroyed()) {
     return;
@@ -1965,7 +2080,7 @@ function addCivilEngineeringModel(
     const showOutline = selected || preview || invalid;
     const entityId = isPrimaryPart
       ? `${prefix}-${placement.id}`
-      : `${prefix}-${placement.id}-${part.id}`;
+      : `${prefix}-${placement.id}-part-${part.id}`;
 
     try {
       if (isCylinder) {
@@ -2012,6 +2127,29 @@ function addCivilEngineeringModel(
       console.warn("Skipped structure part", placement.structureId, part.id, error);
     }
   }
+
+  const footprint = getStructureFootprintMeters(placement.structureId);
+  const beaconColor = Color.fromCssColorString(
+    invalid ? "#ef6b4a" : selected ? "#f0b429" : preview ? "#5ec8ff" : "#48d597",
+  ).withAlpha(preview || invalid ? 0.72 : 0.88);
+  viewer.entities.add({
+    id: `${prefix}-${placement.id}-beacon`,
+    position: Cartesian3.fromDegrees(
+      placement.position.longitude,
+      placement.position.latitude,
+      groundHeight + footprint.height + 6,
+    ),
+    cylinder: new CylinderGraphics({
+      length: 12,
+      topRadius: 0.75,
+      bottomRadius: 0.75,
+      material: beaconColor,
+      outline: true,
+      outlineColor: Color.WHITE.withAlpha(0.58),
+      outlineWidth: 1,
+      shadows: ShadowMode.DISABLED,
+    }),
+  });
 }
 
 /** 施設パーツの東西南北オフセット（m）を経度緯度へ変換する。 */
@@ -2031,4 +2169,3 @@ function offsetLonLatMeters(
     latitude: latitude + rotatedNorth / metersPerDegreeLat,
   };
 }
-

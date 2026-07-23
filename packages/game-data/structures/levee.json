@@ -1,7 +1,7 @@
 {
   "id": "levee",
   "displayName": "堤防",
-  "description": "越水点の河岸に並べて、河川水の市街地への溢れを防ぐ。内水や湾曲侵食には向かない。",
+  "description": "低岸の溢れを止める前線。",
   "constructionCost": 3000,
   "constructionTimeSeconds": 18,
   "maintenanceCostPerSecond": 3,
@@ -22,12 +22,10 @@
   "role": {
     "primaryHazard": "overtopping",
     "strengths": [
-      "低岸・越水点の直近で堤防線を作り、溢れを止める",
-      "流出方向に正対する向きだと局所防護が強い"
+      "低岸の溢れを止める"
     ],
     "weaknesses": [
-      "低地にたまった内水は排水できない",
-      "湾曲部の侵食崩壊には護岸より効果が薄い"
+      "内水・岸崩れは苦手"
     ]
   },
   "hazardAffinity": {

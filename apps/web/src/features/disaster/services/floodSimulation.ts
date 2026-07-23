@@ -14,6 +14,11 @@ import {
   resolveCandidateVulnerability,
   type OverflowCandidate,
 } from "./overflowBankSites";
+import {
+  influenceStrengthAt,
+  resolveInfluenceZone,
+  type InfluenceZone,
+} from "./influenceZones";
 
 export type GamePhase = "idle" | "preparation" | "disaster" | "result" | "review";
 
@@ -42,17 +47,23 @@ export type ProtectedBankSite = {
   primaryHazard: HazardKind;
 };
 
-/** 施設1基の川への影響範囲（地図表示用）。 */
+/** 施設1基の川への影響範囲（地図表示用）。向きに必ず追従する。 */
 export type StructureInfluence = {
   placementId: string;
   structureId: string;
   longitude: number;
   latitude: number;
+  /** 影響圏の主軸（施設の向き）。描画・減衰の両方で必須。 */
+  headingDegrees: number;
+  /** 最大到達の目安（互換・テスト用）。 */
   radiusMeters: number;
+  zone: InfluenceZone;
   /** 短い効果ラベル。 */
   effectLabel: string;
   /** 位置・向き・標高から見た配置有効率 0〜1。 */
   effectiveness: number;
+  /** 仮配置のプレビュー影響圏。 */
+  preview?: boolean;
 };
 
 export type FloodSimulationState = {
@@ -436,7 +447,12 @@ function evaluateLocalContribution(
     candidate.longitude,
     candidate.latitude,
   );
-  const radius = getStructureInfluenceRadiusMeters(placement.structureId);
+  const zone = resolveInfluenceZone(placement, calculateHydraulicEffectiveness(placement));
+  const shapeStrength = influenceStrengthAt(zone, candidate.longitude, candidate.latitude);
+  if (shapeStrength < 0.04 && distance > zone.extentMeters * 1.15) {
+    return 0;
+  }
+  const radius = zone.extentMeters;
   const effectWeight = localEffectWeight(definition.effects, candidate.primaryHazard);
   if (effectWeight <= 0.02 && affinity > 0) {
     return 0;
@@ -448,7 +464,8 @@ function evaluateLocalContribution(
       : protectionHeadingBonus(placement, candidate.outflowHeadingDegrees);
   const hydraulic = calculateHydraulicEffectiveness(placement);
   const magnitude =
-    Math.exp(-distance / radius) *
+    shapeStrength *
+    Math.exp(-distance / Math.max(radius * 1.8, 80)) *
     Math.abs(affinity) *
     Math.max(effectWeight, affinity < 0 ? 0.55 : 0) *
     heading *
@@ -473,19 +490,19 @@ function localEffectWeight(effects: StructureEffects, hazard: HazardKind): numbe
   }
 }
 
-/** 施設ごとの川への影響半径（可視化・説明用）。 */
+/** 施設ごとの川への影響半径の目安（最大到達）。 */
 export function getStructureInfluenceRadiusMeters(structureId: string): number {
   switch (structureId) {
     case "levee":
-      return 280;
-    case "revetment":
-      return 220;
-    case "retention-basin":
-      return 360;
-    case "drainage-pump":
       return 200;
+    case "revetment":
+      return 120;
+    case "retention-basin":
+      return 300;
+    case "drainage-pump":
+      return 240;
     case "channel-dredging":
-      return 420;
+      return 270;
     default:
       return 180;
   }
@@ -496,20 +513,24 @@ export { getStructureEffectLabel, getRiverPlacementContext };
 export function calculateStructureInfluences(
   placements: PlacedStructure[],
 ): StructureInfluence[] {
-  return placements
-    .filter((placement) => placement.preview !== true)
-    .map((placement) => {
-      const effectiveness = calculatePlacementEffectiveness(placement);
-      return {
-        placementId: placement.id,
-        structureId: placement.structureId,
-        longitude: placement.position.longitude,
-        latitude: placement.position.latitude,
-        radiusMeters: getStructureInfluenceRadiusMeters(placement.structureId) * (0.7 + 0.3 * effectiveness),
-        effectLabel: getStructureEffectLabel(placement.structureId),
-        effectiveness,
-      };
-    });
+  // 仮配置も含める（向き調整中に影響圏が追従して見えるようにする）。
+  // 治水効果の数値計算側は preview を除外する。
+  return placements.map((placement) => {
+    const effectiveness = calculatePlacementEffectiveness(placement);
+    const zone = resolveInfluenceZone(placement, effectiveness);
+    return {
+      placementId: placement.id,
+      structureId: placement.structureId,
+      longitude: placement.position.longitude,
+      latitude: placement.position.latitude,
+      headingDegrees: zone.headingDegrees,
+      radiusMeters: zone.extentMeters,
+      zone,
+      effectLabel: getStructureEffectLabel(placement.structureId),
+      effectiveness,
+      preview: placement.preview === true,
+    };
+  });
 }
 
 export function calculateMitigation(placements: PlacedStructure[]): MitigationSummary {
@@ -602,7 +623,10 @@ function nearestWeaknessBoost(placement: PlacedStructure): number {
 }
 
 function calculateRainfallIntensity(progress: number): number {
-  return clamp(0.25 + Math.sin(progress * Math.PI) * 0.75, 0, 1);
+  // 序盤はしのげる雨、中盤〜終盤にピークを寄せて盛り上がりを作る。
+  const swell = Math.pow(Math.sin(progress * Math.PI), 0.85);
+  const latePush = progress > 0.55 ? (progress - 0.55) * 0.55 : 0;
+  return clamp(0.22 + swell * 0.7 + latePush, 0, 1);
 }
 
 function distanceInMeters(

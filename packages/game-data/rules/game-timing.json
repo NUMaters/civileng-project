@@ -1,8 +1,8 @@
 {
-  "totalPlayTimeSeconds": 180,
+  "totalPlayTimeSeconds": 100,
   "phases": {
-    "preparationSeconds": 60,
-    "disasterSeconds": 90,
-    "resultSeconds": 30
+    "preparationSeconds": 20,
+    "disasterSeconds": 60,
+    "resultSeconds": 20
   }
 }

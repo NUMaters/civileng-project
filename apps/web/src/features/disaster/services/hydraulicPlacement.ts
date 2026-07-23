@@ -11,7 +11,10 @@ export type RiverPlacementContext = {
   distanceToCenterlineMeters: number;
   /** 中心線の接線方位（度、北=0・時計回り）。 */
   channelHeadingDegrees: number;
-  /** 施設向きと河道の平行度 0〜1（1=完全に川沿い）。 */
+  /**
+   * 堤体／掘削線（向き+90°）と河道の平行度 0〜1（1=完全に川沿い）。
+   * 帯状施設の 3D 長軸は向きの直角方向のため、向きそのものではなく堤体軸で評価する。
+   */
   alignmentWithChannel: number;
   /** true なら本川寄りの河道内。 */
   inChannel: boolean;
@@ -30,7 +33,9 @@ export function getRiverPlacementContext(
 ): RiverPlacementContext {
   const nearest = nearestPointOnPolyline(longitude, latitude, ABUKUMA_RIVER_CENTERLINE);
   const channelHeadingDegrees = channelHeadingAtNearest(longitude, latitude);
-  const alignmentWithChannel = headingAlignmentScore(headingDegrees, channelHeadingDegrees);
+  // 模型の長軸（堤体）は heading+90°。川沿い＝堤体が河道と平行。
+  const crestHeadingDegrees = normalizeHeading(headingDegrees + 90);
+  const alignmentWithChannel = headingAlignmentScore(crestHeadingDegrees, channelHeadingDegrees);
   const distanceToCenterlineMeters = nearest.distanceMeters;
   const inChannel = distanceToCenterlineMeters <= NORMAL_CHANNEL_HALF_WIDTH_M * 0.85;
   const onBank =
@@ -127,8 +132,8 @@ export function protectionHeadingBonus(
   if (placement.structureId !== "levee" && placement.structureId !== "revetment") {
     return 1;
   }
-  // 堤防法線が流出方向に近い（堤体が流れを横切る）ほど良い。
-  const normal = normalizeHeading(placement.headingDegrees + 90);
+  // 向き矢印＝法面側（法線）。流出方向に正対し、堤体が流れを横切るほど良い。
+  const normal = normalizeHeading(placement.headingDegrees);
   const align = headingAlignmentScore(normal, outflowHeadingDegrees);
   return 0.7 + 0.45 * align;
 }

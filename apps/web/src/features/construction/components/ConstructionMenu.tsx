@@ -20,27 +20,26 @@ export function ConstructionMenu({
   const selected = structures.find(({ id }) => id === selectedStructureId);
 
   return (
-    <section className="construction-menu" aria-label="土木施設">
+    <section className="construction-menu" aria-label="建設ドック">
       <div className="construction-menu__heading">
         <div>
           <span className="construction-menu__heading-label">建設ドック</span>
-          <strong>カードを河道・河岸（薄い青い帯）へドラッグして配置</strong>
+          <strong>施設を川の青い帯へドラッグして配備</strong>
         </div>
         {selected !== undefined ? (
           <div className="construction-menu__detail" key={selected.id}>
-            <p className="construction-menu__hint">{selected.description}</p>
             <div className="construction-menu__role">
               <span className="construction-menu__role-chip">
-                得意: {getHazardKindLabel(selected.role.primaryHazard)}
+                対 {getHazardKindLabel(selected.role.primaryHazard)}
               </span>
             </div>
             <ul className="construction-menu__bullets">
-              {selected.role.strengths.slice(0, 2).map((line) => (
+              {selected.role.strengths.slice(0, 1).map((line) => (
                 <li key={`s-${line}`} className="is-strength">
                   {line}
                 </li>
               ))}
-              {selected.role.weaknesses.slice(0, 2).map((line) => (
+              {selected.role.weaknesses.slice(0, 1).map((line) => (
                 <li key={`w-${line}`} className="is-weakness">
                   {line}
                 </li>
@@ -48,7 +47,7 @@ export function ConstructionMenu({
             </ul>
           </div>
         ) : (
-          <small>タップでは配置されません。ドックからドラッグしてください</small>
+          <small>タップでは建てられない。ドックから引きずり出せ</small>
         )}
       </div>
       <div className="construction-menu__list">

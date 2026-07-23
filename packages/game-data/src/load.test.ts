@@ -26,7 +26,9 @@ describe("loadGameData", () => {
     expect(rules.budget.incomePerSecondDisaster).toBe(110);
     expect(rules.budget.disasterStartGrant).toBe(2_000);
     expect(rules.budget.maxBudget).toBe(24_000);
-    expect(rules.timing.totalPlayTimeSeconds).toBe(180);
+    expect(rules.timing.totalPlayTimeSeconds).toBe(100);
+    expect(rules.timing.phases.preparationSeconds).toBe(20);
+    expect(rules.timing.phases.disasterSeconds).toBe(60);
     expect(rules.victory.clearThresholdPercent).toBe(5);
   });
 

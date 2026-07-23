@@ -33,7 +33,8 @@ describe("FloodHud render after placement", () => {
           onStartRainNow: () => undefined,
         }),
       );
-      expect(html).toContain("治水効果");
+      expect(html).toContain("配備");
+      expect(html).toContain("雨勢");
     });
   }
 
@@ -54,6 +55,7 @@ describe("FloodHud render after placement", () => {
         onStartRainNow: () => undefined,
       }),
     );
-    expect(html).toContain("治水効果");
+    expect(html).toContain("配備");
+    expect(html).toContain("雨勢");
   });
 });

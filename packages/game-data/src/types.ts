@@ -88,9 +88,9 @@ export type GameDataBundle = {
 
 export const HAZARD_KIND_LABELS: Record<HazardKind, string> = {
   overtopping: "越水",
-  erosion: "河岸侵食",
-  inlandPonding: "内水氾濫",
-  capacityShortage: "流下不足",
+  erosion: "侵食",
+  inlandPonding: "内水",
+  capacityShortage: "水位上昇",
 };
 
 export function getHazardKindLabel(kind: HazardKind): string {

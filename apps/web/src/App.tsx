@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import "./App.css";
 import { CesiumGameMap, type CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
+import { GameToast } from "./components/GameToast";
 import { ConstructionMenu, useConstruction } from "./features/construction";
 import { formatBudget } from "./features/construction/services/constructionService";
 import type { GeoPosition } from "./features/construction/types/construction";
-import { FloodHud, FloodResultPanel, ReviewModeBar, useFloodSimulation } from "./features/disaster";
+import { FloodHud, FloodResultPanel, RainOverlay, ReviewModeBar, useFloodSimulation } from "./features/disaster";
+import { GameMenuScreen, TitleScreen, type LobbyScreen, type PlayMode } from "./features/lobby";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
 type DockDragState = {
@@ -27,24 +29,34 @@ const MOVE_SEND_THROTTLE_MS = 400;
 const REALTIME_ENABLED = import.meta.env.VITE_REALTIME_ENABLED === "true";
 
 const statusLabel: Record<string, string> = {
-  connecting: "接続中",
-  connected: "オンライン",
-  disconnected: "オフライン",
-  error: "接続エラー",
+  connecting: "同期中",
+  connected: "連携中",
+  disconnected: "単独プレイ",
+  error: "通信エラー",
 };
 
 export function App() {
+  const [lobbyScreen, setLobbyScreen] = useState<LobbyScreen>("title");
+  const [playMode, setPlayMode] = useState<PlayMode | null>(null);
+  const [menuHowtoOnMount, setMenuHowtoOnMount] = useState(true);
   const construction = useConstruction();
-  const flood = useFloodSimulation(construction.placements);
-  const socket = useGameSocket(REALTIME_ENABLED);
+  // 仮配置（preview）も含め、設置調整中から影響圏を地図に出す。
+  // 数値の治水効果は floodSimulation 側で preview を除外する。
+  const flood = useFloodSimulation(construction.visiblePlacements);
+  const socket = useGameSocket(REALTIME_ENABLED && playMode === "multi");
   const mapRef = useRef<CesiumGameMapHandle>(null);
   const dragRef = useRef<DockDragState | null>(null);
   const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
 
+  const inGame = lobbyScreen === "game";
+
   useEffect(() => {
+    if (!inGame) {
+      return;
+    }
     construction.setEconomyPhase(flood.phase);
-  }, [flood.phase, construction.setEconomyPhase]);
+  }, [inGame, flood.phase, construction.setEconomyPhase]);
 
   const beginDockDrag = useCallback(
     (structureId: string, clientX: number, clientY: number) => {
@@ -53,7 +65,7 @@ export function App() {
         return;
       }
       if (construction.budget < structure.constructionCost) {
-        construction.setMessage("予算が足りません");
+        construction.setMessage("予算不足！ポイントを貯めよう");
         return;
       }
       const next: DockDragState = {
@@ -93,7 +105,7 @@ export function App() {
   }, [construction.confirmPendingPlacement, socket]);
 
   useEffect(() => {
-    if (construction.pendingPlacement === null) {
+    if (!inGame || construction.pendingPlacement === null) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -110,6 +122,7 @@ export function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    inGame,
     construction.cancelPendingPlacement,
     construction.pendingPlacement,
     handleConfirmPlacement,
@@ -127,17 +140,35 @@ export function App() {
     [socket],
   );
 
-  const handleStartNewGame = useCallback(() => {
+  const enterMenu = useCallback(() => {
+    setMenuHowtoOnMount(true);
+    setLobbyScreen("menu");
+  }, []);
+
+  const handleMenuStart = useCallback(
+    (mode: PlayMode) => {
+      setPlayMode(mode);
+      construction.resetSession();
+      flood.startFreshGame();
+      setLobbyScreen("game");
+    },
+    [construction.resetSession, flood.startFreshGame],
+  );
+
+  const handleReturnToMenu = useCallback(() => {
     construction.resetSession();
-    flood.startFreshGame();
-  }, [construction.resetSession, flood.startFreshGame]);
+    flood.restart();
+    setPlayMode(null);
+    setMenuHowtoOnMount(false);
+    setLobbyScreen("menu");
+  }, [construction.resetSession, flood.restart]);
 
   const isDockDragging = drag !== null;
   const isReviewing = flood.phase === "review";
-  const hideConstructionUi = flood.phase === "result" || isReviewing;
+  const hideConstructionUi = !inGame || flood.phase === "result" || isReviewing;
 
   useEffect(() => {
-    if (!isDockDragging) {
+    if (!inGame || !isDockDragging) {
       return;
     }
     const map = mapRef.current;
@@ -164,7 +195,6 @@ export function App() {
         placeable: ghost?.placeable === true,
       };
       dragRef.current = next;
-      // 地図上では 3D ゴーストが本体なので、HTML 更新は状態変化時／地図外だけ。
       if (
         current.overMap !== next.overMap ||
         current.placeable !== next.placeable ||
@@ -198,7 +228,27 @@ export function App() {
       window.removeEventListener("pointercancel", onUp);
       map?.clearDragGhost();
     };
-  }, [isDockDragging]);
+  }, [inGame, isDockDragging]);
+
+  if (lobbyScreen === "title") {
+    return (
+      <main className="game-shell game-shell--lobby">
+        <TitleScreen onEnter={enterMenu} />
+      </main>
+    );
+  }
+
+  if (lobbyScreen === "menu") {
+    return (
+      <main className="game-shell game-shell--lobby">
+        <GameMenuScreen
+          onBackToTitle={() => setLobbyScreen("title")}
+          onStartGame={handleMenuStart}
+          openHowtoOnMount={menuHowtoOnMount}
+        />
+      </main>
+    );
+  }
 
   return (
     <main
@@ -206,6 +256,15 @@ export function App() {
     >
       <div className="game-shell__veil game-shell__veil--top" aria-hidden="true" />
       <div className="game-shell__veil game-shell__veil--bottom" aria-hidden="true" />
+
+      <RainOverlay
+        active={
+          flood.phase === "disaster" ||
+          flood.phase === "result" ||
+          flood.phase === "review"
+        }
+        getLatestState={flood.getLatestState}
+      />
 
       <CesiumGameMap
         ref={mapRef}
@@ -222,7 +281,6 @@ export function App() {
         onCameraFocusChange={handleCameraFocusChange}
         freeCameraLook={isReviewing}
         floodState={{
-          // 結果・プレビュー中も最終の浸水状態を残す。
           active:
             flood.phase === "disaster" ||
             flood.phase === "result" ||
@@ -285,7 +343,7 @@ export function App() {
                 {construction.incomeLabel !== "" ? (
                   <em
                     className={`budget-panel__rate${construction.netIncomePerSecond < 0 ? " is-drain" : ""}`}
-                    title="補給 − 維持費"
+                    title="収入 − 維持コスト"
                   >
                     {construction.incomeLabel}
                   </em>
@@ -310,10 +368,8 @@ export function App() {
         </header>
       ) : null}
 
-      {construction.message !== "" && !hideConstructionUi ? (
-        <p key={construction.message} className="game-toast" role="status">
-          {construction.message}
-        </p>
+      {!hideConstructionUi ? (
+        <GameToast message={construction.message} tone={construction.messageTone} />
       ) : null}
 
       {!hideConstructionUi ? (
@@ -332,7 +388,7 @@ export function App() {
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
-          <span className="dock-drag-ghost__hint">地図へドラッグして配置</span>
+          <span className="dock-drag-ghost__hint">川へドロップして配備</span>
           <span>{drag.displayName}</span>
         </div>
       ) : null}
@@ -342,7 +398,7 @@ export function App() {
           style={{ left: drag.x, top: drag.y + 56 }}
           aria-hidden="true"
         >
-          <span>{drag.placeable ? `${drag.displayName}を配置` : "河道・河岸へ"}</span>
+          <span>{drag.placeable ? `${drag.displayName} OK` : "青い帯の上へ"}</span>
         </div>
       ) : null}
 
@@ -356,7 +412,7 @@ export function App() {
         usedBudget={construction.spentBudget}
         placementCount={construction.placements.length}
         onEnterReview={flood.enterReviewMode}
-        onStartNewGame={handleStartNewGame}
+        onStartNewGame={handleReturnToMenu}
       />
 
       {isReviewing ? (
@@ -364,7 +420,7 @@ export function App() {
           isClear={flood.isClear}
           score={flood.score}
           onShowResult={flood.reopenResultPanel}
-          onStartNewGame={handleStartNewGame}
+          onStartNewGame={handleReturnToMenu}
         />
       ) : null}
     </main>

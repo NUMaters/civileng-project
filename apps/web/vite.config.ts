@@ -145,15 +145,26 @@ export default defineConfig({
   optimizeDeps: {
     // Cesium pulls CommonJS deps (e.g. mersenne-twister). Prebundle them so
     // Vite does not request a non-existent default ESM export at runtime.
-    include: ["cesium", "mersenne-twister"],
+    include: [
+      "cesium",
+      "mersenne-twister",
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "react/jsx-dev-runtime",
+      "react/jsx-runtime",
+    ],
+    // iCloud Drive 上の巨大 node_modules クロールで起動が止まるのを防ぐ
+    noDiscovery: true,
+    entries: ["index.html", "src/main.tsx"],
   },
   build: {
     chunkSizeWarningLimit: 5000,
   },
   server: {
     port: 5173,
-    // :: で待ち受け、localhost（IPv6 ::1）と 127.0.0.1 の両方から接続できるようにする
-    host: "::",
+    // 同一 LAN / テザリングのスマホからも届くよう全インターフェースで待ち受ける
+    host: "0.0.0.0",
     strictPort: true,
     proxy: {
       // ゲームサーバー WebSocket（cmd/game GET /ws）
@@ -164,7 +175,8 @@ export default defineConfig({
       },
     },
     watch: {
-      ignored: ["**/node_modules/cesium/**", "**/dist/**"],
+      // Documents/iCloud 配下の巨大ツリー監視で起動・HMR が止まるのを防ぐ
+      ignored: ["**/node_modules/**", "**/dist/**", "**/.git/**"],
     },
   },
   test: {

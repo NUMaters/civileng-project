@@ -152,10 +152,10 @@ export async function createRiverWaterSurface(
     const calmFactor = 1 - calm * 0.55;
 
     waterMaterial.uniforms.animationSpeed =
-      (0.014 + levelRatio * 0.02 + rain * 0.018 + overflow * 0.015 + activeFlood * 0.01) *
+      (0.014 + levelRatio * 0.02 + rain * 0.028 + overflow * 0.018 + activeFlood * 0.012) *
       calmFactor;
     waterMaterial.uniforms.amplitude =
-      (2.1 + levelRatio * 2.4 + rain * 1.4 + overflow * 1.8) * calmFactor;
+      (2.1 + levelRatio * 2.4 + rain * 2.2 + overflow * 2.1) * calmFactor;
     waterMaterial.uniforms.baseWaterColor = Color.lerp(
       Color.fromCssColorString("#1f96c9"),
       Color.fromCssColorString("#0c4f7a"),

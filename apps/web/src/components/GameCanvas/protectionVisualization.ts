@@ -4,7 +4,11 @@ import {
   ColorMaterialProperty,
   ConstantPositionProperty,
   ConstantProperty,
+  CornerType,
   HeightReference,
+  Math as CesiumMath,
+  PolygonHierarchy,
+  PolylineGlowMaterialProperty,
   Viewer,
 } from "cesium";
 import { getHazardMarkerColor } from "../../features/construction/structureVisuals";
@@ -12,8 +16,14 @@ import type {
   ProtectedBankSite,
   StructureInfluence,
 } from "../../features/disaster/services/floodSimulation";
+import {
+  fanPolygonDegrees,
+  stripCenterlineDegrees,
+  type InfluenceZone,
+} from "../../features/disaster/services/influenceZones";
 
 const ZONE_PREFIX = "protect-zone-";
+const ZONE_AXIS_PREFIX = "protect-zone-axis-";
 const BANK_PREFIX = "protect-bank-";
 
 const STRUCTURE_ZONE_COLOR: Record<string, string> = {
@@ -26,7 +36,7 @@ const STRUCTURE_ZONE_COLOR: Record<string, string> = {
 
 /**
  * 施設の影響圏と、弱点地点の抑え込み／越水状態を地図に描く。
- * 弱点色は災害種別（越水／侵食／内水）で分け、対策のミスマッチが分かるようにする。
+ * strip は堤体長軸（向き+90°）、ellipse／fan は施設正面（向き）に追従する。
  */
 export function syncProtectionVisualization(
   viewer: Viewer,
@@ -34,13 +44,12 @@ export function syncProtectionVisualization(
   bankSites: readonly ProtectedBankSite[],
   options: { showBankSites: boolean },
 ): void {
-  const keepZoneIds = new Set(influences.map((item) => `${ZONE_PREFIX}${item.placementId}`));
   const keepBankIds = new Set(
     options.showBankSites ? bankSites.map((site) => `${BANK_PREFIX}${site.id}`) : [],
   );
 
   for (const entity of [...viewer.entities.values]) {
-    if (entity.id.startsWith(ZONE_PREFIX) && !keepZoneIds.has(entity.id)) {
+    if (entity.id.startsWith(ZONE_PREFIX) || entity.id.startsWith(ZONE_AXIS_PREFIX)) {
       viewer.entities.remove(entity);
     }
     if (entity.id.startsWith(BANK_PREFIX) && !keepBankIds.has(entity.id)) {
@@ -49,43 +58,18 @@ export function syncProtectionVisualization(
   }
 
   for (const influence of influences) {
-    const id = `${ZONE_PREFIX}${influence.placementId}`;
-    const colorHex = STRUCTURE_ZONE_COLOR[influence.structureId] ?? "#58d5a1";
-    const fill = Color.fromCssColorString(colorHex).withAlpha(0.14);
-    const outline = Color.fromCssColorString(colorHex).withAlpha(0.7);
-    const existing = viewer.entities.getById(id);
     if (!Number.isFinite(influence.longitude) || !Number.isFinite(influence.latitude)) {
       continue;
     }
-    const radius = Number.isFinite(influence.radiusMeters)
-      ? Math.max(20, influence.radiusMeters)
-      : 180;
-    const position = Cartesian3.fromDegrees(influence.longitude, influence.latitude);
-
-    if (existing?.ellipse !== undefined) {
-      existing.position = new ConstantPositionProperty(position);
-      existing.ellipse.semiMajorAxis = new ConstantProperty(radius);
-      existing.ellipse.semiMinorAxis = new ConstantProperty(radius);
-      existing.ellipse.material = new ColorMaterialProperty(fill);
-      existing.ellipse.outlineColor = new ConstantProperty(outline);
-      existing.show = true;
-      continue;
-    }
-
-    viewer.entities.add({
-      id,
-      position,
-      ellipse: {
-        semiMajorAxis: radius,
-        semiMinorAxis: radius,
-        height: 0.35,
-        heightReference: HeightReference.RELATIVE_TO_GROUND,
-        material: fill,
-        outline: true,
-        outlineColor: outline,
-        outlineWidth: 1,
-      },
-    });
+    // zone.heading と influence.heading を一致させて向きズレを防ぐ。
+    const zone: InfluenceZone = {
+      ...influence.zone,
+      headingDegrees: influence.headingDegrees,
+      longitude: influence.longitude,
+      latitude: influence.latitude,
+    };
+    addInfluenceZoneEntity(viewer, { ...influence, zone }, influence.preview === true);
+    addHeadingAxis(viewer, influence, zone);
   }
 
   if (options.showBankSites) {
@@ -131,6 +115,136 @@ export function syncProtectionVisualization(
       });
     }
   }
+}
 
-  viewer.scene.requestRender();
+function addInfluenceZoneEntity(
+  viewer: Viewer,
+  influence: StructureInfluence,
+  preview: boolean,
+): void {
+  const id = `${ZONE_PREFIX}${influence.placementId}`;
+  const colorHex = STRUCTURE_ZONE_COLOR[influence.structureId] ?? "#58d5a1";
+  const fillAlpha = preview ? 0.1 : 0.17;
+  const outlineAlpha = preview ? 0.45 : 0.75;
+  const fill = Color.fromCssColorString(colorHex).withAlpha(fillAlpha);
+  const outline = Color.fromCssColorString(colorHex).withAlpha(outlineAlpha);
+  const zone = influence.zone;
+
+  if (zone.kind === "strip") {
+    const positions = Cartesian3.fromDegreesArray(stripCenterlineDegrees(zone));
+    viewer.entities.add({
+      id,
+      corridor: {
+        positions,
+        width: Math.max(24, zone.widthMeters),
+        height: 0.32,
+        heightReference: HeightReference.RELATIVE_TO_GROUND,
+        material: fill,
+        outline: true,
+        outlineColor: outline,
+        cornerType: CornerType.ROUNDED,
+      },
+    });
+    return;
+  }
+
+  if (zone.kind === "fan") {
+    const hierarchy = new PolygonHierarchy(
+      Cartesian3.fromDegreesArray(fanPolygonDegrees(zone)),
+    );
+    viewer.entities.add({
+      id,
+      polygon: {
+        hierarchy,
+        height: 0.3,
+        heightReference: HeightReference.RELATIVE_TO_GROUND,
+        material: fill,
+        outline: true,
+        outlineColor: outline,
+        outlineWidth: 1,
+      },
+    });
+    return;
+  }
+
+  const major = zone.kind === "ellipse" ? zone.majorMeters : influence.radiusMeters;
+  const minor = zone.kind === "ellipse" ? zone.minorMeters : influence.radiusMeters;
+  // Cesium ellipse.rotation は北から反時計回り。施設 heading は北から時計回り。
+  const rotation = -CesiumMath.toRadians(zone.headingDegrees);
+  viewer.entities.add({
+    id,
+    position: Cartesian3.fromDegrees(influence.longitude, influence.latitude),
+    ellipse: {
+      semiMajorAxis: Math.max(30, major),
+      semiMinorAxis: Math.max(20, minor),
+      rotation,
+      height: 0.32,
+      heightReference: HeightReference.RELATIVE_TO_GROUND,
+      material: fill,
+      outline: true,
+      outlineColor: outline,
+      outlineWidth: 1,
+    },
+  });
+}
+
+/** 向きの主軸を細い線で示し、影響圏が施設向きに連動していることを明示する。 */
+function addHeadingAxis(
+  viewer: Viewer,
+  influence: StructureInfluence,
+  zone: InfluenceZone,
+): void {
+  const heading = CesiumMath.toRadians(zone.headingDegrees);
+  const length =
+    zone.kind === "strip"
+      ? zone.lengthMeters * 0.52
+      : zone.kind === "ellipse"
+        ? zone.majorMeters * 0.55
+        : zone.radiusMeters * 0.7;
+  const start = offsetLonLat(
+    influence.longitude,
+    influence.latitude,
+    -Math.sin(heading) * length * 0.15,
+    -Math.cos(heading) * length * 0.15,
+  );
+  const end = offsetLonLat(
+    influence.longitude,
+    influence.latitude,
+    Math.sin(heading) * length,
+    Math.cos(heading) * length,
+  );
+  const colorHex = STRUCTURE_ZONE_COLOR[influence.structureId] ?? "#58d5a1";
+  viewer.entities.add({
+    id: `${ZONE_AXIS_PREFIX}${influence.placementId}`,
+    polyline: {
+      positions: Cartesian3.fromDegreesArray([
+        start.longitude,
+        start.latitude,
+        end.longitude,
+        end.latitude,
+      ]),
+      width: influence.preview === true ? 2.5 : 3.5,
+      clampToGround: true,
+      material: new PolylineGlowMaterialProperty({
+        glowPower: 0.18,
+        color: Color.fromCssColorString(colorHex).withAlpha(
+          influence.preview === true ? 0.55 : 0.85,
+        ),
+      }),
+    },
+  });
+}
+
+function offsetLonLat(
+  longitude: number,
+  latitude: number,
+  eastMeters: number,
+  northMeters: number,
+): { longitude: number; latitude: number } {
+  const metersPerDegreeLat = 110_540;
+  const metersPerDegreeLon = 111_320 * Math.cos(CesiumMath.toRadians(latitude));
+  return {
+    longitude: longitude + eastMeters / metersPerDegreeLon,
+    latitude: latitude + northMeters / metersPerDegreeLat,
+  };
 }

@@ -10,7 +10,6 @@ import {
   tickBudgetEconomy,
   type BudgetEconomyPhase,
 } from "../services/constructionService";
-import { getStructureEffectLabel } from "../structureVisuals";
 import type { GeoPosition, PlacedStructure, StructureDefinition } from "../types/construction";
 
 const structures: StructureDefinition[] = loadStructures().map(
@@ -35,8 +34,14 @@ const structures: StructureDefinition[] = loadStructures().map(
   }),
 );
 
-/** トーストメッセージの表示時間（ms）。 */
-const MESSAGE_AUTO_HIDE_MS = 3_500;
+/** 成功・情報トーストの表示時間（ms）。短めにしてうるさくしない。 */
+const MESSAGE_INFO_HIDE_MS = 2_200;
+/** 警告トーストの表示時間（ms）。 */
+const MESSAGE_WARN_HIDE_MS = 2_800;
+/** 同じ文言の連投を抑える間隔（ms）。 */
+const MESSAGE_THROTTLE_MS = 1_400;
+
+export type ToastTone = "info" | "warn" | "success";
 
 /** 古い iOS Safari など crypto.randomUUID 非対応端末向け。 */
 function createPlacementId(): string {
@@ -44,6 +49,23 @@ function createPlacementId(): string {
     return crypto.randomUUID();
   }
   return `${Date.now().toString(36)}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function inferTone(message: string): ToastTone {
+  if (
+    message.includes("足り") ||
+    message.includes("必要") ||
+    message.includes("範囲外") ||
+    message.includes("できません") ||
+    message.includes("移して") ||
+    message.includes("のみ")
+  ) {
+    return "warn";
+  }
+  if (message.includes("配置")) {
+    return "success";
+  }
+  return "info";
 }
 
 export function useConstruction() {
@@ -56,10 +78,11 @@ export function useConstruction() {
   const [pendingPlacement, setPendingPlacement] = useState<PlacedStructure | null>(null);
   const [selectedPlacementId, setSelectedPlacementId] = useState<string | null>(null);
   const [message, setMessageState] = useState("");
+  const [messageTone, setMessageTone] = useState<ToastTone>("info");
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /** 連続ドロップで同じ予算を二重に読まないための同期ソース。 */
+  const lastToastRef = useRef<{ text: string; at: number }>({ text: "", at: 0 });
+  /** 連続ドロップで同じ予算を二重に読まないための同期ソース（rAF 経済ティックの単一ソース）。 */
   const budgetRef = useRef(budget);
-  budgetRef.current = budget;
   const placementsRef = useRef(placements);
   placementsRef.current = placements;
   const economyPhaseRef = useRef(economyPhase);
@@ -74,16 +97,29 @@ export function useConstruction() {
   }, []);
 
   const setMessage = useCallback(
-    (next: string) => {
-      clearHideTimer();
-      setMessageState(next);
+    (next: string, tone?: ToastTone) => {
       if (next === "") {
+        clearHideTimer();
+        setMessageState("");
         return;
       }
+      const now = performance.now();
+      if (
+        next === lastToastRef.current.text &&
+        now - lastToastRef.current.at < MESSAGE_THROTTLE_MS
+      ) {
+        return;
+      }
+      lastToastRef.current = { text: next, at: now };
+      clearHideTimer();
+      const resolvedTone = tone ?? inferTone(next);
+      setMessageTone(resolvedTone);
+      setMessageState(next);
+      const hideMs = resolvedTone === "warn" ? MESSAGE_WARN_HIDE_MS : MESSAGE_INFO_HIDE_MS;
       hideTimerRef.current = setTimeout(() => {
         setMessageState("");
         hideTimerRef.current = null;
-      }, MESSAGE_AUTO_HIDE_MS);
+      }, hideMs);
     },
     [clearHideTimer],
   );
@@ -109,17 +145,17 @@ export function useConstruction() {
         const granted = applyDisasterStartGrant(budgetRef.current);
         budgetRef.current = granted;
         setBudget(granted);
-        setMessage("災害対応の緊急予算が支給されました");
+        // 緊急予算は HUD の数値変化で十分。トーストは出さない。
       }
 
       if (phase !== "preparation" && phase !== "disaster") {
         setNetIncomePerSecond(0);
       }
     },
-    [setMessage],
+    [],
   );
 
-  // 準備／災害中は補給 − 維持費で予算を更新する。
+  // 準備／災害中は補給 − 維持費で予算を更新する（壁時計ベース。フレーム落ちでも遅れない）。
   useEffect(() => {
     if (economyPhase !== "preparation" && economyPhase !== "disaster") {
       return;
@@ -127,7 +163,7 @@ export function useConstruction() {
     let frameId = 0;
     let lastAt = performance.now();
     const tick = (now: number) => {
-      const deltaSeconds = Math.min(0.05, Math.max(0, (now - lastAt) / 1000));
+      const deltaSeconds = Math.min(0.5, Math.max(0, (now - lastAt) / 1000));
       lastAt = now;
       if (deltaSeconds > 0) {
         const result = tickBudgetEconomy({
@@ -172,12 +208,12 @@ export function useConstruction() {
     ): PlacedStructure | null => {
       const structure = structures.find(({ id }) => id === structureId);
       if (structure === undefined) {
-        setMessage("配置する施設を選択してください");
+        setMessage("先にドックで施設を選べ");
         return null;
       }
       if (budgetRef.current < structure.constructionCost) {
         setMessage(
-          `${structure.displayName}の建設にはあと${(structure.constructionCost - budgetRef.current).toLocaleString("ja-JP")} pt必要です`,
+          `${structure.displayName}まであと${(structure.constructionCost - budgetRef.current).toLocaleString("ja-JP")} pt不足`,
         );
         return null;
       }
@@ -203,11 +239,11 @@ export function useConstruction() {
       if (current === null) {
         return null;
       }
-      setMessage("仮配置をキャンセルしました");
+      // キャンセルは操作の結果が画面から消えるのでトースト不要。
       setSelectedPlacementId(null);
       return null;
     });
-  }, [setMessage]);
+  }, []);
 
   /** 仮配置を確定し予算を消費する。 */
   const confirmPendingPlacement = useCallback((): PlacedStructure | null => {
@@ -218,7 +254,7 @@ export function useConstruction() {
     const structure = structures.find(({ id }) => id === pending.structureId);
     if (structure === undefined) {
       setPendingPlacement(null);
-      setMessage("配置する施設を選択してください");
+      setMessage("先にドックで施設を選べ");
       return null;
     }
 
@@ -247,9 +283,7 @@ export function useConstruction() {
     setSelectedStructureId(structure.id);
     // 確定後は向き変更 UI を出さない（選択ハイライトも外す）。
     setSelectedPlacementId(null);
-    setMessage(
-      `${structure.displayName}を配置 — ${getStructureEffectLabel(structure.id)}（緑の円が影響範囲）`,
-    );
+    setMessage(`${structure.displayName}を配備完了`, "success");
     return confirmed;
   }, [pendingPlacement, setMessage]);
 
@@ -330,6 +364,7 @@ export function useConstruction() {
     economyPhase,
     setEconomyPhase,
     message,
+    messageTone,
     placements,
     pendingPlacement,
     visiblePlacements,

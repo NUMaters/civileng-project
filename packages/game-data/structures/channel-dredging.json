@@ -1,7 +1,7 @@
 {
   "id": "channel-dredging",
   "displayName": "河道掘削",
-  "description": "本川の流下能力を上げて水位を下げる。広域に効くが、湾曲部の侵食を悪化させうる。",
+  "description": "川の水通しを強化する。",
   "constructionCost": 3400,
   "constructionTimeSeconds": 22,
   "maintenanceCostPerSecond": 2,
@@ -21,12 +21,10 @@
   "role": {
     "primaryHazard": "capacityShortage",
     "strengths": [
-      "本川の流下能力を上げ、全体の水位・越水圧力を下げる",
-      "局所の堤防がなくても広域に効く"
+      "水通しを上げ水位を下げる"
     ],
     "weaknesses": [
-      "湾曲部では流速増で侵食リスクを上げることがある",
-      "内水の排水や決壊口の直接封鎖はできない"
+      "湾曲では侵食が増えやすい"
     ]
   },
   "hazardAffinity": {

@@ -51,21 +51,21 @@ export function getStructureVisual(structureId: string): StructureVisual {
   return STRUCTURE_VISUALS[structureId] ?? FALLBACK_VISUAL;
 }
 
-/** 配置トースト・影響圏説明用の短い効果ラベル。 */
+/** 配備トースト・影響圏説明用の短い効果ラベル。 */
 export function getStructureEffectLabel(structureId: string): string {
   switch (structureId) {
     case "levee":
-      return "越水を抑える";
+      return "溢れ止め";
     case "revetment":
-      return "侵食を防ぐ";
+      return "岸固め";
     case "retention-basin":
-      return "水位ピークを削る";
+      return "水位カット";
     case "drainage-pump":
-      return "内水を排水";
+      return "内水排出";
     case "channel-dredging":
-      return "流下能力アップ";
+      return "川通し強化";
     default:
-      return "治水効果";
+      return "防衛効果";
   }
 }
 

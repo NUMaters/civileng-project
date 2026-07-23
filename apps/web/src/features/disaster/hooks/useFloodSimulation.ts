@@ -13,6 +13,10 @@ import {
 
 /** HUD / React への反映間隔。描画側はこれより高頻度で補間する。 */
 const UI_EMIT_SECONDS = 1 / 20;
+/** 1 フレームあたりの物理積分ステップ上限（安定用）。合計は実時間に追いつくまで複数回進める。 */
+const MAX_SIM_STEP_SECONDS = 0.05;
+/** タブ復帰などで一気に飛ばしすぎない上限（秒）。 */
+const MAX_CATCH_UP_SECONDS = 0.5;
 
 export type UseFloodSimulationResult = FloodSimulationState & {
   startGame: () => void;
@@ -31,15 +35,15 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
   const placementsRef = useRef(placements);
   const stateRef = useRef(state);
   placementsRef.current = placements;
-  stateRef.current = state;
+  // stateRef は rAF が進める最新状態の単一ソース。
+  // 毎レンダーで state を書き戻すと、HUD 間引きのあいだに進んだ時間が巻き戻る。
 
   // 配置が変わるたびに影響圏・治水効果を即時反映（準備中も見える）。
+  // タイマー進行は stateRef（rAF 最新）を基準にし、間引き後の古い React state で巻き戻さない。
   useEffect(() => {
-    setState((current) => {
-      const next = refreshPlacementEffects(current, placements);
-      stateRef.current = next;
-      return next;
-    });
+    const next = refreshPlacementEffects(stateRef.current, placements);
+    stateRef.current = next;
+    setState(next);
   }, [placements]);
 
   useEffect(() => {
@@ -47,23 +51,36 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
       return;
     }
     // 水位は毎フレーム連続で進め、React への通知だけ間引いて階段状の見た目を防ぐ。
+    // カウントダウンは壁時計に合わせる（Cesium 負荷でフレームが伸びても遅れない）。
     let frameId = 0;
     let lastAt = performance.now();
     let emitAccumulator = 0;
+    const phaseWhenStarted = state.phase;
 
     const tick = (now: number) => {
-      const deltaSeconds = Math.min(0.05, Math.max(0, (now - lastAt) / 1000));
+      const wallDelta = Math.max(0, (now - lastAt) / 1000);
       lastAt = now;
-      if (deltaSeconds > 0) {
-        const previousPhase = stateRef.current.phase;
-        const next = advanceFloodSimulation(
-          stateRef.current,
-          placementsRef.current,
-          deltaSeconds,
-        );
+      let catchUp = Math.min(MAX_CATCH_UP_SECONDS, wallDelta);
+      let next = stateRef.current;
+      let advanced = 0;
+
+      while (catchUp > 1e-6) {
+        if (next.phase !== phaseWhenStarted) {
+          break;
+        }
+        const step = Math.min(MAX_SIM_STEP_SECONDS, catchUp);
+        next = advanceFloodSimulation(next, placementsRef.current, step);
+        catchUp -= step;
+        advanced += step;
+        if (next.phase !== phaseWhenStarted) {
+          break;
+        }
+      }
+
+      if (advanced > 0 || next.phase !== phaseWhenStarted) {
         stateRef.current = next;
-        emitAccumulator += deltaSeconds;
-        const phaseChanged = next.phase !== previousPhase;
+        emitAccumulator += advanced;
+        const phaseChanged = next.phase !== phaseWhenStarted;
         if (emitAccumulator >= UI_EMIT_SECONDS || phaseChanged || next.phase === "result") {
           emitAccumulator = 0;
           setState(next);
@@ -93,7 +110,9 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
 
   const startRainNow = useCallback(() => {
     setState((current) => {
-      const next = refreshPlacementEffects(beginDisaster(current), placementsRef.current);
+      // rAF が進めた最新状態から災害へ移す（間引き表示の遅れを持ち込まない）。
+      const base = stateRef.current.phase === current.phase ? stateRef.current : current;
+      const next = refreshPlacementEffects(beginDisaster(base), placementsRef.current);
       stateRef.current = next;
       return next;
     });

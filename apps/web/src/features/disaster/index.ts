@@ -1,6 +1,8 @@
 export { FloodHud } from "./components/FloodHud";
 export { FloodResultPanel, ReviewModeBar } from "./components/FloodResultPanel";
+export { RainOverlay } from "./components/RainOverlay";
 export { useFloodSimulation } from "./hooks/useFloodSimulation";
+export { resolveRainDrama } from "./services/rainDrama";
 export {
   calculateFloodplainExtent,
   FLOODPLAIN_WARN_LEVEL_METERS,
@@ -25,3 +27,8 @@ export type {
   InundationSeed,
   InundationSiteField,
 } from "./services/inundationField";
+export {
+  resolveInfluenceZone,
+  influenceStrengthAt,
+} from "./services/influenceZones";
+export type { InfluenceZone, InfluenceZoneGeometry } from "./services/influenceZones";

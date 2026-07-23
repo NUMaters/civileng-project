@@ -8,11 +8,11 @@ type FloodHudProps = FloodSimulationState & {
 };
 
 const phaseLabel = {
-  idle: "待機中",
-  preparation: "準備",
-  disaster: "大雨",
-  result: "結果",
-  review: "プレビュー",
+  idle: "待機",
+  preparation: "防衛準備",
+  disaster: "大雨襲来",
+  result: "戦況結果",
+  review: "戦況確認",
 } as const;
 
 export function FloodHud({
@@ -27,18 +27,17 @@ export function FloodHud({
   damagePercent,
   overflowSites,
   mitigation,
-  protectedBankSites,
-  onStartGame,
+  onStartGame: _onStartGame,
   onStartRainNow,
 }: FloodHudProps) {
-  const bankSites = protectedBankSites ?? [];
+  void _onStartGame;
   const overflows = overflowSites ?? [];
-  const heldSites = bankSites.filter((site) => !site.overflowing).length;
   const safeMitigation = sanitizeMitigation(mitigation);
   const hazardSummary = summarizeHazards(overflows);
+  const facilityCount = safeMitigation.activeStructureCount;
 
   return (
-    <section className={`flood-hud flood-hud--${phase}`} aria-label="災害状況">
+    <section className={`flood-hud flood-hud--${phase}`} aria-label="戦況">
       <div className="flood-hud__heading">
         <span className="flood-hud__phase">{phaseLabel[phase] ?? phase}</span>
         {phase !== "idle" ? (
@@ -48,67 +47,70 @@ export function FloodHud({
 
       {phase === "idle" ? (
         <>
-          <strong className="flood-hud__title">阿武隈川・大雨シナリオ</strong>
-          <p>
-            弱点には種別があります（越水・侵食・内水）。堤防は越水、護岸は侵食、排水機場は内水、掘削・遊水地は流下不足向き。種類を合わせて配置してください。
-          </p>
-          <button className="flood-hud__primary" type="button" onClick={onStartGame}>
-            ゲーム開始
-          </button>
+          <strong className="flood-hud__title">待機中</strong>
+          <p>メニューからゲームを開始してください。</p>
         </>
       ) : (
         <>
-          <MitigationPanel mitigation={safeMitigation} heldSites={heldSites} />
+          {facilityCount > 0 ? (
+            <p className="flood-hud__deploy-count" aria-label="配備数">
+              配備 <strong>{facilityCount}</strong> 基
+            </p>
+          ) : phase === "preparation" ? (
+            <p className="flood-hud__deploy-hint">
+              川沿いの低い岸を優先して配備せよ。向きが合うほど効果が増す
+            </p>
+          ) : null}
           {hazardSummary !== "" ? (
             <p className="flood-hud__hazard-tip">{hazardSummary}</p>
           ) : null}
           <div className="flood-hud__metrics">
             <FloodMetric
-              label="雨量"
+              label="雨勢"
               value={`${Math.round(finiteOr(rainfallIntensity, 0) * 100)}%`}
               ratio={finiteOr(rainfallIntensity, 0)}
               tone="rain"
             />
             <FloodMetric
-              label="河川水位"
+              label="川の水位"
               value={`${finiteOr(riverLevelMeters, 0).toFixed(1)} m`}
               ratio={finiteOr(riverLevelMeters, 0) / 7}
               tone="water"
             />
             <FloodMetric
-              label="越水量"
+              label="溢れ"
               value={
                 finiteOr(overflowMeters, 0) > 0.02
                   ? `+${finiteOr(overflowMeters, 0).toFixed(2)} m`
-                  : "なし"
+                  : "安定"
               }
               ratio={Math.min(1, finiteOr(overflowMeters, 0) / 1.5)}
               tone="water"
             />
             <FloodMetric
-              label="氾濫原"
+              label="浸水域"
               value={
                 finiteOr(floodplainFillRatio, 0) > 0.04
                   ? `片岸 ${Math.round(finiteOr(floodplainHalfWidthMeters, 0))} m`
-                  : "本川のみ"
+                  : "川のみ"
               }
               ratio={finiteOr(floodplainFillRatio, 0)}
               tone="water"
             />
             <FloodMetric
-              label="決壊地点"
+              label="決壊口"
               value={overflows.length > 0 ? `${overflows.length} 箇所` : "なし"}
               ratio={Math.min(1, overflows.length / 4)}
               tone="damage"
             />
             <FloodMetric
-              label="最大浸水深"
+              label="最大水深"
               value={`${finiteOr(floodDepthMeters, 0).toFixed(2)} m`}
               ratio={finiteOr(floodDepthMeters, 0) / 2}
               tone="water"
             />
             <FloodMetric
-              label="被災度"
+              label="被害度"
               value={`${finiteOr(damagePercent, 0).toFixed(1)}%`}
               ratio={finiteOr(damagePercent, 0) / 100}
               tone="damage"
@@ -119,64 +121,10 @@ export function FloodHud({
 
       {phase === "preparation" ? (
         <button className="flood-hud__rain-button" type="button" onClick={onStartRainNow}>
-          準備完了・大雨を開始
+          防衛完了・大雨スタート
         </button>
       ) : null}
     </section>
-  );
-}
-
-function MitigationPanel({
-  mitigation,
-  heldSites,
-}: {
-  mitigation: MitigationSummary;
-  heldSites: number;
-}) {
-  const hasFacilities = mitigation.activeStructureCount > 0;
-  return (
-    <div className="mitigation-panel" aria-label="施設の治水効果">
-      <div className="mitigation-panel__title">
-        <span>治水効果</span>
-        <strong>{hasFacilities ? `${mitigation.activeStructureCount} 施設` : "未配置"}</strong>
-      </div>
-      {hasFacilities ? (
-        <ul className="mitigation-panel__list">
-          <li>
-            <span>越水抑制</span>
-            <strong>{Math.round(mitigation.overflowPrevention * 100)}%</strong>
-          </li>
-          <li>
-            <span>水位低減</span>
-            <strong>{Math.round(mitigation.waterLevelReduction * 100)}%</strong>
-          </li>
-          <li>
-            <span>流下能力</span>
-            <strong>+{mitigation.channelCapacityIncrease.toFixed(1)}</strong>
-          </li>
-          <li>
-            <span>排水</span>
-            <strong>{mitigation.drainageCapacity.toFixed(1)}</strong>
-          </li>
-          <li>
-            <span>河岸保護</span>
-            <strong>{Math.round(mitigation.bankProtection * 100)}%</strong>
-          </li>
-          <li>
-            <span>弱点を抑制</span>
-            <strong>{heldSites} 箇所</strong>
-          </li>
-          <li>
-            <span>配置効率</span>
-            <strong>{Math.round(mitigation.averageEffectiveness * 100)}%</strong>
-          </li>
-        </ul>
-      ) : (
-        <p className="mitigation-panel__empty">
-          河岸に川沿いへ置くほど効きます。低い岸の弱点を優先してください
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -241,5 +189,5 @@ function summarizeHazards(
   const parts = [...counts.entries()].map(
     ([kind, count]) => `${getHazardLabel(kind)} ${count}`,
   );
-  return `発生中の弱点: ${parts.join(" / ")}（対策の種類を合わせて）`;
+  return `警報: ${parts.join(" / ")} — 相性の合う施設で抑え込め`;
 }

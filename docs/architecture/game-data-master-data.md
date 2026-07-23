@@ -59,8 +59,8 @@ packages/game-data/structures/<structure-id>.json
   },
   "role": {
     "primaryHazard": "overtopping",
-    "strengths": ["越水点の直近で堤防線を形成する"],
-    "weaknesses": ["内水は排水できない"]
+    "strengths": ["低岸の溢れを止める"],
+    "weaknesses": ["内水・岸崩れは苦手"]
   },
   "hazardAffinity": {
     "overtopping": 1,
@@ -149,15 +149,15 @@ packages/game-data/structures/<structure-id>.json
 
 ### game-timing.json
 
-1 プレイ 3 分のフェーズ配分（既存）。
+1 プレイ約 100 秒のフェーズ配分（準備 20 / 災害 60 / 結果 20）。
 
 ```json
 {
-  "totalPlayTimeSeconds": 180,
+  "totalPlayTimeSeconds": 100,
   "phases": {
-    "preparationSeconds": 60,
-    "disasterSeconds": 90,
-    "resultSeconds": 30
+    "preparationSeconds": 20,
+    "disasterSeconds": 60,
+    "resultSeconds": 20
   }
 }
 ```

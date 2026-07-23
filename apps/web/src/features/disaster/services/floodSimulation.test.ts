@@ -12,12 +12,14 @@ import {
   reopenResult,
 } from "./floodSimulation";
 
-/** キャンパスコア弱点の河岸に、川沿い向きの堤防を置く。 */
+/** キャンパスコア弱点の河岸に、堤体が川沿いになる向きの堤防を置く。
+ * 向き矢印は法面側（河道横断）。堤体長軸は向き+90°。
+ */
 function bankLevee(
   id: string,
   longitude: number,
   latitude: number,
-  headingDegrees = 50,
+  headingDegrees = 140,
 ): PlacedStructure {
   return {
     id,
@@ -27,17 +29,17 @@ function bankLevee(
   };
 }
 
-const CORE = bankLevee("levee-core", 140.37776, 37.359853, 50);
-const SOUTH = bankLevee("levee-south", 140.37492, 37.357985, 65);
-const NORTH = bankLevee("levee-north", 140.38349, 37.364066, 40);
+const CORE = bankLevee("levee-core", 140.37776, 37.359853, 140);
+const SOUTH = bankLevee("levee-south", 140.37492, 37.357985, 155);
+const NORTH = bankLevee("levee-north", 140.38349, 37.364066, 130);
 
 function channelMisplacedLevee(): PlacedStructure {
   return {
     id: "levee-channel",
     structureId: "levee",
-    // 中心線付近・向きが流出方向と合いにくい
+    // 中心線付近・向きが河道に沿い堤体が横断（効きにくい）
     position: { longitude: 140.37737, latitude: 37.36024, height: 17 },
-    headingDegrees: 140,
+    headingDegrees: 50,
   };
 }
 
@@ -120,13 +122,24 @@ describe("floodSimulation", () => {
   it("堤防配置で影響圏と治水効果が可視化用に出る", () => {
     const state = refreshPlacementEffects(createInitialFloodState(), [CORE]);
     expect(state.structureInfluences).toHaveLength(1);
-    expect(state.structureInfluences[0]?.radiusMeters).toBeGreaterThan(200);
+    expect(state.structureInfluences[0]?.radiusMeters).toBeGreaterThan(80);
+    expect(state.structureInfluences[0]?.zone.kind).toBe("strip");
     expect(state.structureInfluences[0]?.effectiveness).toBeGreaterThan(0.45);
     expect(state.mitigation.activeStructureCount).toBe(1);
     expect(state.mitigation.overflowPrevention).toBeGreaterThan(0.25);
   });
 
-  it("向きが川と直交する堤防は平行な堤防より配置効率が低い", () => {
+  it("仮配置でも影響圏は出るが防衛数値には乗らない", () => {
+    const preview = { ...CORE, id: "preview-levee", preview: true as const };
+    const state = refreshPlacementEffects(createInitialFloodState(), [preview]);
+    expect(state.structureInfluences).toHaveLength(1);
+    expect(state.structureInfluences[0]?.preview).toBe(true);
+    expect(state.structureInfluences[0]?.zone.kind).toBe("strip");
+    expect(state.mitigation.activeStructureCount).toBe(0);
+    expect(state.mitigation.overflowPrevention).toBe(0);
+  });
+
+  it("堤体が川と直交する向きは、堤体が川沿いの向きより配置効率が低い", () => {
     const aligned = calculatePlacementEffectiveness(CORE);
     const skewed = calculatePlacementEffectiveness({
       ...CORE,
@@ -161,7 +174,7 @@ describe("floodSimulation", () => {
       id: "levee-core",
       structureId: "levee",
       position: { longitude: 140.37776, latitude: 37.359853, height: 22 },
-      headingDegrees: 50,
+      headingDegrees: 140,
     };
     const pumpAtCore: PlacedStructure = {
       id: "pump-core",
@@ -188,13 +201,13 @@ describe("floodSimulation", () => {
       id: "rev-bend",
       structureId: "revetment",
       position: { longitude: 140.385275, latitude: 37.371045, height: 21 },
-      headingDegrees: 20,
+      headingDegrees: 110,
     };
     const leveeAtBend: PlacedStructure = {
       id: "levee-bend",
       structureId: "levee",
       position: { longitude: 140.385275, latitude: 37.371045, height: 21 },
-      headingDegrees: 20,
+      headingDegrees: 110,
     };
 
     let withRevetment = beginDisaster(createInitialFloodState());

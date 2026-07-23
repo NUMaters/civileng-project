@@ -1,7 +1,7 @@
 {
   "id": "retention-basin",
   "displayName": "遊水地",
-  "description": "氾濫原・低地に水を逃がして水位ピークを削る。決壊口の直近より上流・低地向き。侵食は止められない。",
+  "description": "水位ピークを削る貯留。",
   "constructionCost": 2500,
   "constructionTimeSeconds": 20,
   "maintenanceCostPerSecond": 2,
@@ -22,12 +22,10 @@
   "role": {
     "primaryHazard": "capacityShortage",
     "strengths": [
-      "河道の流下不足を緩和し、広域の水位ピークを下げる",
-      "内水の一時貯留にもある程度効く"
+      "水位ピークを削る"
     ],
     "weaknesses": [
-      "決壊口そのものを塞ぐ力は弱い",
-      "河岸の侵食にはほぼ無効"
+      "決壊口は塞げない"
     ]
   },
   "hazardAffinity": {

@@ -1,7 +1,7 @@
 {
   "id": "drainage-pump",
   "displayName": "排水機場",
-  "description": "越水後に低地へたまった内水を排水する。河岸の越水・侵食は止められない。",
+  "description": "まち側の内水を吐き出す。",
   "constructionCost": 2000,
   "constructionTimeSeconds": 12,
   "maintenanceCostPerSecond": 4,
@@ -22,12 +22,10 @@
   "role": {
     "primaryHazard": "inlandPonding",
     "strengths": [
-      "内水地点の浸水深を下げ、市街地側の被害拡大を抑える",
-      "越水が起きてからでも後始末として有効"
+      "内水を吐き出す"
     ],
     "weaknesses": [
-      "河岸の越水口や侵食崩壊は止められない",
-      "維持費が高く、置き場所を間違えると効果が出ない"
+      "決壊・侵食は止められない"
     ]
   },
   "hazardAffinity": {
