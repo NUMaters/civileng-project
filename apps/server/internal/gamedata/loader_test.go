@@ -26,7 +26,7 @@ func TestLoadGameData(t *testing.T) {
 	if bundle.Rules.Budget.MaxBudget != 24_000 {
 		t.Fatalf("unexpected max budget: %d", bundle.Rules.Budget.MaxBudget)
 	}
-	if bundle.Rules.Timing.TotalPlayTimeSeconds != 180 {
+	if bundle.Rules.Timing.TotalPlayTimeSeconds != 100 {
 		t.Fatalf("unexpected timing: %d", bundle.Rules.Timing.TotalPlayTimeSeconds)
 	}
 }
