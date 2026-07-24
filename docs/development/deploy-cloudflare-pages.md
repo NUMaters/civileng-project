@@ -80,17 +80,15 @@ pnpm --filter @civilcraft/web pages:deploy
 
 ワークフロー: [`.github/workflows/deploy-pages.yml`](../../.github/workflows/deploy-pages.yml)
 
-リポジトリ **Settings → Secrets and variables → Actions** に追加:
+必要な Secret / Variable（設定済みなら追加作業なし）:
 
 | Secret / Variable | 内容 |
 |-------------------|------|
-| `CLOUDFLARE_API_TOKEN` | Pages 編集権限付き API トークン |
-| `CLOUDFLARE_ACCOUNT_ID` | アカウント ID（ダッシュボード右側） |
-| （任意）`ENABLE_CLOUDFLARE_PAGES` | `true` にすると明示的に有効化 |
+| `CLOUDFLARE_API_TOKEN` | Pages 編集権限付き API トークン（または Wrangler OAuth トークン） |
+| `CLOUDFLARE_ACCOUNT_ID` | アカウント ID |
+| `ENABLE_CLOUDFLARE_PAGES` | `true` のとき push で自動デプロイ |
 
-トークン作成: Cloudflare → My Profile → API Tokens → **Edit Cloudflare Workers** テンプレ（Pages 含む）を利用。
-
-`main` / `develop` への push（web / game-data 変更時）または **workflow_dispatch** でデプロイされます。
+`main` / `develop` / `feat/web-water-flood-ux` への push（web / game-data 変更時）、または Actions の **Run workflow**（`workflow_dispatch`）で https://civilcraft.pages.dev/ へ公開されます。
 
 ## 5. カスタムドメイン（任意）
 

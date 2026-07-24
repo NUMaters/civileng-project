@@ -1,3 +1,5 @@
+import { useRef } from "react";
+import { resolveDockPointerIntent } from "../dockGesture";
 import { formatBudget } from "../services/constructionService";
 import { getStructureVisual } from "../structureVisuals";
 import type { StructureDefinition } from "../types/construction";
@@ -7,7 +9,14 @@ type StructureCardProps = {
   selected: boolean;
   disabled: boolean;
   onSelect: (structureId: string) => void;
-  onDragStart: (structureId: string, clientX: number, clientY: number) => void;
+  /** 縦ドラッグ確定時。start は pointerdown、x/y は確定時点の座標。 */
+  onDragStart: (
+    structureId: string,
+    startX: number,
+    startY: number,
+    x: number,
+    y: number,
+  ) => void;
 };
 
 export function StructureCard({
@@ -18,6 +27,11 @@ export function StructureCard({
   onDragStart,
 }: StructureCardProps) {
   const visual = getStructureVisual(structure.id);
+  const gestureRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
 
   return (
     <button
@@ -28,9 +42,49 @@ export function StructureCard({
         if (disabled || event.button !== 0) {
           return;
         }
-        event.preventDefault();
+        // preventDefault しない＝横スクロールを阻害しない
         onSelect(structure.id);
-        onDragStart(structure.id, event.clientX, event.clientY);
+        const pointerId = event.pointerId;
+        const startX = event.clientX;
+        const startY = event.clientY;
+        gestureRef.current = { pointerId, startX, startY };
+
+        const cleanup = () => {
+          gestureRef.current = null;
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+          window.removeEventListener("pointercancel", onUp);
+        };
+
+        const onMove = (moveEvent: PointerEvent) => {
+          if (moveEvent.pointerId !== pointerId || gestureRef.current === null) {
+            return;
+          }
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
+          const intent = resolveDockPointerIntent(dx, dy);
+          if (intent === "pending") {
+            return;
+          }
+          if (intent === "scroll") {
+            // 横スクロールに任せる。リスナーだけ外す。
+            cleanup();
+            return;
+          }
+          cleanup();
+          onDragStart(structure.id, startX, startY, moveEvent.clientX, moveEvent.clientY);
+        };
+
+        const onUp = (upEvent: PointerEvent) => {
+          if (upEvent.pointerId !== pointerId) {
+            return;
+          }
+          cleanup();
+        };
+
+        window.addEventListener("pointermove", onMove, { passive: true });
+        window.addEventListener("pointerup", onUp);
+        window.addEventListener("pointercancel", onUp);
       }}
       type="button"
       aria-pressed={selected}

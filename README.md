@@ -123,7 +123,11 @@ make down     # docker compose down
 
 ソロプレイはクライアント完結のため、**Cloudflare Pages** に静的デプロイできる（想定コスト約 $0–15/月）。
 
-**Git 連携の注意（失敗しやすい）**
+**公開 URL:** https://civilcraft.pages.dev/
+
+**自動デプロイ（GitHub Actions）:** `ENABLE_CLOUDFLARE_PAGES=true` と Cloudflare Secrets 設定済み。`develop` / `main` / `feat/web-water-flood-ux` へ web 関連を push するか、Actions で手動実行すると Pages に反映される。
+
+ダッシュボードの Git 連携を使う場合の注意:
 
 - 本番ブランチは **`develop`**（`main` はルート `package.json` がなくビルド不可）
 - Build command: `CI=true pnpm install --frozen-lockfile && CI=true pnpm --filter @civilcraft/web build`
@@ -136,7 +140,7 @@ pnpm --filter @civilcraft/web preview # ローカル確認
 pnpm deploy:web                       # ローカルからの wrangler pages deploy（要 login / API トークン）
 ```
 
-手順・GitHub Actions・Secrets は [docs/development/deploy-cloudflare-pages.md](./docs/development/deploy-cloudflare-pages.md) を参照。
+手順・Secrets は [docs/development/deploy-cloudflare-pages.md](./docs/development/deploy-cloudflare-pages.md) を参照。
 
 #### 個別起動
 

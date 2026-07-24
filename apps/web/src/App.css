@@ -1557,6 +1557,9 @@ a {
   padding: 2px 2px 4px;
   scrollbar-width: none;
   scroll-snap-type: x proximity;
+  touch-action: pan-x;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .construction-menu__list::-webkit-scrollbar {
@@ -1578,7 +1581,8 @@ a {
   font: inherit;
   text-align: left;
   cursor: grab;
-  touch-action: none;
+  /* 横パンはネイティブ・スクロール。配置ドラッグは縦優勢時に JS で開始 */
+  touch-action: pan-x;
   user-select: none;
   scroll-snap-align: start;
   transition:
@@ -1591,6 +1595,7 @@ a {
 .game-shell.is-dock-dragging {
   cursor: grabbing;
   user-select: none;
+  touch-action: none;
 }
 
 .game-shell.is-dock-dragging .construction-menu {

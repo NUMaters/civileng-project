@@ -7,7 +7,13 @@ type ConstructionMenuProps = {
   selectedStructureId: string;
   structures: StructureDefinition[];
   onSelect: (structureId: string) => void;
-  onDragStart: (structureId: string, clientX: number, clientY: number) => void;
+  onDragStart: (
+    structureId: string,
+    startX: number,
+    startY: number,
+    x: number,
+    y: number,
+  ) => void;
 };
 
 export function ConstructionMenu({
@@ -24,7 +30,7 @@ export function ConstructionMenu({
       <div className="construction-menu__heading">
         <div>
           <span className="construction-menu__heading-label">建設ドック</span>
-          <strong>ドラッグして配置</strong>
+          <strong>上へドラッグで配置</strong>
         </div>
         {selected !== undefined ? (
           <div className="construction-menu__detail" key={selected.id}>
@@ -50,7 +56,7 @@ export function ConstructionMenu({
             </ul>
           </div>
         ) : (
-          <small>ドラッグで配置</small>
+          <small>横に送る／上へドラッグ</small>
         )}
       </div>
       <div className="construction-menu__list">

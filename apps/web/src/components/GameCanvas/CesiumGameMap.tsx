@@ -260,6 +260,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const dragGhostLastKeyRef = useRef("");
     /** ドラッグ中カーソル位置の影響圏（仮配置確定前）。 */
     const dragGhostInfluenceRef = useRef<StructureInfluence | null>(null);
+    /** 施設モデルの描画指紋（同一なら再生成をスキップし、向きスライダーを滑らかにする）。 */
+    const placementVisualKeyRef = useRef(new Map<string, string>());
     floodStateRef.current = floodState;
     const [mapError, setMapError] = useState<string | null>(null);
     const [isMapReady, setIsMapReady] = useState(false);
@@ -985,36 +987,36 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return;
       }
 
+      const nextIds = new Set(placements.map((placement) => placement.id));
       for (const entity of [...viewer.entities.values]) {
-        if (entity.id.startsWith("placement-")) {
+        if (!entity.id.startsWith("placement-")) {
+          continue;
+        }
+        const placementId = matchPlacementId(entity.id, placements);
+        if (placementId === undefined || !nextIds.has(placementId)) {
           viewer.entities.remove(entity);
         }
       }
-
-      for (const placement of placements) {
-        try {
-          addCivilEngineeringModel(
-            viewer,
-            placement,
-            placement.id === selectedPlacementId,
-            placement.preview === true,
-          );
-        } catch (error) {
-          console.error(
-            "Failed to render structure model",
-            placement.structureId,
-            placement.id,
-            error,
-          );
-          addFallbackStructureMarker(
-            viewer,
-            placement,
-            placement.id === selectedPlacementId,
-            placement.preview === true,
-          );
+      for (const id of [...placementVisualKeyRef.current.keys()]) {
+        if (!nextIds.has(id)) {
+          placementVisualKeyRef.current.delete(id);
         }
       }
-      viewer.scene.requestRender();
+
+      let changed = false;
+      for (const placement of placements) {
+        const selected = placement.id === selectedPlacementId;
+        const key = placementVisualKey(placement, selected);
+        if (placementVisualKeyRef.current.get(placement.id) === key) {
+          continue;
+        }
+        applyPlacementHeading(viewer, placement, selected, placement.preview === true);
+        placementVisualKeyRef.current.set(placement.id, key);
+        changed = true;
+      }
+      if (changed) {
+        viewer.scene.requestRender();
+      }
     }, [placements, selectedPlacementId, structures]);
 
     useEffect(() => {
@@ -1273,7 +1275,18 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 floating
                 headingDegrees={orientationTarget.headingDegrees}
                 onLiveChange={(headingDegrees) => {
-                  // 向き変更は即 state へ反映し、影響圏も同じ向きで追従させる。
+                  // スライダー操作中に施設モデル／影響圏を即回転（手を離す前に向きが分かる）。
+                  applyLivePlacementHeading(
+                    viewerRef.current,
+                    placementsRef,
+                    placementVisualKeyRef,
+                    orientationTarget.id,
+                    headingDegrees,
+                    selectedPlacementIdRef.current,
+                    floodStateRef.current,
+                    dragGhostInfluenceRef.current,
+                    mapActiveRef.current,
+                  );
                   onRotatePlacement(orientationTarget.id, headingDegrees);
                 }}
                 onChange={(headingDegrees) =>
@@ -1840,6 +1853,73 @@ type StructureModelOptions = {
   invalid?: boolean;
   showHeadingCue?: boolean;
 };
+
+function placementVisualKey(placement: PlacedStructure, selected: boolean): string {
+  return [
+    placement.structureId,
+    placement.preview === true ? "1" : "0",
+    selected ? "1" : "0",
+    Math.round(placement.headingDegrees),
+    placement.position.longitude.toFixed(6),
+    placement.position.latitude.toFixed(6),
+    Math.round(placement.position.height * 10),
+  ].join("|");
+}
+
+/**
+ * 向きスライダー操作中に、React の再描画を待たず施設モデルと影響圏を即時更新する。
+ */
+function applyLivePlacementHeading(
+  viewer: Viewer | null,
+  placementsRef: { current: PlacedStructure[] },
+  visualKeyRef: { current: Map<string, string> },
+  placementId: string,
+  headingDegrees: number,
+  selectedPlacementId: string | null,
+  floodState:
+    | {
+        active: boolean;
+        phase?: "idle" | "preparation" | "disaster" | "result" | "review";
+        structureInfluences: StructureInfluence[];
+        protectedBankSites: ProtectedBankSite[];
+      }
+    | null
+    | undefined,
+  dragInfluence: StructureInfluence | null,
+  mapActive: boolean,
+): void {
+  if (viewer === null || viewer.isDestroyed()) {
+    return;
+  }
+  const current = placementsRef.current.find((placement) => placement.id === placementId);
+  if (current === undefined) {
+    return;
+  }
+  const next: PlacedStructure = {
+    ...current,
+    headingDegrees,
+  };
+  placementsRef.current = placementsRef.current.map((placement) =>
+    placement.id === placementId ? next : placement,
+  );
+  const selected = placementId === selectedPlacementId || next.preview === true;
+  applyPlacementHeading(viewer, next, selected, next.preview === true);
+  visualKeyRef.current.set(placementId, placementVisualKey(next, selected));
+
+  const influences = calculateStructureInfluences(placementsRef.current);
+  refreshProtectionWithDragGhost(
+    viewer,
+    {
+      active: floodState?.active === true,
+      phase: floodState?.phase,
+      structureInfluences: influences,
+      protectedBankSites: floodState?.protectedBankSites ?? [],
+    },
+    dragInfluence,
+    mapActive,
+  );
+  viewer.scene.requestRender();
+}
 
 function applyPlacementHeading(
   viewer: Viewer,

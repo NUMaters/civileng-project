@@ -3,7 +3,7 @@ import { normalizeHeadingDegrees } from "../services/constructionService";
 
 type RotationControlsProps = {
   headingDegrees: number;
-  /** 確定値（ポインタを離したとき／変更終了時）。 */
+  /** 確定値（ポインタを離したとき／キーボード変更時）。 */
   onChange: (headingDegrees: number) => void;
   /** ドラッグ中のライブ更新（地図モデルを即回転させる）。 */
   onLiveChange?: (headingDegrees: number) => void;
@@ -25,6 +25,8 @@ export function RotationControls({
     Math.round(normalizeHeadingDegrees(headingDegrees)),
   );
   const draggingRef = useRef(false);
+  const draftRef = useRef(draftDegrees);
+  draftRef.current = draftDegrees;
 
   useEffect(() => {
     if (draggingRef.current) {
@@ -35,14 +37,31 @@ export function RotationControls({
 
   const commit = (raw: number) => {
     const next = normalizeHeadingDegrees(raw);
-    setDraftDegrees(Math.round(next));
+    const rounded = Math.round(next);
+    setDraftDegrees(rounded);
+    draftRef.current = rounded;
     onChange(next);
   };
 
   const live = (raw: number) => {
     const next = normalizeHeadingDegrees(raw);
-    setDraftDegrees(Math.round(next));
-    onLiveChange?.(next);
+    const rounded = Math.round(next);
+    setDraftDegrees(rounded);
+    draftRef.current = rounded;
+    // ライブ未指定時も操作中に向きが変わるよう onChange へフォールバック
+    if (onLiveChange !== undefined) {
+      onLiveChange(next);
+    } else {
+      onChange(next);
+    }
+  };
+
+  const endDrag = () => {
+    if (!draggingRef.current) {
+      return;
+    }
+    draggingRef.current = false;
+    commit(draftRef.current);
   };
 
   return (
@@ -53,15 +72,6 @@ export function RotationControls({
       onPointerDown={(event) => {
         // 地図のドラッグ操作に伝播させない。
         event.stopPropagation();
-        draggingRef.current = true;
-      }}
-      onPointerUp={() => {
-        draggingRef.current = false;
-        commit(draftDegrees);
-      }}
-      onPointerCancel={() => {
-        draggingRef.current = false;
-        commit(draftDegrees);
       }}
     >
       <label className="orientation-slider__track">
@@ -74,9 +84,21 @@ export function RotationControls({
           value={draftDegrees}
           aria-valuetext={`${draftDegrees}度`}
           aria-label="向きスライダー"
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            draggingRef.current = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onLostPointerCapture={endDrag}
+          onInput={(event) => {
+            // input はドラッグ中の連続イベント。ここで即ライブ回転する。
+            live(Number(event.currentTarget.value));
+          }}
           onChange={(event) => {
             const value = Number(event.target.value);
-            // ポインタドラッグ中はライブ反映のみ。キーボード操作などは即確定する。
+            // キーボード等: pointer ドラッグ中でなければ確定更新。
             if (draggingRef.current) {
               live(value);
               return;

@@ -110,7 +110,7 @@ export function App() {
   ]);
 
   const beginDockDrag = useCallback(
-    (structureId: string, clientX: number, clientY: number) => {
+    (structureId: string, startX: number, startY: number, x: number, y: number) => {
       const structure = construction.structures.find(({ id }) => id === structureId);
       if (structure === undefined) {
         return;
@@ -119,15 +119,20 @@ export function App() {
         construction.setMessage("予算不足");
         return;
       }
+      const moved = Math.hypot(x - startX, y - startY);
+      const ghost =
+        moved >= DOCK_DRAG_PLACE_THRESHOLD_PX
+          ? mapRef.current?.updateDragGhost(structureId, x, y)
+          : undefined;
       const next: DockDragState = {
         structureId,
         displayName: structure.displayName,
-        startX: clientX,
-        startY: clientY,
-        x: clientX,
-        y: clientY,
-        overMap: false,
-        placeable: false,
+        startX,
+        startY,
+        x,
+        y,
+        overMap: ghost?.overMap === true,
+        placeable: ghost?.placeable === true,
       };
       dragRef.current = next;
       setDrag(next);
