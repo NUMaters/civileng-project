@@ -3,9 +3,10 @@
 ## 文書の状態
 
 - 状態：実装未承認
-- 対象：[`overview.md`](./overview.md)・[`requirements.md`](./requirements.md)・[`detailed-design.md`](./detailed-design.md)・[`dialogue-ai-design.md`](./dialogue-ai-design.md) で定義した住民 NPC、およびよみやすさ設定（readingLevel）
+- 対象：[`overview.md`](../npc/overview.md)・[`requirements.md`](../npc/requirements.md)・[`detailed-design.md`](../npc/detailed-design.md)・[`dialogue-ai-design.md`](../npc/dialogue-ai-design.md) で定義した住民 NPC、およびよみやすさ設定（readingLevel）
 - 実装開始条件：`requirements.md`・`detailed-design.md`・`dialogue-ai-design.md` と、Claude Code の読み取り専用調査計画をユーザーが承認すること
 - 本書は「実装承認済み」「実装開始可能」の状態ではない。実装着手には、本書に従った段階的調査の結果をユーザーが承認する必要がある
+- 配置方針：ゲームの仕様書（NPC機能の要件・設計）は `docs/npc/` で、AI Agent 向けの実装手順・調査手順は `docs/agent/` で、それぞれ別に管理する
 
 この文書は、Claude Code が会話履歴を参照できない状況でも、`docs/npc/`の設計文書を参照し、必要最小限の調査と実装計画を作成できるようにするための指示書である。各設計文書の承認状態は、その文書の「文書の状態」とユーザーの最新指示を正本とし、Claude Codeが独自に承認済みと判断してはならない。
 
@@ -13,17 +14,16 @@
 
 ## 最重要ルール
 
-1. **既存の `docs/` 文書を変更しない**
-2. NPC 文書の追加・修正は `docs/npc/` 内だけで行う
+1. **既存の `docs/` 文書を変更しない**（本書自身の更新を除く。本書は `docs/agent/claude-code-implementation-guide.md` として、NPC文書の一部の扱いとする）
+2. NPC 関連文書の追加・修正は、`docs/npc/`（ゲーム仕様書）と `docs/agent/claude-code-implementation-guide.md`（AI Agent 向け実装ガイド、本書）内だけで行う
 3. 最初のターンは読み取り専用調査と実装計画の提示だけを行う
-4. ユーザーが計画を承認するまでコード・設定・依存関係・DBを変更しない
-5. AI ディレクターは実装しない
-6. NPC に災害イベント、難易度、施設配置を制御させない
-7. `.env`、APIキー、秘密情報を表示・読み上げ・コミットしない
-8. ユーザーの既存変更を上書き・破棄しない
-9. Issue 番号なしの `TODO` を追加しない
-10. NPC 機能を無効にした場合、既存ゲームの動作を変えない
-11. **NPCのAPI・通信方式（WebSocketイベント名、エンドポイント、ペイロード、TypeScript型、Goの通信DTO、`status`・`reasonCode`等の列挙値、`packages/game-schema`への追加ファイルを含む）は、別のAPI設計Issueが承認されるまで実装しない。** `requirements.md`・`detailed-design.md`が確定しているのは、ユーザーから見た挙動とサーバー権威型検証の要件であり、通信の具体設計ではない（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）
+4. 原則として、コード・設定・依存関係・DBを変更しない
+5. NPC に災害イベント、難易度、施設配置を制御させない
+6. `.env`、APIキー、秘密情報を表示・読み上げ・コミットしない
+7. ユーザーの既存変更を上書き・破棄しない
+8. Issue 番号なしの `TODO` を追加しない
+9. NPC 機能を無効にした場合、既存ゲームの動作を変えない
+10. **NPCのAPI・通信方式（WebSocketイベント名、エンドポイント、ペイロード、TypeScript型、Goの通信DTO、`status`・`reasonCode`等の列挙値、`packages/game-schema`への追加ファイルを含む）は、別のAPI設計Issueが承認されるまで実装しない。** `requirements.md`・`detailed-design.md`が確定しているのは、ユーザーから見た挙動とサーバー権威型検証の要件であり、通信の具体設計ではない（[`detailed-design.md`](../npc/detailed-design.md#19-api設計issueへの引き継ぎ条件)）
 
 ---
 
@@ -43,7 +43,7 @@ Get-ChildItem .\docs\npc\requirements.md,.\docs\npc\detailed-design.md,.\docs\np
 
 - リポジトリルートの`CLAUDE.md`・`AGENTS.md`（存在するものだけ）
 - `docs/npc/overview.md`
-- `docs/npc/claude-code-implementation-guide.md`
+- `docs/agent/claude-code-implementation-guide.md`（本書）
 
 見出し一覧だけを確認し、本文はまだ読まないもの：
 
@@ -71,7 +71,7 @@ rg -n '^#{1,3} ' docs/npc/requirements.md docs/npc/detailed-design.md docs/npc/d
 - 最初に、今回対象とするIssueまたは実装単位を確認する
 - 対象Issueに関係する`requirements.md`・`detailed-design.md`・`dialogue-ai-design.md`の章を、見出し名で列挙する
 - 章を読む理由と、読まない章を示す
-- ユーザーが承認した章だけを読む
+- ユーザーが承認した章だけを、見出し検索で特定した開始行から次の見出しの直前までの範囲を指定して読み、それ以外の章やファイル全文の読み込みを避ける
 - 実装対象（承認されたIssueまたは実装単位）に必要な既存docsと代表ソースファイルを先に列挙する
 - 各ファイルを読む理由を一覧で説明してからユーザーへ提示する
 - 同種のファイルを大量に読まない（代表例を数点に絞る）
@@ -81,8 +81,8 @@ rg -n '^#{1,3} ' docs/npc/requirements.md docs/npc/detailed-design.md docs/npc/d
 対象選定調査で確認する観点の例（実装単位に応じて必要なものだけを選ぶ）：
 
 - リポジトリ状態：現在のブランチ、`git status`、既存のユーザー変更、モノレポ・ワークスペース構成、ビルド・Lint・テストコマンド、Docker・DB・Redis・Ollama の起動方法
-- フロントエンド：Three.js／3D ワールドの構成、プレイヤー座標・接近判定、施設配置と入力制御、ゲームフェーズ・タイマーの管理、WebSocket クライアント、UI コンポーネント・状態管理、マップデータと 3D アセットの形式
-- バックエンド：モジュール・依存方向、ゲームセッション・プレイヤー・フェーズ・Tick、WebSocket ルーター・イベント配信、マップ・災害・浸水状態、マスターデータのローダーと検証、PostgreSQL・Redis・マイグレーション、Logger・設定・CLI コマンド、テスト用モック・Integration Test 基盤
+- フロントエンド：Three.js／3D ワールドの構成、CesiumJS によるマップ表示・地理空間データの構成（マップ表示の主力）、プレイヤー座標・接近判定、施設配置と入力制御、ゲームフェーズ・タイマーの管理、WebSocket クライアント、UI コンポーネント・状態管理、マップデータと 3D アセットの形式
+- バックエンド：モジュール構成・依存方向、NPC機能が連携する既存のゲーム状態管理・通信基盤・マスターデータ基盤の有無（各領域の詳細設計は別エンジニアの担当であり、本書では前提としない。実装単位ごとに実装時点の状況を確認する）
 - AI・RAG：既存 AI／LLM 接続コードの有無、Ollama 接続方法の候補、既存 HTTP クライアント・設定方式、embeddings／vector search の既存実装、PostgreSQL に `pgvector` を追加できるか、簡易検索で初期要件を満たせるか
 
 対象選定調査で候補になりうる既存docsの例（実装単位に応じて必要なものだけを選ぶ。すべてを毎回読むわけではない）：
@@ -140,7 +140,7 @@ docs/git/pull-request.md
 ユーザーの明示的な再承認がない限り、次を含む既存文書を変更しない。
 
 ```text
-docs/agent/
+docs/agent/guide.md
 docs/api/
 docs/architecture/
 docs/civil-engineering/
@@ -149,7 +149,7 @@ docs/game-design/
 docs/git/
 ```
 
-`docs/npc/` だけが NPC 文書の変更可能範囲である。
+`docs/npc/`（ゲーム仕様書）と `docs/agent/claude-code-implementation-guide.md`（本書、AI Agent 向け実装ガイド）だけが NPC 関連文書の変更可能範囲である。`docs/agent/guide.md` 等、`docs/agent/` 配下の他の既存ファイルは引き続き変更しない。
 
 ### 機能
 
@@ -176,7 +176,7 @@ docs/git/
 
 ## 読み取り専用調査後に提出する計画
 
-NPC機能の要件・統合設計・RAG/LLM専門設計は、`requirements.md`・`detailed-design.md`・`dialogue-ai-design.md`に文書化されている。これらを確定仕様として扱えるのは、各文書の状態がユーザー承認済みとなった後に限る。API・通信方式（イベント名、ペイロード、型、DTO等）は別Issueで扱い、API設計Issueが承認されるまで実装しない（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）。本節は、承認された実装単位ごとの計画提出フォーマットとして用いる。コード変更前に、次の形式でユーザーへ提示する。
+NPC機能の要件・統合設計・RAG/LLM専門設計は、`requirements.md`・`detailed-design.md`・`dialogue-ai-design.md`に文書化されている。これらを確定仕様として扱えるのは、各文書の状態がユーザー承認済みとなった後に限る。API・通信方式（イベント名、ペイロード、型、DTO等）は別Issueで扱い、API設計Issueが承認されるまで実装しない（[`detailed-design.md`](../npc/detailed-design.md#19-api設計issueへの引き継ぎ条件)）。本節は、承認された実装単位ごとの計画提出フォーマットとして用いる。コード変更前に、次の形式でユーザーへ提示する。
 
 ### 1. 現状整理
 
@@ -221,7 +221,7 @@ Claude Code がリポジトリ構造を踏まえて分割を提案する。各�
 
 ### 5. 未決定事項
 
-全体の未決定事項一覧は [`requirements.md`](./requirements.md#23-未決定事項実装前確認事項) を正本とする。当該実装単位に固有の新たな未決定事項があれば、ここに追加で提示する。
+全体の未決定事項一覧は [`requirements.md`](../npc/requirements.md#23-未決定事項実装前確認事項) を正本とする。当該実装単位に固有の新たな未決定事項があれば、ここに追加で提示する。
 
 - チーム判断が必要な項目
 - 実装を止める項目
@@ -245,7 +245,7 @@ Claude Code がリポジトリ構造を踏まえて分割を提案する。各�
 
 ## 実装時に満たす機能
 
-実装時に満たすべき機能要件・非機能要件・受け入れ条件は [`requirements.md`](./requirements.md) を正本とする。統合構成・状態遷移・サーバー権威型検証は [`detailed-design.md`](./detailed-design.md) を、RAG・LLM・知識データ・グロッサリー・安全性・匿名分析の専門設計は [`dialogue-ai-design.md`](./dialogue-ai-design.md) を参照する。**通信イベント・ペイロード・型定義は、別のAPI設計Issueで決定するまで未確定である**（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）。本書では、これらの正本と重複する要件一覧を保持しない。
+実装時に満たすべき機能要件・非機能要件・受け入れ条件は [`requirements.md`](../npc/requirements.md) を正本とする。統合構成・状態遷移・サーバー権威型検証は [`detailed-design.md`](../npc/detailed-design.md) を、RAG・LLM・知識データ・グロッサリー・安全性・匿名分析の専門設計は [`dialogue-ai-design.md`](../npc/dialogue-ai-design.md) を参照する。**通信イベント・ペイロード・型定義は、別のAPI設計Issueで決定するまで未確定である**（[`detailed-design.md`](../npc/detailed-design.md#19-api設計issueへの引き継ぎ条件)）。本書では、これらの正本と重複する要件一覧を保持しない。
 
 ---
 
@@ -337,7 +337,7 @@ CivilCraft に、docs/npc/で定義された「地域情報提供型・住民NPC
 全文を読んでよいもの：
 - リポジトリルートのCLAUDE.md・AGENTS.md（存在するものだけ）
 - docs/npc/overview.md
-- docs/npc/claude-code-implementation-guide.md
+- docs/agent/claude-code-implementation-guide.md
 
 見出し一覧だけを確認し、本文をまだ読まないもの：
 - docs/npc/requirements.md
@@ -353,7 +353,7 @@ CivilCraft に、docs/npc/で定義された「地域情報提供型・住民NPC
 続いて段階1として、今回対象とするIssueまたは実装単位に必要な章と既存ファイルを、理由付きで一覧化してください。まだ本文は読まず、私の承認を待ってください。私が承認した章とファイルだけを読んでください。
 
 重要な禁止事項：
-- docs/npc/ 以外の既存docsを変更しない
+- docs/npc/ および docs/agent/claude-code-implementation-guide.md 以外の既存docsを変更しない
 - AIディレクターを実装しない
 - NPCに災害難易度・災害イベント・施設配置を制御させない
 - .env、APIキー、秘密情報を表示・コミットしない
@@ -398,7 +398,7 @@ NPCの名前・性格・自己紹介・質問候補、公的資料から作る�
 
 ## チーム協議事項
 
-全体の未決定事項・実装前確認事項は [`requirements.md`](./requirements.md#23-未決定事項実装前確認事項) を正本とする。次は実装前または実験前に Issue 化する。
+全体の未決定事項・実装前確認事項は [`requirements.md`](../npc/requirements.md#23-未決定事項実装前確認事項) を正本とする。次は実装前または実験前に Issue 化する。
 
 - NPC 数・位置（マップ確定後）
 - NPC 名・性格・質問候補（Claude Code 仮案のユーザー確認後）

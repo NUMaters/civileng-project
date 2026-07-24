@@ -32,6 +32,6 @@ NPC は、土木や治水の知識がないプレイヤーに、地域の災害�
 | [`requirements.md`](./requirements.md) | 機能要件、非機能要件、受け入れ条件の唯一の正本 |
 | [`detailed-design.md`](./detailed-design.md) | 統合構成、UI、状態遷移、表示用型、ファイル、テスト、およびAPI設計Issueへの引き継ぎ条件の正本 |
 | [`dialogue-ai-design.md`](./dialogue-ai-design.md) | RAG、LLM、知識データ、グロッサリー、フォールバック、安全性、匿名分析の専門設計 |
-| [`claude-code-implementation-guide.md`](./claude-code-implementation-guide.md) | 段階的調査、承認ゲート、実装手順 |
+| [`claude-code-implementation-guide.md`](../agent/claude-code-implementation-guide.md) | 段階的調査、承認ゲート、実装手順（AI Agent 向けのため `docs/agent/` で管理） |
 
-要件・受け入れ条件・型定義は上記の正本にのみ記載し、他の文書からは相対リンクで参照する。
+要件・受け入れ条件・型定義は上記の正本にのみ記載し、他の文書からは相対リンクで参照する。ゲームの仕様書は `docs/npc/`、AI Agent 向けの実装手順は `docs/agent/` で、それぞれ別に管理する。

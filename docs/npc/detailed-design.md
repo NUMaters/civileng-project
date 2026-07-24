@@ -550,7 +550,7 @@ packages/game-schema/common/furigana-segment.ts（通信データとしての型
 
 `[チーム協議]`
 
-本書はコード変更を伴わない。API・通信方式に関わる実装（`presentation`層、`packages/game-schema`へのNPC関連ファイル追加等）は、API設計Issueが承認されるまで着手しない。それ以外（`domain`・`application`層のロジック、マスターデータ、`ReadingAwareText`等の表示コンポーネント）は、3章の前提Issue（game/state・game/tick・game/session・game/realtime）の状況を踏まえ、[`claude-code-implementation-guide.md`](./claude-code-implementation-guide.md)の段階的調査プロセスに従ってユーザー承認後に決定する。
+本書はコード変更を伴わない。API・通信方式に関わる実装（`presentation`層、`packages/game-schema`へのNPC関連ファイル追加等）は、API設計Issueが承認されるまで着手しない。それ以外（`domain`・`application`層のロジック、マスターデータ、`ReadingAwareText`等の表示コンポーネント）は、3章の前提Issue（game/state・game/tick・game/session・game/realtime）の状況を踏まえ、[`claude-code-implementation-guide.md`](../agent/claude-code-implementation-guide.md)（AI Agent 向け実装ガイド、`docs/agent/`で管理）の段階的調査プロセスに従ってユーザー承認後に決定する。
 
 ## 37. 未決定事項・実装前確認事項
 
