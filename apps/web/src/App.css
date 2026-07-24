@@ -31,9 +31,11 @@ body,
 #root {
   width: 100%;
   height: 100%;
+  height: 100dvh;
   margin: 0;
   overflow: hidden;
   background: #071612;
+  touch-action: manipulation;
 }
 
 .fatal-error {
@@ -927,23 +929,23 @@ a {
 
 .cesium-orientation-hud {
   position: absolute;
-  z-index: 4;
+  z-index: 20;
   top: 0;
   left: 0;
   visibility: hidden;
-  width: min(220px, 72vw);
+  width: min(200px, 68vw);
   pointer-events: auto;
   will-change: transform;
 }
 
 .cesium-confirm-hud {
   position: absolute;
-  z-index: 5;
+  z-index: 21;
   top: 0;
   left: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   visibility: hidden;
   pointer-events: auto;
   will-change: transform;
@@ -967,13 +969,13 @@ a {
 }
 
 .cesium-confirm-hud__confirm {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-color: rgb(180 240 210 / 45%);
   background: rgb(28 120 88 / 88%);
   box-shadow: 0 6px 16px rgb(0 20 12 / 35%);
   color: #f3fff8;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
 }
 
@@ -987,12 +989,12 @@ a {
 }
 
 .cesium-confirm-hud__cancel {
-  width: 30px;
-  height: 30px;
+  width: 44px;
+  height: 44px;
   border-color: rgb(255 255 255 / 16%);
   background: rgb(12 20 24 / 55%);
   color: rgb(230 236 240 / 85%);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 500;
 }
 
@@ -1028,7 +1030,7 @@ a {
 .orientation-slider__input {
   display: block;
   width: 100%;
-  height: 28px;
+  height: 44px;
   margin: 0;
   accent-color: #f0b429;
   cursor: pointer;
@@ -1602,6 +1604,26 @@ a {
   pointer-events: none;
 }
 
+/* 仮配置中は確定／向き HUD を最前面に。ドック詳細は畳んでマップ操作領域を確保 */
+.game-shell.is-pending-placement .cesium-orientation-hud,
+.game-shell.is-pending-placement .cesium-confirm-hud {
+  z-index: 30;
+}
+
+.game-shell.is-pending-placement .construction-menu__detail,
+.game-shell.is-pending-placement .construction-menu__bullets,
+.game-shell.is-pending-placement .construction-menu__zone-tip {
+  display: none;
+}
+
+.game-shell.is-pending-placement .construction-menu__heading {
+  padding-bottom: 4px;
+}
+
+.game-shell.is-pending-placement .construction-menu__heading strong {
+  font-size: 12px;
+}
+
 .dock-drag-ghost {
   position: fixed;
   z-index: 40;
@@ -1765,6 +1787,14 @@ a {
   box-shadow: var(--shadow);
   backdrop-filter: blur(18px) saturate(1.2);
   animation: hud-slide-down 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* 表示は残しつつ地図操作は通す。ボタンだけ受け取る */
+  pointer-events: none;
+}
+
+.flood-hud button,
+.flood-hud__primary,
+.flood-hud__rain-button {
+  pointer-events: auto;
 }
 
 .flood-hud--disaster {
@@ -1854,11 +1884,12 @@ a {
 .result-panel__secondary {
   width: 100%;
   margin-top: 10px;
-  padding: 9px 12px;
+  min-height: 44px;
+  padding: 12px 14px;
   border-radius: 12px;
   font: inherit;
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 800;
   cursor: pointer;
 }
@@ -2248,12 +2279,17 @@ a {
 
 @media (max-width: 430px) {
   .flood-hud {
-    width: min(210px, calc(100vw - 118px));
+    width: min(196px, calc(100vw - 118px));
     min-width: 0;
+    padding: 10px;
   }
 
   .flood-hud__metrics {
     grid-template-columns: 1fr 1fr;
+  }
+
+  .flood-hud__title {
+    font-size: 13px;
   }
 
   .construction-menu {
@@ -2265,17 +2301,43 @@ a {
     padding-bottom: 6px;
   }
 
+  .construction-menu__detail {
+    display: none;
+  }
+
+  .construction-menu__heading strong {
+    font-size: 12px;
+  }
+
+  .structure-card {
+    min-width: 108px;
+    min-height: 56px;
+    padding: 8px 10px 8px 8px;
+  }
+
+  .structure-card__body strong {
+    font-size: 12px;
+  }
+
+  .structure-card__body small {
+    font-size: 11px;
+  }
+
   .game-toast {
     top: calc(118px + env(safe-area-inset-top));
   }
 
   .result-panel {
-    max-height: calc(100vh - 36px);
+    max-height: calc(100dvh - 36px);
     overflow-y: auto;
   }
 
   .cesium-orientation-hud {
-    width: min(156px, 62vw);
+    width: min(168px, 70vw);
+  }
+
+  .orientation-slider {
+    padding: 8px 12px;
   }
 }
 

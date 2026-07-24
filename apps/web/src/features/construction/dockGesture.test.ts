@@ -17,8 +17,13 @@ describe("resolveDockPointerIntent", () => {
     expect(resolveDockPointerIntent(18, 18)).toBe("scroll");
   });
 
-  it("縦移動が優勢なら drag", () => {
+  it("上方向かつ縦優勢なら drag", () => {
     expect(resolveDockPointerIntent(6, -28)).toBe("drag");
-    expect(resolveDockPointerIntent(-5, 30)).toBe("drag");
+    expect(resolveDockPointerIntent(-5, -30)).toBe("drag");
+  });
+
+  it("下方向の縦移動は drag にしない", () => {
+    expect(resolveDockPointerIntent(-5, 30)).toBe("scroll");
+    expect(resolveDockPointerIntent(0, 20)).toBe("scroll");
   });
 });

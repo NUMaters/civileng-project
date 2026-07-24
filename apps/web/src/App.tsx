@@ -23,13 +23,16 @@ type DockDragState = {
   startY: number;
   x: number;
   y: number;
+  pointerId: number;
   /** 地図上で 3D ゴーストを表示中（HTML アイコンは隠す）。 */
   overMap: boolean;
   placeable: boolean;
 };
 
-/** タップ選択とドラッグ配置を区別する最小移動量（CSS px）。 */
-const DOCK_DRAG_PLACE_THRESHOLD_PX = 28;
+/** ドックから地図への配置ドラッグを確定する最小移動量（CSS px）。 */
+const DOCK_DRAG_PLACE_THRESHOLD_PX = 18;
+/** 配置ゴーストを出し始める移動量（意図ロック直後から追従させる）。 */
+const DOCK_DRAG_GHOST_THRESHOLD_PX = 10;
 /** カメラ移動の WS 送信スロットル（ms）。 */
 const MOVE_SEND_THROTTLE_MS = 400;
 /** ローカル単独プレイではWS再接続を止め、開発サーバーのプロキシ負荷を避ける。 */
@@ -110,7 +113,14 @@ export function App() {
   ]);
 
   const beginDockDrag = useCallback(
-    (structureId: string, startX: number, startY: number, x: number, y: number) => {
+    (
+      structureId: string,
+      startX: number,
+      startY: number,
+      x: number,
+      y: number,
+      pointerId: number,
+    ) => {
       const structure = construction.structures.find(({ id }) => id === structureId);
       if (structure === undefined) {
         return;
@@ -121,7 +131,7 @@ export function App() {
       }
       const moved = Math.hypot(x - startX, y - startY);
       const ghost =
-        moved >= DOCK_DRAG_PLACE_THRESHOLD_PX
+        moved >= DOCK_DRAG_GHOST_THRESHOLD_PX
           ? mapRef.current?.updateDragGhost(structureId, x, y)
           : undefined;
       const next: DockDragState = {
@@ -131,6 +141,7 @@ export function App() {
         startY,
         x,
         y,
+        pointerId,
         overMap: ghost?.overMap === true,
         placeable: ghost?.placeable === true,
       };
@@ -223,6 +234,7 @@ export function App() {
   const isDockDragging = drag !== null;
   const isReviewing = flood.phase === "review";
   const hideConstructionUi = !inGame || flood.phase === "result" || isReviewing;
+  const hasPendingPlacement = construction.pendingPlacement !== null;
 
   useEffect(() => {
     if (!inGame || !isDockDragging) {
@@ -232,12 +244,12 @@ export function App() {
 
     const onMove = (event: PointerEvent) => {
       const current = dragRef.current;
-      if (current === null) {
+      if (current === null || event.pointerId !== current.pointerId) {
         return;
       }
       const moved = Math.hypot(event.clientX - current.startX, event.clientY - current.startY);
       const ghost =
-        moved >= DOCK_DRAG_PLACE_THRESHOLD_PX
+        moved >= DOCK_DRAG_GHOST_THRESHOLD_PX
           ? mapRef.current?.updateDragGhost(
               current.structureId,
               event.clientX,
@@ -263,6 +275,9 @@ export function App() {
 
     const onUp = (event: PointerEvent) => {
       const current = dragRef.current;
+      if (current !== null && event.pointerId !== current.pointerId) {
+        return;
+      }
       dragRef.current = null;
       setDrag(null);
       mapRef.current?.clearDragGhost();
@@ -307,7 +322,7 @@ export function App() {
 
       {gameLayerMounted ? (
         <main
-          className={`game-shell${drag !== null ? " is-dock-dragging" : ""}${isReviewing ? " is-reviewing" : ""}${inGame ? "" : " is-dormant"}`}
+          className={`game-shell${drag !== null ? " is-dock-dragging" : ""}${hasPendingPlacement ? " is-pending-placement" : ""}${isReviewing ? " is-reviewing" : ""}${inGame ? "" : " is-dormant"}`}
           aria-hidden={!inGame}
         >
           <div className="game-shell__veil game-shell__veil--top" aria-hidden="true" />

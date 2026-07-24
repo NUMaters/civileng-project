@@ -129,9 +129,9 @@ const GSI_SEAMLESS_PHOTO_URL = import.meta.env.DEV
   ? "/gsi-tiles/seamlessphoto/{z}/{x}/{y}.jpg"
   : "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
 /** 施設ドラッグ移設を開始する画面移動量（CSS px）。 */
-const MOVE_START_MOVE_PX = 6;
+const MOVE_START_MOVE_PX = 14;
 /** モデルを直接拾えなくても中心付近なら選択できる半径（CSS px）。 */
-const PLACEMENT_PICK_RADIUS_PX = 64;
+const PLACEMENT_PICK_RADIUS_PX = 72;
 /** 仮配置の矢印キー微調整量（m）。 */
 const NUDGE_METERS = 2.5;
 /** 地形高が取れないとき・NaN のときのフォールバック標高（楕円体高 m）。 */
@@ -339,17 +339,23 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       if (viewer === null || viewer.isDestroyed()) {
         return;
       }
-      // ロビーから戻った直後はキャンバス寸法が 0 のまま残ることがある。
-      viewer.resize();
-      viewer.scene.requestRender();
-      const retry = window.setTimeout(() => {
+      const resizeViewer = () => {
         if (viewer.isDestroyed()) {
           return;
         }
         viewer.resize();
         viewer.scene.requestRender();
-      }, 120);
-      return () => window.clearTimeout(retry);
+      };
+      // ロビーから戻った直後やモバイルのツールバー伸縮で寸法がずれる。
+      resizeViewer();
+      const retry = window.setTimeout(resizeViewer, 120);
+      window.visualViewport?.addEventListener("resize", resizeViewer);
+      window.addEventListener("orientationchange", resizeViewer);
+      return () => {
+        window.clearTimeout(retry);
+        window.visualViewport?.removeEventListener("resize", resizeViewer);
+        window.removeEventListener("orientationchange", resizeViewer);
+      };
     }, [mapActive]);
 
     useImperativeHandle(ref, () => ({
@@ -582,7 +588,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           intensity: 2.2,
         });
         tuneImageryLayer(gsiBaseLayer);
-        mapViewer.scene.screenSpaceCameraController.enableTilt = true;
+        mapViewer.scene.screenSpaceCameraController.enableTilt =
+          typeof window !== "undefined" ? window.matchMedia("(min-width: 768px)").matches : true;
         mapViewer.scene.screenSpaceCameraController.enableLook = false;
         mapViewer.scene.screenSpaceCameraController.minimumZoomDistance =
           CAMERA_MIN_ZOOM_DISTANCE_M;
@@ -851,6 +858,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             canvas.style.cursor = "";
             return;
           }
+          // 仮配置を掴んだ瞬間からカメラを止め、パンと移設の競合を防ぐ。
+          mapViewer.scene.screenSpaceCameraController.enableInputs = false;
           canvas.style.cursor = "move";
           moveSession = {
             placementId: pickedId,
@@ -869,7 +878,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           const distance = Cartesian2.distance(pointerDown, event.endPosition);
           if (!moveSession.active && distance > MOVE_START_MOVE_PX) {
             moveSession.active = true;
-            mapViewer.scene.screenSpaceCameraController.enableInputs = false;
           }
           if (!moveSession.active) {
             return;
@@ -1140,13 +1148,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           );
           const hud = orientationHudRef.current;
           if (hud !== null) {
-            // 施設の手前（画面下側）にスライダーを置く。
-            applyScreenHudPosition(hud, screenBelow, 0, 28, "below");
+            // 施設の右下にスライダーを置き、モデル本体のドラッグ移設と重なりにくくする。
+            applyScreenHudPosition(hud, screenBelow, 72, 18, "below");
           }
           const confirmHud = confirmHudRef.current;
           if (confirmHud !== null) {
             // 施設の上に確定／キャンセルをさりげなく置く。
-            applyScreenHudPosition(confirmHud, screenAbove, 0, -8, "above");
+            applyScreenHudPosition(confirmHud, screenAbove, 0, -12, "above");
           }
         }
       };
@@ -1398,7 +1406,7 @@ function applyScreenLabelPosition(
   element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) translate(-50%, -100%)`;
 }
 
-/** 施設の手前など、アンカー点の下に UI を置く。画面端でははみ出さないようクランプする。 */
+/** 施設の手前など、アンカー点の下に UI を置く。画面端・ドック帯でははみ出さないようクランプする。 */
 function applyScreenHudPosition(
   element: HTMLDivElement,
   screen: Cartesian2 | undefined,
@@ -1414,19 +1422,48 @@ function applyScreenHudPosition(
   const parent = element.offsetParent as HTMLElement | null;
   const viewWidth = parent?.clientWidth ?? window.innerWidth;
   const viewHeight = parent?.clientHeight ?? window.innerHeight;
-  const pad = 12;
+  const safeTop = readSafeAreaInset("top");
+  const safeBottom = readSafeAreaInset("bottom");
+  const dockClearance = estimateDockClearancePx();
+  const padX = 12;
+  const padTop = 12 + safeTop;
+  const padBottom = 12 + safeBottom + dockClearance;
   const halfWidth = Math.max(element.offsetWidth, 120) / 2;
-  const height = Math.max(element.offsetHeight, 28);
+  const height = Math.max(element.offsetHeight, 44);
   let x = screen.x + offsetX;
   let y = screen.y + offsetY;
-  x = Math.min(viewWidth - pad - halfWidth, Math.max(pad + halfWidth, x));
+  x = Math.min(viewWidth - padX - halfWidth, Math.max(padX + halfWidth, x));
   if (anchor === "above") {
-    y = Math.min(viewHeight - pad, Math.max(pad + height, y));
+    y = Math.min(viewHeight - padBottom, Math.max(padTop + height, y));
   } else {
-    y = Math.min(viewHeight - pad - height, Math.max(pad, y));
+    y = Math.min(viewHeight - padBottom - height, Math.max(padTop, y));
   }
   const anchorTransform = anchor === "above" ? "translate(-50%, -100%)" : "translate(-50%, 0)";
   element.style.transform = `translate(${x}px, ${y}px) ${anchorTransform}`;
+}
+
+function readSafeAreaInset(edge: "top" | "bottom" | "left" | "right"): number {
+  if (typeof document === "undefined") {
+    return 0;
+  }
+  const probe = document.createElement("div");
+  probe.style.cssText = `position:fixed;visibility:hidden;pointer-events:none;padding-${edge}:env(safe-area-inset-${edge}, 0px);`;
+  document.body.appendChild(probe);
+  const value = Number.parseFloat(getComputedStyle(probe).getPropertyValue(`padding-${edge}`));
+  probe.remove();
+  return Number.isFinite(value) ? value : 0;
+}
+
+/** 下部建設ドックが覆う概算高さ。仮配置 HUD がドック下に沈まないようにする。 */
+function estimateDockClearancePx(): number {
+  if (typeof document === "undefined") {
+    return 120;
+  }
+  const dock = document.querySelector(".construction-menu");
+  if (!(dock instanceof HTMLElement) || dock.offsetParent === null) {
+    return 24;
+  }
+  return Math.min(Math.max(dock.offsetHeight + 16, 96), 220);
 }
 
 async function loadAlignedTerrain(viewer: Viewer, isDisposed: () => boolean): Promise<void> {

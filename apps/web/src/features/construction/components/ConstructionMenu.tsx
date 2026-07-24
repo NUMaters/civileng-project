@@ -13,6 +13,7 @@ type ConstructionMenuProps = {
     startY: number,
     x: number,
     y: number,
+    pointerId: number,
   ) => void;
 };
 

@@ -9,13 +9,14 @@ type StructureCardProps = {
   selected: boolean;
   disabled: boolean;
   onSelect: (structureId: string) => void;
-  /** 縦ドラッグ確定時。start は pointerdown、x/y は確定時点の座標。 */
+  /** 上方向ドラッグ確定時。start は pointerdown、x/y は確定時点の座標。 */
   onDragStart: (
     structureId: string,
     startX: number,
     startY: number,
     x: number,
     y: number,
+    pointerId: number,
   ) => void;
 };
 
@@ -44,6 +45,7 @@ export function StructureCard({
         }
         // preventDefault しない＝横スクロールを阻害しない
         onSelect(structure.id);
+        const target = event.currentTarget;
         const pointerId = event.pointerId;
         const startX = event.clientX;
         const startY = event.clientY;
@@ -67,18 +69,32 @@ export function StructureCard({
             return;
           }
           if (intent === "scroll") {
-            // 横スクロールに任せる。リスナーだけ外す。
             cleanup();
             return;
           }
+          // 配置ドラッグ確定: 即 touch-action を止め、capture で指を追う
+          try {
+            target.style.touchAction = "none";
+            target.setPointerCapture(pointerId);
+          } catch {
+            // capture 非対応環境でも後続の window リスナーで追従できる
+          }
           cleanup();
-          onDragStart(structure.id, startX, startY, moveEvent.clientX, moveEvent.clientY);
+          onDragStart(
+            structure.id,
+            startX,
+            startY,
+            moveEvent.clientX,
+            moveEvent.clientY,
+            pointerId,
+          );
         };
 
         const onUp = (upEvent: PointerEvent) => {
           if (upEvent.pointerId !== pointerId) {
             return;
           }
+          target.style.touchAction = "";
           cleanup();
         };
 
