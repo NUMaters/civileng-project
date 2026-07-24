@@ -55,7 +55,10 @@ export function syncProtectionVisualization(
   bankSites: readonly ProtectedBankSite[],
   options: {
     showBankSites: boolean;
-    /** 準備中も弱点の位置を示し、影響圏の狙いを分かりやすくする。 */
+    /**
+     * 弱点マーカー。準備／災害中かつ配置操作中のみ出す。
+     * 未開始・未配置時は出さない（決壊と紛らわしい）。
+     */
     showWeaknessTargets: boolean;
   },
 ): void {
@@ -138,6 +141,20 @@ export function syncProtectionVisualization(
           outlineWidth: 2,
         },
       });
+    }
+  }
+}
+
+/** 影響圏・弱点・防護マーカーをすべて消す。 */
+export function clearProtectionVisualization(viewer: Viewer): void {
+  for (const entity of [...viewer.entities.values]) {
+    if (
+      entity.id.startsWith(ZONE_PREFIX) ||
+      entity.id.startsWith(ZONE_AXIS_PREFIX) ||
+      entity.id.startsWith(BANK_PREFIX) ||
+      entity.id.startsWith(TARGET_PREFIX)
+    ) {
+      viewer.entities.remove(entity);
     }
   }
 }

@@ -1,3 +1,4 @@
+import { loadRules } from "@civilcraft/game-data/load";
 import { describe, expect, it } from "vitest";
 import type { PlacedStructure } from "../../construction";
 import {
@@ -7,10 +8,14 @@ import {
   calculateOverflowSites,
   calculatePlacementEffectiveness,
   createInitialFloodState,
+  DEFAULT_WEATHER_SEED,
   enterReview,
   refreshPlacementEffects,
   reopenResult,
 } from "./floodSimulation";
+
+const CLEAR_THRESHOLD = loadRules().victory.clearThresholdPercent;
+const DISASTER_SECONDS = loadRules().timing.phases.disasterSeconds;
 
 /** キャンパスコア弱点の河岸に、堤体が川沿いになる向きの堤防を置く。 */
 function bankLevee(
@@ -52,6 +57,18 @@ const BASIN = place("basin-south", "retention-basin", 140.3762, 37.3584, 90);
 /** 越水・侵食・内水・貯留を組み合わせた適所配置。 */
 const BALANCED_DEFENSE = [CORE, SOUTH, NORTH, REVETMENT, PUMP, BASIN];
 
+function startDisaster() {
+  return beginDisaster(createInitialFloodState(), { weatherSeed: DEFAULT_WEATHER_SEED });
+}
+
+function runToResult(placements: PlacedStructure[]) {
+  let state = startDisaster();
+  for (let second = 0; second < DISASTER_SECONDS + 2; second += 1) {
+    state = advanceFloodSimulation(state, placements);
+  }
+  return state;
+}
+
 function channelMisplacedLevee(): PlacedStructure {
   return {
     id: "levee-channel",
@@ -63,52 +80,37 @@ function channelMisplacedLevee(): PlacedStructure {
 
 describe("floodSimulation", () => {
   it("施設がない場合は大雨で浸水被害が発生する", () => {
-    let state = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      state = advanceFloodSimulation(state, []);
-    }
+    const state = runToResult([]);
 
     expect(state.phase).toBe("result");
-    expect(state.damagePercent).toBeGreaterThan(5);
+    expect(state.damagePercent).toBeGreaterThan(CLEAR_THRESHOLD);
     expect(state.isClear).toBe(false);
   });
 
   it("堤防1基だけではクリアできない", () => {
-    let state = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      state = advanceFloodSimulation(state, [CORE]);
-    }
+    const state = runToResult([CORE]);
     expect(state.isClear).toBe(false);
-    expect(state.damagePercent).toBeGreaterThan(5);
+    expect(state.damagePercent).toBeGreaterThan(CLEAR_THRESHOLD);
   });
 
   it("同種の堤防を重ねるだけではクリアできない", () => {
-    let state = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      state = advanceFloodSimulation(state, [CORE, SOUTH, NORTH]);
-    }
+    const state = runToResult([CORE, SOUTH, NORTH]);
     expect(state.isClear).toBe(false);
-    expect(state.damagePercent).toBeGreaterThan(5);
+    expect(state.damagePercent).toBeGreaterThan(CLEAR_THRESHOLD);
   });
 
   it("適所の混成配置ならクリアできる", () => {
-    let state = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      state = advanceFloodSimulation(state, BALANCED_DEFENSE);
-    }
+    const state = runToResult(BALANCED_DEFENSE);
 
     expect(state.phase).toBe("result");
-    expect(state.damagePercent).toBeLessThan(5);
+    expect(state.damagePercent).toBeLessThan(CLEAR_THRESHOLD);
     expect(state.isClear).toBe(true);
+    expect(state.score).toBeGreaterThan(1_500);
   });
 
   it("適所混成は無防備より被害を大きく減らす", () => {
-    let bare = beginDisaster(createInitialFloodState());
-    let defended = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      bare = advanceFloodSimulation(bare, []);
-      defended = advanceFloodSimulation(defended, BALANCED_DEFENSE);
-    }
+    const bare = runToResult([]);
+    const defended = runToResult(BALANCED_DEFENSE);
 
     expect(defended.damagePercent).toBeLessThan(bare.damagePercent * 0.25);
     expect(defended.mitigation.averageEffectiveness).toBeGreaterThan(0.5);
@@ -132,12 +134,8 @@ describe("floodSimulation", () => {
 
   it("決壊口への排水機場は誤配置で被害が増える", () => {
     const pumpOnBreach = place("pump-wrong", "drainage-pump", 140.37776, 37.359853, 50);
-    let bare = beginDisaster(createInitialFloodState());
-    let wrong = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      bare = advanceFloodSimulation(bare, []);
-      wrong = advanceFloodSimulation(wrong, [pumpOnBreach]);
-    }
+    const bare = runToResult([]);
+    const wrong = runToResult([pumpOnBreach]);
     expect(wrong.damagePercent).toBeGreaterThan(bare.damagePercent);
     expect(wrong.mitigation.placementInterference).toBeGreaterThan(0.3);
   });
@@ -159,9 +157,23 @@ describe("floodSimulation", () => {
     expect(gain12).toBeGreaterThan(gain23);
   });
 
+  it("雨量は時間経過で落ち着いたり強まったりする", () => {
+    let state = startDisaster();
+    const samples: number[] = [];
+    for (let second = 0; second < 60; second += 1) {
+      state = advanceFloodSimulation(state, []);
+      samples.push(state.rainfallIntensity);
+    }
+    const min = Math.min(...samples);
+    const max = Math.max(...samples);
+    expect(max - min).toBeGreaterThan(0.12);
+    expect(min).toBeLessThan(0.55);
+    expect(max).toBeGreaterThan(0.45);
+  });
+
   it("越水時は局所流出地点が現れ、近傍の堤防で抑えられる", () => {
-    let unprotected = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 75; second += 1) {
+    let unprotected = startDisaster();
+    for (let second = 0; second < DISASTER_SECONDS - 10; second += 1) {
       unprotected = advanceFloodSimulation(unprotected, []);
     }
     expect(unprotected.overflowMeters).toBeGreaterThan(0.05);
@@ -176,10 +188,10 @@ describe("floodSimulation", () => {
   });
 
   it("越水後にのみ氾濫原指標が立つ", () => {
-    let state = beginDisaster(createInitialFloodState());
+    let state = startDisaster();
     expect(state.floodplainFillRatio).toBe(0);
 
-    for (let second = 0; second < 25; second += 1) {
+    for (let second = 0; second < 30; second += 1) {
       state = advanceFloodSimulation(state, []);
     }
     // 増水途中でも越水前は 0（街全体の冠水表現に使わない）。
@@ -187,7 +199,7 @@ describe("floodSimulation", () => {
       expect(state.floodplainFillRatio).toBe(0);
     }
 
-    for (let second = 0; second < 70; second += 1) {
+    for (let second = 0; second < DISASTER_SECONDS; second += 1) {
       state = advanceFloodSimulation(state, []);
     }
     expect(state.overflowMeters).toBeGreaterThan(0.05);
@@ -226,10 +238,7 @@ describe("floodSimulation", () => {
   });
 
   it("結果からプレビューへ遷移でき、プレビュー中は状態が凍結される", () => {
-    let state = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      state = advanceFloodSimulation(state, []);
-    }
+    let state = runToResult([]);
     expect(state.phase).toBe("result");
     const damage = state.damagePercent;
 
@@ -259,12 +268,8 @@ describe("floodSimulation", () => {
       headingDegrees: 50,
     };
 
-    let withLevee = beginDisaster(createInitialFloodState());
-    let withPump = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      withLevee = advanceFloodSimulation(withLevee, [leveeAtCore]);
-      withPump = advanceFloodSimulation(withPump, [pumpAtCore]);
-    }
+    const withLevee = runToResult([leveeAtCore]);
+    const withPump = runToResult([pumpAtCore]);
 
     expect(withLevee.damagePercent).toBeLessThan(withPump.damagePercent);
     expect(withPump.mitigation.placementInterference).toBeGreaterThan(
@@ -286,12 +291,8 @@ describe("floodSimulation", () => {
       headingDegrees: 110,
     };
 
-    let withRevetment = beginDisaster(createInitialFloodState());
-    let withLevee = beginDisaster(createInitialFloodState());
-    for (let second = 0; second < 90; second += 1) {
-      withRevetment = advanceFloodSimulation(withRevetment, [revetmentAtBend]);
-      withLevee = advanceFloodSimulation(withLevee, [leveeAtBend]);
-    }
+    const withRevetment = runToResult([revetmentAtBend]);
+    const withLevee = runToResult([leveeAtBend]);
 
     const revSite = withRevetment.overflowSites.find((site) => site.id === "north-bend");
     const leveeSite = withLevee.overflowSites.find((site) => site.id === "north-bend");

@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { HowToPlayModal } from "./HowToPlayModal";
 import type { PlayMode } from "./types";
 
 type GameMenuScreenProps = {
@@ -126,7 +127,7 @@ export function GameMenuScreen({
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">シングルプレイ</span>
             <strong>一人で治水に挑戦</strong>
-            <span className="game-menu__mode-meta">準備 10 秒 · 大雨 60 秒 · 被害 5% 未満でクリア</span>
+            <span className="game-menu__mode-meta">準備 60 秒 · 大雨 90 秒 · 被害 8% 未満でクリア</span>
           </span>
         </button>
         <button
@@ -183,47 +184,5 @@ export function GameMenuScreen({
         <HowToPlayModal titleId={howtoTitleId} onClose={() => setHowtoOpen(false)} />
       ) : null}
     </section>
-  );
-}
-
-function HowToPlayModal({
-  titleId,
-  onClose,
-}: {
-  titleId: string;
-  onClose: () => void;
-}) {
-  return (
-    <div className="howto-modal" role="presentation">
-      <button className="howto-modal__backdrop" type="button" aria-label="閉じる" onClick={onClose} />
-      <div
-        className="howto-modal__panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <header className="howto-modal__head">
-          <h2 id={titleId}>遊び方</h2>
-          <button type="button" onClick={onClose} aria-label="閉じる">
-            ×
-          </button>
-        </header>
-        <div className="howto-modal__body">
-          <p>阿武隈川の弱点に合う土木施設を置き、大雨からまちを守ろう。</p>
-          <ul>
-            <li>ドックから配置帯（黄色い帯）へドラッグ</li>
-            <li>向き調整 → ✓ で確定</li>
-            <li>色付きの影響範囲内の弱点にだけ効く</li>
-            <li>相性を合わせる（越水→堤防、侵食→護岸、内水→排水）</li>
-            <li>合わない場所への設置は逆効果になる</li>
-            <li>同じ施設の重ね置きだけでは足りない</li>
-            <li>準備 10 秒 · 大雨 60 秒／被害 5% 未満でクリア</li>
-          </ul>
-        </div>
-        <button className="howto-modal__ok" type="button" onClick={onClose}>
-          了解
-        </button>
-      </div>
-    </div>
   );
 }

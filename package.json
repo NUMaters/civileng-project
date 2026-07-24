@@ -10,7 +10,8 @@
     "build": "pnpm -r build",
     "dev:web": "pnpm --filter @civilcraft/web dev:ensure",
     "dev:web:fg": "pnpm --filter @civilcraft/web dev",
-    "stop:web": "pnpm --filter @civilcraft/web stop:dev"
+    "stop:web": "pnpm --filter @civilcraft/web stop:dev",
+    "deploy:web": "pnpm --filter @civilcraft/web pages:deploy"
   },
   "devDependencies": {
     "prettier": "^3.5.3"

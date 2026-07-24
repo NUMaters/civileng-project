@@ -55,7 +55,7 @@ import {
   syncOverflowVisualization,
 } from "./overflowVisualization";
 import { createPlaceableZone } from "./placeableZone";
-import { syncProtectionVisualization } from "./protectionVisualization";
+import { syncProtectionVisualization, clearProtectionVisualization } from "./protectionVisualization";
 import { nearestPointOnPolyline, resolvePlaceablePosition } from "./riverPlacement";
 import { createRiverWaterSurface, type RiverWaterSurfaceController } from "./riverWaterSurface";
 import { createStructureMaterial } from "./structureMaterials";
@@ -170,6 +170,8 @@ type CesiumGameMapProps = {
   onCameraFocusChange?: (position: GeoPosition) => void;
   floodState?: {
     active: boolean;
+    /** 地図マーカー表示の切替用。idle では決壊・設置ガイドを出さない。 */
+    phase: "idle" | "preparation" | "disaster" | "result" | "review";
     rainfallIntensity: number;
     riverLevelMeters: number;
     overflowMeters: number;
@@ -294,25 +296,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       [placements],
     );
 
-    const influenceHint = useMemo(() => {
-      if (orientationTarget === null) {
-        return null;
-      }
-      const influence =
-        floodState?.structureInfluences.find(
-          (item) => item.placementId === orientationTarget.id,
-        ) ?? null;
-      if (influence === null) {
-        return null;
-      }
-      return {
-        effectLabel: influence.effectLabel,
-        zoneMeaning: influence.zoneMeaning,
-        coverageHint: influence.coverageHint,
-        coverageTone: influence.coverageTone,
-      };
-    }, [floodState?.structureInfluences, orientationTarget]);
-
     // 決壊はオレンジ楕円・浸水プルームだけで示し、地点名ラベルは出さない。
     const mapLabels = facilityLabels;
 
@@ -413,7 +396,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           clearDragGhostEntities(viewer);
           dragGhostLastKeyRef.current = "";
           dragGhostInfluenceRef.current = null;
-          refreshProtectionWithDragGhost(viewer, floodStateRef.current, null);
+          refreshProtectionWithDragGhost(viewer, floodStateRef.current, null, mapActiveRef.current);
           return { overMap: false, placeable: false };
         }
 
@@ -422,7 +405,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           clearDragGhostEntities(viewer);
           dragGhostLastKeyRef.current = "";
           dragGhostInfluenceRef.current = null;
-          refreshProtectionWithDragGhost(viewer, floodStateRef.current, null);
+          refreshProtectionWithDragGhost(viewer, floodStateRef.current, null, mapActiveRef.current);
           return { overMap: true, placeable: false };
         }
 
@@ -474,7 +457,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           // 設置前から影響圏を見せ、置き場判断を助ける。
           const influence = calculateStructureInfluences([ghost])[0] ?? null;
           dragGhostInfluenceRef.current = influence;
-          refreshProtectionWithDragGhost(activeViewer, floodStateRef.current, influence);
+          refreshProtectionWithDragGhost(
+            activeViewer,
+            floodStateRef.current,
+            influence,
+            mapActiveRef.current,
+          );
           activeViewer.scene.requestRender();
         });
 
@@ -488,7 +476,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         dragGhostLastKeyRef.current = "";
         dragGhostInfluenceRef.current = null;
         clearDragGhostEntities(viewerRef.current);
-        refreshProtectionWithDragGhost(viewerRef.current, floodStateRef.current, null);
+        refreshProtectionWithDragGhost(
+          viewerRef.current,
+          floodStateRef.current,
+          null,
+          mapActiveRef.current,
+        );
         viewerRef.current?.scene.requestRender();
       },
     }));
@@ -754,8 +747,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
 
+        // 配置帯は準備／災害中かつ mapActive のときだけ出す（初期化時点では作らない）。
         placeableZoneRef.current?.destroy();
-        placeableZoneRef.current = createPlaceableZone(mapViewer);
+        placeableZoneRef.current = null;
+        syncPlaceableZoneForPhase(mapViewer, placeableZoneRef, floodStateRef.current, mapActiveRef.current);
 
         void createRiverWaterSurface(mapViewer)
           .then((controller) => {
@@ -1028,31 +1023,53 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return;
       }
 
-      const sites = floodState?.active === true ? (floodState.overflowSites ?? []) : [];
-      refreshProtectionWithDragGhost(viewer, floodState, dragGhostInfluenceRef.current);
+      // ロビー裏表示・未開始時は決壊／弱点／影響圏／配置帯をすべて消す。
+      if (!mapActive || floodState?.phase === "idle" || floodState === undefined) {
+        clearProtectionVisualization(viewer);
+        dragGhostInfluenceRef.current = null;
+        syncOverflowVisualization(viewer, [], 0, 0);
+        syncInundationVisualization(viewer, [], 0, false);
+        syncNearOverflowFloodplain(viewer, {
+          active: false,
+          riverLevelMeters: 2.2,
+          overflowMeters: 0,
+        });
+        placeableZoneRef.current?.destroy();
+        placeableZoneRef.current = null;
+        clearLegacyFloodZones(viewer);
+        viewer.scene.requestRender();
+        return;
+      }
+
+      syncPlaceableZoneForPhase(viewer, placeableZoneRef, floodState, mapActive);
+
+      const sites = floodState.active === true ? (floodState.overflowSites ?? []) : [];
+      refreshProtectionWithDragGhost(viewer, floodState, dragGhostInfluenceRef.current, mapActive);
       syncNearOverflowFloodplain(viewer, {
-        active: floodState?.active === true,
-        riverLevelMeters: floodState?.riverLevelMeters ?? 2.2,
-        overflowMeters: floodState?.overflowMeters ?? 0,
-        overflowLevelMeters: floodState?.overflowLevelMeters,
+        active: floodState.active === true,
+        riverLevelMeters: floodState.riverLevelMeters ?? 2.2,
+        overflowMeters: floodState.overflowMeters ?? 0,
+        overflowLevelMeters: floodState.overflowLevelMeters,
       });
       syncOverflowVisualization(
         viewer,
         sites,
-        floodState?.floodDepthMeters ?? 0,
-        floodState?.floodedAreaPercent ?? 0,
+        floodState.floodDepthMeters ?? 0,
+        floodState.floodedAreaPercent ?? 0,
       );
       syncInundationVisualization(
         viewer,
         sites,
-        floodState?.floodDepthMeters ?? 0,
-        floodState?.active === true,
+        floodState.floodDepthMeters ?? 0,
+        floodState.active === true,
       );
       // 旧・無関係な固定浸水ゾーンは使わない（決壊地点からの浸水のみ）。
       clearLegacyFloodZones(viewer);
       viewer.scene.requestRender();
     }, [
+      mapActive,
       floodState?.active,
+      floodState?.phase,
       floodState?.floodDepthMeters,
       floodState?.floodedAreaPercent,
       floodState?.overflowLevelMeters,
@@ -1252,16 +1269,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               ref={orientationHudRef}
               className={`cesium-orientation-hud${orientationTarget.preview === true ? " is-preview" : ""}`}
             >
-              {influenceHint !== null ? (
-                <div
-                  className={`influence-placement-hint influence-placement-hint--${influenceHint.coverageTone}`}
-                  role="status"
-                >
-                  <strong>{influenceHint.effectLabel}</strong>
-                  <span>{influenceHint.zoneMeaning}</span>
-                  <em>{influenceHint.coverageHint}</em>
-                </div>
-              ) : null}
               <RotationControls
                 floating
                 headingDegrees={orientationTarget.headingDegrees}
@@ -1861,24 +1868,58 @@ function refreshProtectionWithDragGhost(
   floodState:
     | {
         active: boolean;
+        phase?: "idle" | "preparation" | "disaster" | "result" | "review";
         structureInfluences: StructureInfluence[];
         protectedBankSites: ProtectedBankSite[];
       }
     | null
     | undefined,
   dragInfluence: StructureInfluence | null = null,
+  mapActive = true,
 ): void {
   if (viewer === null || viewer.isDestroyed()) {
     return;
   }
+  const phase = floodState?.phase ?? "idle";
+  const playable = mapActive && (phase === "preparation" || phase === "disaster");
+  if (!playable) {
+    clearProtectionVisualization(viewer);
+    return;
+  }
+
   const base = floodState?.structureInfluences ?? [];
   const influences = dragInfluence
     ? [...base.filter((item) => item.placementId !== dragInfluence.placementId), dragInfluence]
     : base;
+  // 弱点マーカーは配置中（確定／仮／ドラッグ）だけ。未配置の常時表示は決壊と紛らわしい。
+  const showWeaknessTargets = influences.length > 0;
   syncProtectionVisualization(viewer, influences, floodState?.protectedBankSites ?? [], {
     showBankSites: floodState?.active === true,
-    showWeaknessTargets: true,
+    showWeaknessTargets,
   });
+}
+
+function syncPlaceableZoneForPhase(
+  viewer: Viewer,
+  placeableZoneRef: { current: { destroy: () => void } | null },
+  floodState:
+    | {
+        phase?: "idle" | "preparation" | "disaster" | "result" | "review";
+      }
+    | null
+    | undefined,
+  mapActive: boolean,
+): void {
+  const phase = floodState?.phase ?? "idle";
+  const shouldShow = mapActive && (phase === "preparation" || phase === "disaster");
+  if (!shouldShow) {
+    placeableZoneRef.current?.destroy();
+    placeableZoneRef.current = null;
+    return;
+  }
+  if (placeableZoneRef.current === null) {
+    placeableZoneRef.current = createPlaceableZone(viewer);
+  }
 }
 
 function clearDragGhostEntities(viewer: Viewer | null): void {

@@ -121,13 +121,13 @@ packages/game-data/structures/<structure-id>.json
 
 ```json
 {
-  "clearThresholdPercent": 5,
-  "failureThresholdPercent": 5,
+  "clearThresholdPercent": 8,
+  "failureThresholdPercent": 8,
   "description": "被災度が clearThresholdPercent 未満でクリア、以上で失敗"
 }
 ```
 
-[game-rules.md](../game-design/game-rules.md) の MVP 既定値（被災度 5%）に準拠。
+[game-rules.md](../game-design/game-rules.md) の MVP 既定値（被災度 8%）に準拠。
 
 ### budget-rules.json
 
@@ -135,13 +135,13 @@ packages/game-data/structures/<structure-id>.json
 
 ```json
 {
-  "initialBudgetSolo": 12000,
-  "initialBudgetMultiplayerPerPlayer": 9000,
-  "incomePerSecondPreparation": 80,
-  "incomePerSecondDisaster": 110,
-  "disasterStartGrant": 2000,
-  "maxBudget": 24000,
-  "description": "初期予算＋準備／災害中の補給で複数施設を置ける。維持費は毎秒差し引き、上限 maxBudget で貯めすぎを防ぐ。"
+  "initialBudgetSolo": 11000,
+  "initialBudgetMultiplayerPerPlayer": 8500,
+  "incomePerSecondPreparation": 90,
+  "incomePerSecondDisaster": 130,
+  "disasterStartGrant": 1800,
+  "maxBudget": 22000,
+  "description": "予算ポイントは多め。準備・災害中の補給と緊急予算で追加配置しやすくする。維持費は毎秒差し引き。所持上限あり。"
 }
 ```
 
@@ -149,15 +149,15 @@ packages/game-data/structures/<structure-id>.json
 
 ### game-timing.json
 
-1 プレイ約 90 秒（1 分半）のフェーズ配分（準備 10 / 災害 60 / 結果 20）。
+1 プレイ約 180 秒（3 分）のフェーズ配分（準備 60 / 災害 90 / 結果 30）。大雨中の雨量はシミュレーション側でランダムに小康／並雨／強雨へ切り替わる。
 
 ```json
 {
-  "totalPlayTimeSeconds": 90,
+  "totalPlayTimeSeconds": 180,
   "phases": {
-    "preparationSeconds": 10,
-    "disasterSeconds": 60,
-    "resultSeconds": 20
+    "preparationSeconds": 60,
+    "disasterSeconds": 90,
+    "resultSeconds": 30
   }
 }
 ```

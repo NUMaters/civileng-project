@@ -13,6 +13,17 @@ const cesiumBaseUrl = "cesiumStatic";
 const cesiumFolders = ["Assets", "Workers", "Widgets", "ThirdParty"] as const;
 /** iCloud Documents 外に置き、キャッシュ読み書きでのハングを避ける。 */
 const viteCacheDir = path.join(homedir(), ".cache", "civilcraft", "vite");
+/**
+ * ビルド出力先。
+ * - CI / 明示指定: CIVILCRAFT_OUT_DIR または相対 dist
+ * - ローカル（iCloud Documents 配下）: ~/.cache/civilcraft/web-dist へ逃がす
+ */
+const viteOutDir =
+  process.env.CIVILCRAFT_OUT_DIR ??
+  (process.env.CI === "true"
+    ? path.resolve(webRoot, "dist")
+    : path.join(homedir(), ".cache", "civilcraft", "web-dist"));
+const includePlateauPublic = process.env.CIVILCRAFT_INCLUDE_PLATEAU === "1";
 const stableDev = process.env.CIVILCRAFT_DEV_STABLE === "1";
 
 const MIME: Record<string, string> = {
@@ -72,7 +83,7 @@ function serveCesiumAssets(): Plugin {
       });
     },
     closeBundle() {
-      const outDir = path.resolve(webRoot, "dist", cesiumBaseUrl);
+      const outDir = path.resolve(viteOutDir, cesiumBaseUrl);
       rmSync(outDir, { recursive: true, force: true });
       mkdirSync(outDir, { recursive: true });
       for (const folder of cesiumFolders) {
@@ -81,6 +92,31 @@ function serveCesiumAssets(): Plugin {
           throw new Error(`Missing Cesium folder: ${from}`);
         }
         cpSync(from, path.join(outDir, folder), { recursive: true });
+      }
+    },
+  };
+}
+
+/** 本番では plateau を除く public だけを成果物へ載せる。 */
+function copySlimPublicAssets(): Plugin {
+  const slimFiles = ["_redirects", "_headers", "manifest.webmanifest"] as const;
+  return {
+    name: "civilcraft-copy-slim-public",
+    apply: "build",
+    closeBundle() {
+      if (includePlateauPublic) {
+        return;
+      }
+      mkdirSync(viteOutDir, { recursive: true });
+      for (const name of slimFiles) {
+        const from = path.join(webRoot, "public", name);
+        if (existsSync(from)) {
+          cpSync(from, path.join(viteOutDir, name));
+        }
+      }
+      const iconsFrom = path.join(webRoot, "public", "icons");
+      if (existsSync(iconsFrom)) {
+        cpSync(iconsFrom, path.join(viteOutDir, "icons"), { recursive: true });
       }
     },
   };
@@ -146,7 +182,9 @@ export default defineConfig({
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
   },
   cacheDir: viteCacheDir,
-  plugins: [react(), serveCesiumAssets(), proxyGsiTiles()],
+  // plateau（巨大）を Vite の public コピーから外す。必要時のみ全コピー。
+  publicDir: includePlateauPublic ? "public" : false,
+  plugins: [react(), serveCesiumAssets(), copySlimPublicAssets(), proxyGsiTiles()],
   optimizeDeps: {
     // Cesium pulls CommonJS deps (e.g. mersenne-twister). Prebundle them so
     // Vite does not request a non-existent default ESM export at runtime.
@@ -164,6 +202,8 @@ export default defineConfig({
     entries: ["index.html", "src/main.tsx"],
   },
   build: {
+    outDir: viteOutDir,
+    emptyOutDir: true,
     chunkSizeWarningLimit: 5000,
   },
   server: {

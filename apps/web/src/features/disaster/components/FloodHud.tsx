@@ -2,7 +2,18 @@ import type { HazardKind } from "@civilcraft/game-data/types";
 import type { FloodSimulationState, MitigationSummary } from "../services/floodSimulation";
 import { getHazardLabel } from "../../construction/structureVisuals";
 
-type FloodHudProps = FloodSimulationState & {
+type FloodHudProps = Pick<
+  FloodSimulationState,
+  | "phase"
+  | "phaseRemainingSeconds"
+  | "rainfallIntensity"
+  | "riverLevelMeters"
+  | "overflowMeters"
+  | "floodDepthMeters"
+  | "damagePercent"
+  | "overflowSites"
+  | "mitigation"
+> & {
   onStartGame: () => void;
   onStartRainNow: () => void;
 };
@@ -55,8 +66,6 @@ export function FloodHud({
             <p className="flood-hud__deploy-count" aria-label="配置数">
               配置 <strong>{facilityCount}</strong> 基
             </p>
-          ) : phase === "preparation" ? (
-            <p className="flood-hud__deploy-hint">低岸を優先。向きを合わせると効果アップ</p>
           ) : null}
           {hazardSummary !== "" ? (
             <p className="flood-hud__hazard-tip">{hazardSummary}</p>
@@ -66,7 +75,7 @@ export function FloodHud({
               <>
                 <FloodMetric
                   label="雨勢"
-                  value={`${Math.round(finiteOr(rainfallIntensity, 0) * 100)}%`}
+                  value={rainLabel(finiteOr(rainfallIntensity, 0))}
                   ratio={finiteOr(rainfallIntensity, 0)}
                   tone="rain"
                 />
@@ -152,6 +161,19 @@ function formatTime(seconds: number): string {
 
 function finiteOr(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function rainLabel(intensity: number): string {
+  if (intensity < 0.28) {
+    return "小康";
+  }
+  if (intensity < 0.55) {
+    return "並雨";
+  }
+  if (intensity < 0.78) {
+    return "強雨";
+  }
+  return "豪雨";
 }
 
 function sanitizeMitigation(mitigation: MitigationSummary | undefined): MitigationSummary {

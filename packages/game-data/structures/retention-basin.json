@@ -13,11 +13,11 @@
     "heavy-rain"
   ],
   "effects": {
-    "waterLevelReduction": 0.12,
-    "overflowPrevention": 0.06,
+    "waterLevelReduction": 0.2,
+    "overflowPrevention": 0.08,
     "drainageCapacity": 0,
     "bankProtection": 0,
-    "channelCapacityIncrease": 0.08
+    "channelCapacityIncrease": 0.14
   },
   "role": {
     "primaryHazard": "capacityShortage",

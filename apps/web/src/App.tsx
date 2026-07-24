@@ -79,6 +79,9 @@ export function App() {
         flood.startRainNow();
       },
       advance: (seconds: number) => flood.advanceForTest(seconds),
+      setBudget: (amount: number) => {
+        construction.setBudgetForTest(amount);
+      },
       place: (
         structureId: string,
         longitude: number,
@@ -99,6 +102,7 @@ export function App() {
   }, [
     construction.placeConfirmedForTest,
     construction.placements.length,
+    construction.setBudgetForTest,
     flood.advanceForTest,
     flood.getLatestState,
     flood.startRainNow,
@@ -335,6 +339,7 @@ export function App() {
                   flood.phase === "disaster" ||
                   flood.phase === "result" ||
                   flood.phase === "review",
+                phase: flood.phase,
                 rainfallIntensity: flood.rainfallIntensity,
                 riverLevelMeters: flood.riverLevelMeters,
                 overflowMeters: flood.overflowMeters,
@@ -361,22 +366,13 @@ export function App() {
             <FloodHud
               phase={flood.phase}
               phaseRemainingSeconds={flood.phaseRemainingSeconds}
-              disasterElapsedSeconds={flood.disasterElapsedSeconds}
               rainfallIntensity={flood.rainfallIntensity}
               riverLevelMeters={flood.riverLevelMeters}
               overflowMeters={flood.overflowMeters}
-              overflowLevelMeters={flood.overflowLevelMeters}
               floodDepthMeters={flood.floodDepthMeters}
-              floodedAreaPercent={flood.floodedAreaPercent}
-              floodplainFillRatio={flood.floodplainFillRatio}
-              floodplainHalfWidthMeters={flood.floodplainHalfWidthMeters}
               damagePercent={flood.damagePercent}
-              score={flood.score}
-              isClear={flood.isClear}
               overflowSites={flood.overflowSites}
               mitigation={flood.mitigation}
-              protectedBankSites={flood.protectedBankSites}
-              structureInfluences={flood.structureInfluences}
               onStartGame={flood.startGame}
               onStartRainNow={flood.startRainNow}
             />

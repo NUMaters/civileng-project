@@ -598,7 +598,7 @@ a {
   z-index: 80;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 16px;
 }
 
 .howto-modal__backdrop {
@@ -613,26 +613,38 @@ a {
   position: relative;
   z-index: 1;
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 14px;
-  width: min(420px, 100%);
+  width: min(560px, 100%);
+  max-height: min(88vh, 820px);
   padding: 18px;
   border: 1px solid rgb(140 180 200 / 24%);
   border-radius: 2px;
-  background: rgb(8 22 30 / 94%);
+  background:
+    linear-gradient(165deg, rgb(10 28 34 / 96%) 0%, rgb(6 18 24 / 97%) 55%, rgb(8 22 20 / 96%) 100%);
   box-shadow: 0 24px 60px rgb(0 0 0 / 45%);
 }
 
 .howto-modal__head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.howto-modal__kicker {
+  margin: 0 0 4px;
+  color: #7f9aa8;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
 }
 
 .howto-modal__head h2 {
   margin: 0;
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 22px;
+  letter-spacing: 0.02em;
 }
 
 .howto-modal__head button {
@@ -648,19 +660,158 @@ a {
 
 .howto-modal__body {
   display: grid;
-  gap: 10px;
+  gap: 18px;
+  overflow: auto;
+  padding-right: 4px;
   color: #9bb4c2;
   font-size: 13px;
   line-height: 1.55;
+  scrollbar-width: thin;
 }
 
-.howto-modal__body p,
-.howto-modal__body ul {
+.howto-modal__section {
+  display: grid;
+  gap: 8px;
+}
+
+.howto-modal__section h3 {
+  margin: 0;
+  color: #d7ebe3;
+  font-family: var(--font-display);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.howto-modal__section > p,
+.howto-modal__lead {
   margin: 0;
 }
 
-.howto-modal__body ul {
-  padding-left: 1.1em;
+.howto-modal__steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: howto-step;
+}
+
+.howto-modal__steps li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px 10px 40px;
+  border: 1px solid rgb(140 180 200 / 14%);
+  border-radius: 2px;
+  background: rgb(255 255 255 / 3%);
+  counter-increment: howto-step;
+  position: relative;
+}
+
+.howto-modal__steps li::before {
+  content: counter(howto-step);
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  color: var(--accent-hot);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.howto-modal__steps strong {
+  color: #e8f4ee;
+  font-size: 13px;
+}
+
+.howto-modal__steps span {
+  color: #9bb4c2;
+}
+
+.howto-modal__facilities {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.howto-facility {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgb(140 180 200 / 16%);
+  border-radius: 2px;
+  background: rgb(4 16 20 / 55%);
+}
+
+.howto-facility__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.howto-facility__icon {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border: 1px solid rgb(140 180 200 / 18%);
+  border-radius: 2px;
+  background: rgb(255 255 255 / 4%);
+  object-fit: contain;
+}
+
+.howto-facility__titles {
+  display: grid;
+  gap: 4px;
+}
+
+.howto-facility__titles strong {
+  color: #e8f4ee;
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+
+.howto-facility__chip {
+  justify-self: start;
+  padding: 2px 8px;
+  border: 1px solid rgb(63 170 130 / 35%);
+  border-radius: 2px;
+  background: rgb(31 170 116 / 12%);
+  color: #7fd4ae;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.howto-facility__meta {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.howto-facility__meta > div {
+  display: grid;
+  gap: 2px;
+}
+
+.howto-facility__meta dt {
+  color: #6f8b97;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.howto-facility__meta dd {
+  margin: 0;
+  color: #b7cdd6;
+}
+
+.howto-facility__tip {
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--accent-hot);
+  background: rgb(240 180 41 / 8%);
+  color: #d6c39a;
+  font-size: 12px;
 }
 
 .howto-modal__ok {
@@ -672,6 +823,19 @@ a {
   font-weight: 800;
   letter-spacing: 0.06em;
   cursor: pointer;
+}
+
+@media (max-width: 520px) {
+  .howto-modal__panel {
+    width: 100%;
+    max-height: 92vh;
+    padding: 14px;
+  }
+
+  .howto-facility__icon {
+    width: 40px;
+    height: 40px;
+  }
 }
 
 .game-shell__veil {
@@ -770,61 +934,6 @@ a {
   width: min(220px, 72vw);
   pointer-events: auto;
   will-change: transform;
-}
-
-.influence-placement-hint {
-  display: grid;
-  gap: 2px;
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  border: 1px solid rgb(255 255 255 / 18%);
-  border-radius: 10px;
-  background: rgb(12 18 22 / 88%);
-  color: #f2f6f8;
-  font-family: var(--font-body);
-  font-size: 11px;
-  line-height: 1.35;
-  text-align: left;
-  backdrop-filter: blur(8px);
-}
-
-.influence-placement-hint strong {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-}
-
-.influence-placement-hint span {
-  color: rgb(220 230 235 / 82%);
-}
-
-.influence-placement-hint em {
-  font-style: normal;
-  font-weight: 600;
-}
-
-.influence-placement-hint--good {
-  border-color: rgb(62 207 142 / 55%);
-}
-
-.influence-placement-hint--good em {
-  color: #7dffb8;
-}
-
-.influence-placement-hint--warn {
-  border-color: rgb(224 176 64 / 55%);
-}
-
-.influence-placement-hint--warn em {
-  color: #ffd56a;
-}
-
-.influence-placement-hint--bad {
-  border-color: rgb(224 112 96 / 60%);
-}
-
-.influence-placement-hint--bad em {
-  color: #ff9a88;
 }
 
 .cesium-confirm-hud {

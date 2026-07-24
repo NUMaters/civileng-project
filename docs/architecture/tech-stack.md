@@ -49,7 +49,8 @@ CesiumJS は表示と入力に使用し、配置可否、水位、浸水、被�
 | 技術 | 用途 |
 |------|------|
 | Docker / Docker Compose | ローカル・コンテナ実行 |
-| AWS | クラウド基盤 |
+| Cloudflare Pages | ソロ静的 Web 公開（案α・低コスト） |
+| AWS | クラウド基盤（マルチ・永続化が必要な段階） |
 | Amazon ECS | コンテナオーケストレーション |
 | Amazon RDS | マネージド PostgreSQL |
 | Amazon ElastiCache | マネージド Redis |
@@ -59,6 +60,8 @@ CesiumJS は表示と入力に使用し、配置可否、水位、浸水、被�
 | GitHub Actions | CI/CD |
 
 開発初期はローカル環境や低コストなクラウド環境で動作させ、利用者数に応じて段階的に拡張します。
+
+ソロ静的公開（案α）は **Cloudflare Pages** を推奨する。Git 連携時の本番ブランチは `develop`（現状の `main` はモノレポ未整備）。手順は [deploy-cloudflare-pages.md](../development/deploy-cloudflare-pages.md)。
 
 ## 関連ドキュメント
 

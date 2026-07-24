@@ -11,7 +11,6 @@ import {
   type BudgetEconomyPhase,
 } from "../services/constructionService";
 import type { GeoPosition, PlacedStructure, StructureDefinition } from "../types/construction";
-import { calculateMitigation } from "../../disaster/services/floodSimulation";
 
 const structures: StructureDefinition[] = loadStructures().map(
   ({
@@ -281,15 +280,6 @@ export function useConstruction() {
     setSpentBudget((current) => current + structure.constructionCost);
     setPlacements((current) => {
       const next = [...current, confirmed];
-      const mitigation = calculateMitigation(next);
-      if (mitigation.placementInterference >= 0.28) {
-        setMessage(
-          `${structure.displayName} を配置（相性が悪い — 状況が悪化しうる）`,
-          "warn",
-        );
-      } else {
-        setMessage(`${structure.displayName} を配置`, "success");
-      }
       return next;
     });
     setPendingPlacement(null);
@@ -399,6 +389,13 @@ export function useConstruction() {
     [setMessage],
   );
 
+  /** E2E / 開発用: 所持予算を上書きする。 */
+  const setBudgetForTest = useCallback((nextBudget: number) => {
+    const clamped = Math.max(0, Math.min(MAX_BUDGET, nextBudget));
+    budgetRef.current = clamped;
+    setBudget(clamped);
+  }, []);
+
   const budgetRatio = Math.max(0, Math.min(1, budget / MAX_BUDGET));
   const incomeLabel =
     economyPhase === "preparation" || economyPhase === "disaster"
@@ -433,5 +430,6 @@ export function useConstruction() {
     setMessage,
     resetSession,
     placeConfirmedForTest,
+    setBudgetForTest,
   };
 }

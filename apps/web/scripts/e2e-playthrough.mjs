@@ -156,6 +156,7 @@ async function main() {
     step("ゲーム開始（準備中）");
 
     await waitFor(client, `!!window.__civilcraftE2E`, 10_000);
+    await evaluate(client, `window.__civilcraftE2E.setBudget(20000)`);
     const placed = await evaluate(
       client,
       `(() => {

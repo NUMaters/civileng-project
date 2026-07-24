@@ -82,6 +82,12 @@ export type FloodSimulationState = {
   phaseRemainingSeconds: number;
   disasterElapsedSeconds: number;
   rainfallIntensity: number;
+  /** 天候の目標雨量（0〜1）。現在値はここに向かって補間する。 */
+  rainfallTarget: number;
+  /** 次の天候変化までの残り秒。 */
+  weatherHoldRemaining: number;
+  /** 天候乱数の内部状態（再現用シード）。 */
+  weatherRng: number;
   riverLevelMeters: number;
   /** 計画高水位を超えた分（m）。0 なら越水なし。 */
   overflowMeters: number;
@@ -105,6 +111,11 @@ export type FloodSimulationState = {
   structureInfluences: StructureInfluence[];
 };
 
+export type BeginDisasterOptions = {
+  /** 天候乱数の初期シード。未指定時は毎プレイランダム。 */
+  weatherSeed?: number;
+};
+
 export type MitigationSummary = StructureEffects & {
   activeStructureCount: number;
   /** 配置有効率の平均 0〜1。 */
@@ -121,7 +132,9 @@ const structureById = new Map(loadStructures().map((structure) => [structure.id,
 
 const INITIAL_RIVER_LEVEL_METERS = 2.2;
 /** 計画高水位相当。低いほど早く越水し、難易度が上がる。 */
-const BASE_OVERFLOW_LEVEL_METERS = 4.7;
+const BASE_OVERFLOW_LEVEL_METERS = 4.72;
+/** テスト／デバッグ用の既定天候シード（中庸な雨量推移）。 */
+export const DEFAULT_WEATHER_SEED = 42_601;
 
 export { applyOverflowTerrainElevations };
 
@@ -131,6 +144,9 @@ export function createInitialFloodState(): FloodSimulationState {
     phaseRemainingSeconds: rules.timing.phases.preparationSeconds,
     disasterElapsedSeconds: 0,
     rainfallIntensity: 0,
+    rainfallTarget: 0.3,
+    weatherHoldRemaining: 0,
+    weatherRng: DEFAULT_WEATHER_SEED,
     riverLevelMeters: INITIAL_RIVER_LEVEL_METERS,
     overflowMeters: 0,
     overflowLevelMeters: BASE_OVERFLOW_LEVEL_METERS,
@@ -139,7 +155,7 @@ export function createInitialFloodState(): FloodSimulationState {
     floodplainFillRatio: 0,
     floodplainHalfWidthMeters: 0,
     damagePercent: 0,
-    score: 1_000,
+    score: 2_000,
     isClear: null,
     overflowSites: [],
     mitigation: emptyMitigation(),
@@ -168,14 +184,25 @@ export function beginPreparation(): FloodSimulationState {
   };
 }
 
-export function beginDisaster(current: FloodSimulationState): FloodSimulationState {
+export function beginDisaster(
+  current: FloodSimulationState,
+  options: BeginDisasterOptions = {},
+): FloodSimulationState {
+  const weatherSeed =
+    options.weatherSeed ??
+    (Math.floor(Math.random() * 0x7fff_ffff) || DEFAULT_WEATHER_SEED);
+  let weatherRng = weatherSeed >>> 0 || DEFAULT_WEATHER_SEED;
+  const first = pickWeatherTarget(0, weatherRng);
+  weatherRng = first.weatherRng;
   return {
     ...current,
     phase: "disaster",
     phaseRemainingSeconds: rules.timing.phases.disasterSeconds,
     disasterElapsedSeconds: 0,
-    // 降雨は advance 側で progress から連続計算する。開始瞬間の段差を避ける。
-    rainfallIntensity: 0.25,
+    rainfallIntensity: first.rainfallTarget * 0.85,
+    rainfallTarget: first.rainfallTarget,
+    weatherHoldRemaining: first.holdSeconds,
+    weatherRng,
   };
 }
 
@@ -226,30 +253,32 @@ export function advanceFloodSimulation(
   );
   const progress = elapsed / rules.timing.phases.disasterSeconds;
   const mitigation = calculateMitigation(placements);
-  const rainfallIntensity = calculateRainfallIntensity(progress);
-  // 外力は強めだが、適所混成なら抑えきれるラインに調整する。
+  const weather = advanceWeather(current, progress, deltaSeconds);
+  const rainfallIntensity = weather.rainfallIntensity;
+  // 水位上昇は旧設定よりやや緩め。雨の波と適所混成で緊張感を保つ。
+  // 水位は時間経過で確実に上がり、雨の波は揺れ幅。遊水地込みの混成でクリア可能。
   const unmitigatedRiverLevel =
-    INITIAL_RIVER_LEVEL_METERS + progress * 4.35 + rainfallIntensity * 0.38;
+    INITIAL_RIVER_LEVEL_METERS + progress * 4.55 + rainfallIntensity * 0.32;
   const riverLevelMeters = Math.max(
     INITIAL_RIVER_LEVEL_METERS,
     unmitigatedRiverLevel -
-      mitigation.waterLevelReduction * 2.05 +
+      mitigation.waterLevelReduction * 2.6 +
       mitigation.placementInterference * 0.4,
   );
   const overflowLevelMeters = Math.max(
     INITIAL_RIVER_LEVEL_METERS + 0.8,
     BASE_OVERFLOW_LEVEL_METERS +
-      mitigation.overflowPrevention * 1.85 +
-      mitigation.channelCapacityIncrease * 1.1 -
+      mitigation.overflowPrevention * 1.52 +
+      mitigation.channelCapacityIncrease * 1.2 -
       mitigation.placementInterference * 0.35,
   );
   const overflowMeters = Math.max(0, riverLevelMeters - overflowLevelMeters);
   const inflowPerSecond =
     overflowMeters *
-    (1 - mitigation.overflowPrevention * 0.36) *
+    (1 - mitigation.overflowPrevention * 0.34) *
     (1 + mitigation.placementInterference * 0.4) *
-    0.036;
-  const drainagePerSecond = mitigation.drainageCapacity * 0.032;
+    0.034;
+  const drainagePerSecond = mitigation.drainageCapacity * 0.035;
   const floodDepthMeters = Math.max(
     0,
     current.floodDepthMeters + (inflowPerSecond - drainagePerSecond) * deltaSeconds,
@@ -260,7 +289,7 @@ export function advanceFloodSimulation(
     .slice(0, 5)
     .reduce((sum, site) => sum + site.intensity, 0);
   const floodedAreaPercent = clamp(
-    floodDepthMeters * 18 + Math.min(2.2, breachLoad) * 9.5 + Math.max(0, overflowMeters) * 4.2,
+    floodDepthMeters * 17 + Math.min(2.2, breachLoad) * 9.0 + Math.max(0, overflowMeters) * 4.0,
     0,
     100,
   );
@@ -281,11 +310,12 @@ export function advanceFloodSimulation(
   const score = Math.max(
     0,
     Math.round(
-      1_000 -
-        damagePercent * 10 -
-        floodDepthMeters * 45 +
-        mitigation.averageEffectiveness * 55 -
-        mitigation.placementInterference * 120,
+      2_200 -
+        damagePercent * 8 -
+        floodDepthMeters * 35 +
+        mitigation.averageEffectiveness * 140 -
+        mitigation.placementInterference * 90 +
+        (1 - rainfallIntensity) * 40,
     ),
   );
   const remaining = Math.max(0, rules.timing.phases.disasterSeconds - elapsed);
@@ -297,6 +327,9 @@ export function advanceFloodSimulation(
       phaseRemainingSeconds: rules.timing.phases.resultSeconds,
       disasterElapsedSeconds: elapsed,
       rainfallIntensity: 0,
+      rainfallTarget: 0,
+      weatherHoldRemaining: 0,
+      weatherRng: weather.weatherRng,
       riverLevelMeters,
       overflowMeters,
       overflowLevelMeters,
@@ -319,6 +352,9 @@ export function advanceFloodSimulation(
     phaseRemainingSeconds: remaining,
     disasterElapsedSeconds: elapsed,
     rainfallIntensity,
+    rainfallTarget: weather.rainfallTarget,
+    weatherHoldRemaining: weather.weatherHoldRemaining,
+    weatherRng: weather.weatherRng,
     riverLevelMeters,
     overflowMeters,
     overflowLevelMeters,
@@ -844,11 +880,90 @@ function nearestWeaknessBoost(placement: PlacedStructure): number {
   return clamp(best, 0, 1);
 }
 
-function calculateRainfallIntensity(progress: number): number {
-  // 序盤はしのげる雨、中盤〜終盤にピークを寄せて盛り上がりを作る。
-  const swell = Math.pow(Math.sin(progress * Math.PI), 0.85);
-  const latePush = progress > 0.55 ? (progress - 0.55) * 0.55 : 0;
-  return clamp(0.22 + swell * 0.7 + latePush, 0, 1);
+/**
+ * 雨量をランダムに落ち着かせたり強めたりする。
+ * 終盤ほど豪雨が出やすいが、常時ピークではない。
+ */
+function advanceWeather(
+  current: FloodSimulationState,
+  progress: number,
+  deltaSeconds: number,
+): Pick<
+  FloodSimulationState,
+  "rainfallIntensity" | "rainfallTarget" | "weatherHoldRemaining" | "weatherRng"
+> {
+  let weatherRng = current.weatherRng >>> 0 || DEFAULT_WEATHER_SEED;
+  let rainfallTarget = current.rainfallTarget;
+  let weatherHoldRemaining = current.weatherHoldRemaining - deltaSeconds;
+
+  while (weatherHoldRemaining <= 0) {
+    const next = pickWeatherTarget(progress, weatherRng);
+    weatherRng = next.weatherRng;
+    rainfallTarget = next.rainfallTarget;
+    weatherHoldRemaining += next.holdSeconds;
+  }
+
+  const step = Math.min(1, deltaSeconds * 0.14);
+  const rainfallIntensity = clamp(
+    current.rainfallIntensity + (rainfallTarget - current.rainfallIntensity) * step,
+    0,
+    1,
+  );
+
+  return {
+    rainfallIntensity,
+    rainfallTarget,
+    weatherHoldRemaining,
+    weatherRng,
+  };
+}
+
+function pickWeatherTarget(
+  progress: number,
+  weatherRng: number,
+): { rainfallTarget: number; holdSeconds: number; weatherRng: number } {
+  let rng = weatherRng;
+  const roll = nextUnit(rng);
+  rng = roll.rng;
+  // 終盤ほど強い雨の出やすさを少しだけ上げる（常時豪雨にはしない）。
+  const heavyBias = progress * 0.12;
+  let rainfallTarget: number;
+  if (roll.value < 0.34 - heavyBias * 0.4) {
+    // 小康
+    const span = nextUnit(rng);
+    rng = span.rng;
+    rainfallTarget = 0.1 + span.value * 0.22;
+  } else if (roll.value < 0.72 - heavyBias * 0.15) {
+    // 並雨
+    const span = nextUnit(rng);
+    rng = span.rng;
+    rainfallTarget = 0.38 + span.value * 0.28;
+  } else {
+    // 強雨
+    const span = nextUnit(rng);
+    rng = span.rng;
+    rainfallTarget = 0.72 + span.value * 0.26;
+  }
+
+  const hold = nextUnit(rng);
+  rng = hold.rng;
+  const holdSeconds = 5 + hold.value * 12;
+
+  return {
+    rainfallTarget: clamp(rainfallTarget, 0, 1),
+    holdSeconds,
+    weatherRng: rng,
+  };
+}
+
+/** xorshift32。テスト再現用に状態を返す。 */
+function nextUnit(state: number): { value: number; rng: number } {
+  let x = state >>> 0 || DEFAULT_WEATHER_SEED;
+  x ^= x << 13;
+  x ^= x >>> 17;
+  x ^= x << 5;
+  x >>>= 0;
+  return { value: (x >>> 0) / 0x1_0000_0000, rng: x };
 }
 
 function distanceInMeters(
