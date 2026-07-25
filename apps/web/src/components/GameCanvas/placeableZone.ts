@@ -15,7 +15,8 @@ const FILL_ID = "placeable-river-bank-fill";
 const EDGE_ID = "placeable-river-bank-edge";
 
 /**
- * 河道＋河岸の配置可能帯を薄いシアンで示す（水面より広く、氾濫原より狭い）。
+ * 河道＋河岸の配置可能帯。
+ * 水色だと浸水に見えるため、工事エリア寄りのアンバー系で示す。
  */
 export function createPlaceableZone(viewer: Viewer): { destroy: () => void } {
   const positions = Cartesian3.fromDegreesArray(
@@ -27,10 +28,10 @@ export function createPlaceableZone(viewer: Viewer): { destroy: () => void } {
     id: EDGE_ID,
     corridor: {
       positions,
-      width: width + 12,
+      width: width + 10,
       height: 0.03,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
-      material: new ColorMaterialProperty(Color.fromCssColorString("#7ec8e8").withAlpha(0.14)),
+      material: new ColorMaterialProperty(Color.fromCssColorString("#d4a84b").withAlpha(0.22)),
       outline: false,
       cornerType: CornerType.ROUNDED,
     },
@@ -43,7 +44,7 @@ export function createPlaceableZone(viewer: Viewer): { destroy: () => void } {
       width,
       height: 0.02,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
-      material: new ColorMaterialProperty(Color.fromCssColorString("#2f9fc8").withAlpha(0.09)),
+      material: new ColorMaterialProperty(Color.fromCssColorString("#c4922e").withAlpha(0.08)),
       outline: false,
       cornerType: CornerType.ROUNDED,
     },

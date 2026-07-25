@@ -1,5 +1,9 @@
 {
-  "initialBudgetSolo": 10000,
-  "initialBudgetMultiplayerPerPlayer": 8000,
-  "description": "ソロは initialBudgetSolo、マルチはプレイヤーごとに initialBudgetMultiplayerPerPlayer を付与"
+  "initialBudgetSolo": 11000,
+  "initialBudgetMultiplayerPerPlayer": 8500,
+  "incomePerSecondPreparation": 90,
+  "incomePerSecondDisaster": 130,
+  "disasterStartGrant": 1800,
+  "maxBudget": 22000,
+  "description": "予算ポイントは多め。準備・災害中の補給と緊急予算で追加配置しやすくする。維持費は毎秒差し引き。所持上限あり。"
 }

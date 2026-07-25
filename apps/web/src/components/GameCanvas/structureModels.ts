@@ -18,6 +18,10 @@ export type StructureModelPart = {
 /**
  * 土木施設の立体パーツ定義。
  * 単色ボックスではなく、土・コンクリート・水面などの層で構成する。
+ *
+ * Box の dimensions.length は Cesium ローカル X、width は Y。
+ * HPR 向き 0° で X=東・Y=北のため、堤防・護岸・河道掘削の長い辺は
+ * 施設向き（法面矢印）の直角方向＝堤体線に沿う。影響圏 strip も同じ長軸を使う。
  */
 export function getStructureModelParts(structureId: string): StructureModelPart[] {
   const models: Record<string, StructureModelPart[]> = {
@@ -69,7 +73,7 @@ export function getStructureModelParts(structureId: string): StructureModelPart[
         repeatY: 1,
       },
       {
-        id: "marker",
+        id: "crest-badge",
         kind: "box",
         dimensions: { length: 6, width: 1.4, height: 0.35 },
         centerHeight: 8.95,

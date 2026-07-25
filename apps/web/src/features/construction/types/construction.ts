@@ -8,6 +8,9 @@ export type StructureDefinition = Pick<
   | "description"
   | "constructionCost"
   | "constructionTimeSeconds"
+  | "maintenanceCostPerSecond"
+  | "role"
+  | "hazardAffinity"
 >;
 
 export type GeoPosition = {
