@@ -171,17 +171,16 @@ function createOverflowController(viewer: Viewer): OverflowController {
         }
       }
 
-      const intensitySum = nextSites.reduce((sum, site) => sum + site.intensity, 0) || 1;
       for (const site of nextSites) {
         const target: SiteTarget = { site, floodDepthMeters, floodedAreaPercent };
         let handle = sites.get(site.id);
         if (handle === undefined) {
-          handle = createSiteHandle(viewer, target, intensitySum);
+          handle = createSiteHandle(viewer, target);
           sites.set(site.id, handle);
         } else {
           handle.retiring = false;
           handle.targetIntensity = site.intensity;
-          applySiteTargets(handle, target, intensitySum);
+          applySiteTargets(handle, target);
         }
       }
       viewer.scene.requestRender();
@@ -198,13 +197,9 @@ function createOverflowController(viewer: Viewer): OverflowController {
   };
 }
 
-function createSiteHandle(
-  viewer: Viewer,
-  target: SiteTarget,
-  intensitySum: number,
-): SiteHandle {
-  const specs = buildEllipseSpecs(target, intensitySum);
-  const streakSpecs = buildStreakSpecs(target, intensitySum);
+function createSiteHandle(viewer: Viewer, target: SiteTarget): SiteHandle {
+  const specs = buildEllipseSpecs(target);
+  const streakSpecs = buildStreakSpecs(target);
   const ellipses = specs.map((spec) => createEllipseVisual(viewer, spec));
   const streaks = streakSpecs.map((spec, index) =>
     createStreakVisual(viewer, `${ENTITY_PREFIX}streak-${target.site.id}-${index}`, spec),
@@ -219,13 +214,9 @@ function createSiteHandle(
   };
 }
 
-function applySiteTargets(
-  handle: SiteHandle,
-  target: SiteTarget,
-  intensitySum: number,
-): void {
-  const specs = buildEllipseSpecs(target, intensitySum);
-  const streakSpecs = buildStreakSpecs(target, intensitySum);
+function applySiteTargets(handle: SiteHandle, target: SiteTarget): void {
+  const specs = buildEllipseSpecs(target);
+  const streakSpecs = buildStreakSpecs(target);
   for (let index = 0; index < handle.ellipses.length; index += 1) {
     const ellipse = handle.ellipses[index]!;
     const spec = specs[index]!;
@@ -264,7 +255,7 @@ function zeroSiteTargets(handle: SiteHandle): void {
   }
 }
 
-function buildEllipseSpecs(target: SiteTarget, _intensitySum: number) {
+function buildEllipseSpecs(target: SiteTarget) {
   const { site, floodDepthMeters } = target;
   const heading = CesiumMath.toRadians(site.outflowHeadingDegrees);
   const depthScale = Math.max(0.35, Math.min(1.35, 0.4 + floodDepthMeters * 0.55));
@@ -334,7 +325,7 @@ function buildEllipseSpecs(target: SiteTarget, _intensitySum: number) {
   ];
 }
 
-function buildStreakSpecs(target: SiteTarget, _intensitySum: number) {
+function buildStreakSpecs(target: SiteTarget) {
   const { site, floodDepthMeters } = target;
   const heading = CesiumMath.toRadians(site.outflowHeadingDegrees);
   const depthScale = Math.max(0.35, Math.min(1.35, 0.4 + floodDepthMeters * 0.55));
