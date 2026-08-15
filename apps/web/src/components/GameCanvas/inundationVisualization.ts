@@ -3,6 +3,7 @@ import {
   Cartesian3,
   Color,
   ColorMaterialProperty,
+  ConstantProperty,
   HeightReference,
   Math as CesiumMath,
   PolygonHierarchy,
@@ -28,6 +29,12 @@ const BAND_PREFIX = "inundation-band-";
 const FLOW_PREFIX = "inundation-flow-";
 const VISUAL_LERP_RATE = 2.2;
 const FLOW_STREAK_LENGTH_M = 38;
+/** 高さ場の計算は 10fps。描画側の補間で連続感を保つ。 */
+const FIELD_UPDATE_INTERVAL_SECONDS = 0.1;
+/** 流線位置は 15fps。水の移動として十分滑らかで、座標生成を大幅に減らせる。 */
+const FLOW_POSITION_UPDATE_INTERVAL_MS = 1000 / 15;
+/** 終盤でも画面を埋めすぎない流線数。3本/決壊地点程度の密度を維持する。 */
+const MAX_FLOW_VISUALS = 24;
 
 type BandVisual = {
   entity: Entity;
@@ -36,6 +43,7 @@ type BandVisual = {
   alpha: number;
   targetAlpha: number;
   hierarchy: PolygonHierarchy;
+  color: Color;
 };
 
 type FlowVisual = {
@@ -46,6 +54,8 @@ type FlowVisual = {
   width: number;
   targetWidth: number;
   sample: InundationFlowSample;
+  positions: ConstantProperty;
+  color: Color;
 };
 
 type InundationController = {
@@ -91,6 +101,7 @@ function createInundationController(viewer: Viewer): InundationController {
   const flows: FlowVisual[] = [];
   let lastFrameAt = performance.now();
   let lastAdvanceAt = performance.now();
+  let lastFlowPositionAt = 0;
   let activeTarget = false;
   let floodDepthMeters = 0;
   let seeds: InundationSeed[] = [];
@@ -108,7 +119,7 @@ function createInundationController(viewer: Viewer): InundationController {
 
     if (activeTarget && seeds.length > 0) {
       const sinceAdvance = (now - lastAdvanceAt) / 1000;
-      if (sinceAdvance >= 0.05) {
+      if (sinceAdvance >= FIELD_UPDATE_INTERVAL_SECONDS) {
         snapshot = advanceInundationField(seeds, floodDepthMeters, sinceAdvance, now);
         lastAdvanceAt = now;
         applySnapshot(viewer, snapshot, bands, flows);
@@ -125,6 +136,7 @@ function createInundationController(viewer: Viewer): InundationController {
 
     for (const [key, visual] of [...bands.entries()]) {
       visual.alpha = lerp(visual.alpha, visual.targetAlpha, alpha);
+      visual.color.alpha = visual.alpha;
       if (visual.targetAlpha <= 0.01 && visual.alpha <= 0.01) {
         viewer.entities.remove(visual.entity);
         bands.delete(key);
@@ -139,12 +151,21 @@ function createInundationController(viewer: Viewer): InundationController {
       flow.alpha = lerp(flow.alpha, flow.targetAlpha, alpha);
       flow.width = lerp(flow.width, flow.targetWidth, alpha);
       flow.phase = (flow.phase + deltaSeconds * (0.55 + flow.sample.speed * 0.65)) % 1;
+      flow.color.alpha = flow.alpha;
       if (flow.targetAlpha <= 0.01 && flow.alpha <= 0.01) {
         viewer.entities.remove(flow.entity);
         flows.splice(index, 1);
         changed = true;
       } else {
         changed = true;
+      }
+    }
+
+
+    if (now - lastFlowPositionAt >= FLOW_POSITION_UPDATE_INTERVAL_MS) {
+      lastFlowPositionAt = now;
+      for (const flow of flows) {
+        flow.positions.setValue(flowSegment(flow));
       }
     }
 
@@ -220,7 +241,7 @@ function applySnapshot(
     }
   }
 
-  const desiredFlows = snapshot.sites.flatMap((site) => site.flows).slice(0, 64);
+  const desiredFlows = selectRepresentativeFlows(snapshot, MAX_FLOW_VISUALS);
   while (flows.length < desiredFlows.length) {
     const sample = desiredFlows[flows.length]!;
     flows.push(createFlowVisual(viewer, flows.length, sample));
@@ -255,6 +276,7 @@ function createBandVisual(
     alpha: 0,
     targetAlpha: color.alpha,
     hierarchy,
+    color: depthBandColorByIndex(bandIndex).withAlpha(0),
   };
   visual.entity = viewer.entities.add({
     id: `${BAND_PREFIX}${key}`,
@@ -263,10 +285,7 @@ function createBandVisual(
       height: 0.06 + bandIndex * 0.04,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
       material: new ColorMaterialProperty(
-        new CallbackProperty(() => {
-          const base = depthBandColorByIndex(bandIndex);
-          return base.withAlpha(visual.alpha);
-        }, false),
+        new CallbackProperty(() => visual.color, false),
       ),
       outline: false,
       perPositionHeight: false,
@@ -285,23 +304,42 @@ function createFlowVisual(viewer: Viewer, index: number, sample: InundationFlowS
     width: 3,
     targetWidth: 3,
     sample,
+    positions: undefined as unknown as ConstantProperty,
+    color: FLOW_COLOR.withAlpha(0),
   };
+  visual.positions = new ConstantProperty(flowSegment(visual));
   visual.entity = viewer.entities.add({
     id: `${FLOW_PREFIX}${index}`,
     polyline: {
-      positions: new CallbackProperty(() => flowSegment(visual), false),
+      positions: visual.positions,
       width: new CallbackProperty(() => Math.max(1, visual.width), false),
       clampToGround: true,
       material: new PolylineGlowMaterialProperty({
         glowPower: 0.22,
-        color: new CallbackProperty(
-          () => Color.fromCssColorString("#b8f4ff").withAlpha(visual.alpha),
-          false,
-        ),
+        color: new CallbackProperty(() => visual.color, false),
       }),
     },
   });
   return visual;
+}
+
+/** 各決壊地点から均等に選び、単純な先頭切り捨てで表現が偏るのを防ぐ。 */
+function selectRepresentativeFlows(
+  snapshot: InundationFieldSnapshot,
+  limit: number,
+): InundationFlowSample[] {
+  const queues = snapshot.sites.map((site) => [...site.flows]);
+  const selected: InundationFlowSample[] = [];
+  let cursor = 0;
+  while (selected.length < limit && queues.some((queue) => queue.length > 0)) {
+    const queue = queues[cursor % Math.max(1, queues.length)];
+    const sample = queue?.shift();
+    if (sample !== undefined) {
+      selected.push(sample);
+    }
+    cursor += 1;
+  }
+  return selected;
 }
 
 function flowSegment(visual: FlowVisual): Cartesian3[] {
@@ -369,14 +407,13 @@ function depthBandColor(band: InundationBand): Color {
 }
 
 function depthBandColorByIndex(bandIndex: number): Color {
-  const colors = [
-    Color.fromCssColorString("#5ec8e8"),
-    Color.fromCssColorString("#1c9ccc"),
-    Color.fromCssColorString("#1274a8"),
-    Color.fromCssColorString("#0a4f7a"),
-  ];
-  return colors[Math.min(colors.length - 1, bandIndex)]!;
+  return DEPTH_BAND_COLORS[Math.min(DEPTH_BAND_COLORS.length - 1, bandIndex)]!;
 }
+
+const FLOW_COLOR = Color.fromCssColorString("#b8f4ff");
+const DEPTH_BAND_COLORS = ["#5ec8e8", "#1c9ccc", "#1274a8", "#0a4f7a"].map((color) =>
+  Color.fromCssColorString(color),
+);
 
 function offsetLonLat(
   longitude: number,

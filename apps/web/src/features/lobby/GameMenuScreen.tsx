@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import heroImageUrl from "../../../../../assets/generated/civilcraft-abukuma-hero.webp";
 import { HowToPlayModal } from "./HowToPlayModal";
 import type { PlayMode } from "./types";
 
@@ -21,6 +22,7 @@ export function GameMenuScreen({
   openHowtoOnMount = false,
 }: GameMenuScreenProps) {
   const [mode, setMode] = useState<PlayMode | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [loadProgress, setLoadProgress] = useState(0);
   const [howtoOpen, setHowtoOpen] = useState(openHowtoOnMount);
@@ -71,7 +73,7 @@ export function GameMenuScreen({
       cancelled = true;
       window.clearInterval(tick);
     };
-  }, [mode]);
+  }, [loadAttempt, mode]);
 
   const canStart = mode === "solo" && loadState === "ready";
   const startLabel =
@@ -88,31 +90,37 @@ export function GameMenuScreen({
   return (
     <section className="game-menu" aria-labelledby={titleId}>
       <div className="game-menu__world" aria-hidden="true">
+        <img className="game-menu__hero" src={heroImageUrl} alt="" />
         <div className="game-menu__sky" />
-        <div className="game-menu__grid" />
-        <div className="game-menu__river-band" />
+        <i className="game-menu__bubble game-menu__bubble--one" />
+        <i className="game-menu__bubble game-menu__bubble--two" />
+        <span className="game-menu__spark game-menu__spark--one">✦</span>
+        <span className="game-menu__spark game-menu__spark--two">●</span>
       </div>
 
       <header className="game-menu__header">
         <button className="game-menu__back" type="button" onClick={onBackToTitle}>
-          タイトル
+          <span aria-hidden="true">←</span> タイトル
         </button>
-        <p className="game-menu__brand">CivilCraft</p>
+        <p className="game-menu__brand">
+          <span>Civil</span>Craft
+        </p>
         <button
           className="game-menu__howto-btn"
           type="button"
           onClick={() => setHowtoOpen(true)}
         >
-          遊び方
+          <span aria-hidden="true">?</span> 遊び方
         </button>
       </header>
 
       <div className="game-menu__brief">
-        <p className="game-menu__brief-kicker">阿武隈川 · 治水チャレンジ</p>
+        <p className="game-menu__brief-kicker">🌊 阿武隈川 · 治水チャレンジ</p>
         <h1 id={titleId} className="game-menu__title">
-          モード選択
+          どの遊び方で<br />チャレンジする？
         </h1>
         <p className="game-menu__brief-copy">限られた予算と時間で、川沿いの弱点を対策しよう。</p>
+        <p className="game-menu__availability">まずは一人でじっくり作戦を考えよう！</p>
       </div>
 
       <div className="game-menu__modes" role="group" aria-label="プレイモード">
@@ -122,7 +130,7 @@ export function GameMenuScreen({
           onClick={() => setMode("solo")}
         >
           <span className="game-menu__mode-index" aria-hidden="true">
-            01
+            🏗️
           </span>
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">シングルプレイ</span>
@@ -138,7 +146,7 @@ export function GameMenuScreen({
           title="マルチプレイは近日対応"
         >
           <span className="game-menu__mode-index" aria-hidden="true">
-            02
+            🤝
           </span>
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">マルチプレイ</span>
@@ -158,7 +166,16 @@ export function GameMenuScreen({
         ) : loadState === "ready" ? (
           <p>準備完了。スタートできます</p>
         ) : loadState === "error" ? (
-          <p>読込失敗。シングルを選び直してください</p>
+          <>
+            <p>読み込みに失敗しました。通信状態を確認して、もう一度お試しください。</p>
+            <button
+              className="game-menu__retry"
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+            >
+              もう一度読み込む
+            </button>
+          </>
         ) : null}
         {mode === "solo" && loadState === "loading" ? (
           <div className="game-menu__track" aria-hidden="true">
@@ -177,7 +194,8 @@ export function GameMenuScreen({
           }
         }}
       >
-        {startLabel}
+        <span>{startLabel}</span>
+        <span aria-hidden="true">▶</span>
       </button>
 
       {howtoOpen ? (

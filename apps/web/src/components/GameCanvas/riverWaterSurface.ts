@@ -20,7 +20,7 @@ import { ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
 /** Cesium 同梱の水面法線。開発時は `/cesiumStatic` 経由で配信する。 */
 const WATER_NORMAL_MAP_URL = "/cesiumStatic/Assets/Textures/waterNormalsSmall.jpg";
 
-const FLOW_STREAK_COUNT = 18;
+const FLOW_STREAK_COUNT = 14;
 const FLOW_STREAK_SEGMENT_POINTS = 7;
 /** 平常時の流向周期（秒）。短いほど速く見える。下流方向への流れ。 */
 const BASE_FLOW_PERIOD_SECONDS = 8.5;
@@ -37,6 +37,8 @@ const BASE_WATER_PRIMITIVE_WIDTH_M = 88;
  * 増水の立ち上がりを分かりやすくするため、やや速めに追従させる。
  */
 const VISUAL_LERP_RATE = 3.1;
+/** ストリークの位置計算と水位補間は 30fps で十分に滑らか。 */
+const WATER_VISUAL_FRAME_INTERVAL_MS = 1000 / 30;
 
 export type RiverHydraulics = {
   riverLevelMeters: number;
@@ -62,6 +64,7 @@ type FlowSample = {
 
 type StreakHandle = {
   entity: Entity;
+  positions: ConstantProperty;
   phase: number;
   /** 中心線からの横断オフセット（m）。右岸＋／左岸−。 */
   laneOffsetMeters: number;
@@ -145,6 +148,7 @@ export async function createRiverWaterSurface(
   let flowPeriodSeconds = BASE_FLOW_PERIOD_SECONDS;
   const startedAt = performance.now();
   let lastFrameAt = startedAt;
+  let lastVisualUpdateAt = 0;
   let lastStreakStyleKey = "";
 
   const applyDisplayed = (visual: VisualHydraulics) => {
@@ -210,6 +214,10 @@ export async function createRiverWaterSurface(
       return;
     }
     const now = performance.now();
+    if (now - lastVisualUpdateAt < WATER_VISUAL_FRAME_INTERVAL_MS) {
+      return;
+    }
+    lastVisualUpdateAt = now;
     const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - lastFrameAt) / 1000));
     lastFrameAt = now;
 
@@ -218,7 +226,7 @@ export async function createRiverWaterSurface(
       // 下流方向（北→南）へ進む。先頭が下流側になるようウィンドウを取る。
       const head = (streak.phase + elapsedSeconds / flowPeriodSeconds) % 1;
       if (streak.entity.polyline !== undefined) {
-        streak.entity.polyline.positions = new ConstantProperty(
+        streak.positions.setValue(
           sampleDownstreamArcWindow(
             samples,
             totalLength,
@@ -351,16 +359,14 @@ function createFlowStreaks(viewer: Viewer): StreakHandle[] {
     // レーンを横断方向に分散（中央寄りを厚く）
     const laneT = FLOW_STREAK_COUNT <= 1 ? 0 : index / (FLOW_STREAK_COUNT - 1);
     const laneOffsetMeters = (laneT * 2 - 1) * FLOW_LANE_HALF_SPAN_M;
+    const positions = new ConstantProperty(
+      Cartesian3.fromDegreesArray([last.lon, last.lat, nearLast.lon, nearLast.lat]),
+    );
     const entity = viewer.entities.add({
       id: `river-flow-streak-${index}`,
       polyline: {
         // 初期は上流寄り（北）から下流へ向かう短い線
-        positions: Cartesian3.fromDegreesArray([
-          last.lon,
-          last.lat,
-          nearLast.lon,
-          nearLast.lat,
-        ]),
+        positions,
         width: 7,
         clampToGround: true,
         material: new PolylineGlowMaterialProperty({
@@ -370,7 +376,7 @@ function createFlowStreaks(viewer: Viewer): StreakHandle[] {
         }),
       },
     });
-    streaks.push({ entity, phase, laneOffsetMeters });
+    streaks.push({ entity, positions, phase, laneOffsetMeters });
   }
   return streaks;
 }

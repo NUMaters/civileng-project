@@ -17,9 +17,38 @@
     />
     <!-- PostCSS 経由だと壊れる環境があるため、静的配信の Cesium CSS を直接読む -->
     <link rel="stylesheet" href="/cesiumStatic/Widgets/widgets.css" />
+    <style>
+      #boot-fallback {
+        display: grid;
+        min-height: 100dvh;
+        place-items: center;
+        padding: 24px;
+        background: #071018;
+        color: #e8f1f6;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+      }
+      #boot-fallback div { max-width: 360px; }
+      #boot-fallback p { color: #9bb4c2; line-height: 1.6; }
+      #boot-fallback button {
+        padding: 10px 14px;
+        border: 1px solid #80b5ca;
+        border-radius: 4px;
+        background: #163644;
+        color: #e8f1f6;
+        cursor: pointer;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <main id="boot-fallback" role="alert">
+      <div>
+        <h1>CivilCraft を起動しています</h1>
+        <p>表示されない場合は、ページを再読み込みしてください。</p>
+        <button type="button" onclick="window.location.reload()">再読み込み</button>
+      </div>
+    </main>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

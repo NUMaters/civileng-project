@@ -16,3 +16,5 @@ createRoot(rootElement).render(
     </ErrorBoundary>
   </StrictMode>,
 );
+
+document.getElementById("boot-fallback")?.remove();

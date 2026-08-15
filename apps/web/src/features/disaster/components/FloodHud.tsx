@@ -44,6 +44,18 @@ export function FloodHud({
   const safeMitigation = sanitizeMitigation(mitigation);
   const hazardSummary = summarizeHazards(overflows);
   const facilityCount = safeMitigation.activeStructureCount;
+  const facilityEffectTone =
+    safeMitigation.placementInterference >= 0.18
+      ? "bad"
+      : safeMitigation.averageEffectiveness >= 0.55
+        ? "good"
+        : "warn";
+  const facilityEffectLabel =
+    facilityEffectTone === "bad"
+      ? "干渉あり"
+      : facilityEffectTone === "good"
+        ? "対策が有効"
+        : "配置を調整";
   const showFloodMetrics = phase === "disaster" || phase === "result" || phase === "review";
 
   return (
@@ -63,13 +75,17 @@ export function FloodHud({
       ) : (
         <>
           {facilityCount > 0 ? (
-            <p className="flood-hud__deploy-count" aria-label="配置数">
-              配置 <strong>{facilityCount}</strong> 基
-            </p>
+            <div className="flood-hud__facility-status">
+              <p className="flood-hud__deploy-count" aria-label="配置数">
+                配置 <strong>{facilityCount}</strong> 基
+              </p>
+              <span className={`is-${facilityEffectTone}`}>
+                {facilityEffectTone === "good" ? "✓" : facilityEffectTone === "bad" ? "!" : "△"}{" "}
+                {facilityEffectLabel}
+              </span>
+            </div>
           ) : null}
-          {hazardSummary !== "" ? (
-            <p className="flood-hud__hazard-tip">{hazardSummary}</p>
-          ) : null}
+          {hazardSummary !== "" ? <p className="flood-hud__hazard-tip">{hazardSummary}</p> : null}
           <div className="flood-hud__metrics">
             {showFloodMetrics ? (
               <>
@@ -202,8 +218,6 @@ function summarizeHazards(sites: FloodSimulationState["overflowSites"]): string 
     const key = site.primaryHazard;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  const parts = [...counts.entries()].map(
-    ([kind, count]) => `${getHazardLabel(kind)}×${count}`,
-  );
+  const parts = [...counts.entries()].map(([kind, count]) => `${getHazardLabel(kind)}×${count}`);
   return `警報 ${parts.join("・")}`;
 }

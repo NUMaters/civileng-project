@@ -84,7 +84,7 @@ function createFloodplainController(viewer: Viewer): FloodplainController {
       height: 0.03,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
       material: new ColorMaterialProperty(
-        new CallbackProperty(() => Color.clone(fillColor), false),
+        new CallbackProperty(() => fillColor, false),
       ),
       outline: false,
       cornerType: CornerType.ROUNDED,
@@ -100,7 +100,7 @@ function createFloodplainController(viewer: Viewer): FloodplainController {
       height: 0.05,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
       material: new ColorMaterialProperty(
-        new CallbackProperty(() => Color.clone(edgeColor), false),
+        new CallbackProperty(() => edgeColor, false),
       ),
       outline: false,
       cornerType: CornerType.ROUNDED,

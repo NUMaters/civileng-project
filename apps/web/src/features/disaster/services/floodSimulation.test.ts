@@ -138,6 +138,11 @@ describe("floodSimulation", () => {
     const wrong = runToResult([pumpOnBreach]);
     expect(wrong.damagePercent).toBeGreaterThan(bare.damagePercent);
     expect(wrong.mitigation.placementInterference).toBeGreaterThan(0.3);
+    const influence = refreshPlacementEffects(createInitialFloodState(), [pumpOnBreach])
+      .structureInfluences[0];
+    // 決壊口直上の排水は逆効果地点を持つ。内水もカバーすると tone は good になりうるが、
+    // 可視化側は adverseSiteIds を見て警告色へ落とす。
+    expect(influence?.adverseSiteIds.length).toBeGreaterThan(0);
   });
 
   it("内水地点の堤防は干渉を生み、適所堤防より効果が薄い", () => {
@@ -181,8 +186,7 @@ describe("floodSimulation", () => {
 
     const sitesWithoutLevee = calculateOverflowSites([], 0.8, 0.4);
     const sitesWithLevee = calculateOverflowSites([CORE], 0.8, 0.4);
-    const coreWithout =
-      sitesWithoutLevee.find((site) => site.id === "campus-core")?.intensity ?? 0;
+    const coreWithout = sitesWithoutLevee.find((site) => site.id === "campus-core")?.intensity ?? 0;
     const coreWith = sitesWithLevee.find((site) => site.id === "campus-core")?.intensity ?? 0;
     expect(coreWith).toBeLessThan(coreWithout);
   });

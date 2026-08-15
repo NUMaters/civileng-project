@@ -18,6 +18,8 @@ const LEGACY_FLOOD_ZONE_PREFIX = "flood-zone-";
 const VISUAL_LERP_RATE = 2.0;
 /** この強度未満のサイトはフェードアウト後に削除する。 */
 const REMOVE_INTENSITY = 0.02;
+/** 地図の連続演出は 30fps に統一し、終盤の複数決壊でも負荷を一定に保つ。 */
+const OVERFLOW_FRAME_INTERVAL_MS = 1000 / 30;
 
 type SiteTarget = {
   site: OverflowSite;
@@ -49,6 +51,7 @@ type StreakVisual = {
   entity: Entity;
   width: number;
   alpha: number;
+  color: Color;
   targetWidth: number;
   targetAlpha: number;
   startLon: number;
@@ -124,12 +127,17 @@ export function clearLegacyFloodZones(viewer: Viewer): void {
 function createOverflowController(viewer: Viewer): OverflowController {
   const sites = new Map<string, SiteHandle>();
   let lastFrameAt = performance.now();
+  let lastVisualUpdateAt = 0;
 
   const removePreUpdate = viewer.scene.preUpdate.addEventListener(() => {
     if (viewer.isDestroyed()) {
       return;
     }
     const now = performance.now();
+    if (now - lastVisualUpdateAt < OVERFLOW_FRAME_INTERVAL_MS) {
+      return;
+    }
+    lastVisualUpdateAt = now;
     const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - lastFrameAt) / 1000));
     lastFrameAt = now;
     const alpha = 1 - Math.exp(-VISUAL_LERP_RATE * deltaSeconds);
@@ -404,10 +412,11 @@ function createEllipseVisual(
       height: new CallbackProperty(() => visual.height, false),
       heightReference: HeightReference.RELATIVE_TO_GROUND,
       material: new ColorMaterialProperty(
-        new CallbackProperty(() => Color.clone(visual.fill), false),
+        // Color は補間時に同じインスタンスを書き換える。clone を毎描画作成しない。
+        new CallbackProperty(() => visual.fill, false),
       ),
       outline: true,
-      outlineColor: new CallbackProperty(() => Color.clone(visual.outline), false),
+      outlineColor: new CallbackProperty(() => visual.outline, false),
       outlineWidth: 2,
     },
   });
@@ -430,6 +439,7 @@ function createStreakVisual(
     entity: undefined as unknown as Entity,
     width: 1,
     alpha: 0,
+    color: FLOW_STREAK_COLOR.withAlpha(0),
     targetWidth: spec.width,
     targetAlpha: spec.alpha,
     startLon: spec.startLon,
@@ -454,7 +464,7 @@ function createStreakVisual(
         glowPower: 0.3,
         taperPower: 0.45,
         color: new CallbackProperty(
-          () => Color.fromCssColorString("#e7fbff").withAlpha(visual.alpha),
+          () => visual.color,
           false,
         ),
       }),
@@ -462,6 +472,8 @@ function createStreakVisual(
   });
   return visual;
 }
+
+const FLOW_STREAK_COLOR = Color.fromCssColorString("#e7fbff");
 
 /** 決壊→内陸の線上を短いセグメントが流れるように見せる。 */
 function flowingStreakPositions(visual: StreakVisual): Cartesian3[] {
@@ -495,6 +507,7 @@ function stepStreak(streak: StreakVisual, alpha: number): boolean {
   const before = streak.width + streak.alpha;
   streak.width = lerp(streak.width, streak.targetWidth, alpha);
   streak.alpha = lerp(streak.alpha, streak.targetAlpha, alpha);
+  streak.color.alpha = streak.alpha;
   streak.startLon = lerp(streak.startLon, streak.targetStartLon, alpha);
   streak.startLat = lerp(streak.startLat, streak.targetStartLat, alpha);
   streak.endLon = lerp(streak.endLon, streak.targetEndLon, alpha);

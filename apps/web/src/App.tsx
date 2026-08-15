@@ -4,6 +4,7 @@ import type { CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap"
 import { MapBootFallback } from "./components/GameCanvas/MapBootFallback";
 import { GameToast } from "./components/GameToast";
 import { ConstructionMenu, useConstruction } from "./features/construction";
+import { getStructureVisual } from "./features/construction/structureVisuals";
 import { formatBudget } from "./features/construction/services/constructionService";
 import type { GeoPosition } from "./features/construction/types/construction";
 import { FloodHud, FloodResultPanel, RainOverlay, ReviewModeBar, useFloodSimulation } from "./features/disaster";
@@ -19,6 +20,7 @@ const CesiumGameMap = lazy(async () => {
 type DockDragState = {
   structureId: string;
   displayName: string;
+  imageSrc: string;
   startX: number;
   startY: number;
   x: number;
@@ -58,6 +60,7 @@ export function App() {
   const socket = useGameSocket(REALTIME_ENABLED && playMode === "multi");
   const mapRef = useRef<CesiumGameMapHandle>(null);
   const dragRef = useRef<DockDragState | null>(null);
+  const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
 
@@ -137,6 +140,7 @@ export function App() {
       const next: DockDragState = {
         structureId,
         displayName: structure.displayName,
+        imageSrc: getStructureVisual(structureId).imageSrc,
         startX,
         startY,
         x,
@@ -264,6 +268,12 @@ export function App() {
         placeable: ghost?.placeable === true,
       };
       dragRef.current = next;
+      // 位置だけはReactの再描画を待たず、DOMへ直接反映する。
+      // pointermoveごとのApp全体の再レンダーを避け、指の軌道へ1:1で追従させる。
+      if (dragGhostRef.current !== null) {
+        dragGhostRef.current.style.left = `${event.clientX}px`;
+        dragGhostRef.current.style.top = `${event.clientY + (next.overMap ? 56 : 0)}px`;
+      }
       if (
         current.overMap !== next.overMap ||
         current.placeable !== next.placeable ||
@@ -453,20 +463,24 @@ export function App() {
 
           {inGame && drag !== null && !drag.overMap ? (
             <div
+              ref={dragGhostRef}
               className="dock-drag-ghost dock-drag-ghost--lift"
               style={{ left: drag.x, top: drag.y }}
               aria-hidden="true"
             >
               <span className="dock-drag-ghost__hint">川へドロップ</span>
+              <img src={drag.imageSrc} alt="" width={46} height={46} draggable={false} />
               <span>{drag.displayName}</span>
             </div>
           ) : null}
           {inGame && drag !== null && drag.overMap ? (
             <div
+              ref={dragGhostRef}
               className={`dock-drag-ghost dock-drag-ghost--map${drag.placeable ? " is-placeable" : " is-blocked"}`}
               style={{ left: drag.x, top: drag.y + 56 }}
               aria-hidden="true"
             >
+              <img src={drag.imageSrc} alt="" width={52} height={52} draggable={false} />
               <span>{drag.placeable ? `${drag.displayName} OK` : "配置帯の上へ"}</span>
             </div>
           ) : null}

@@ -5,6 +5,7 @@
   "scripts": {
     "copy:cesium": "node ./scripts/copy-cesium-assets.mjs",
     "fetch:plateau": "node ./scripts/fetch-plateau-buildings.mjs",
+    "fetch:plateau:full": "node ./scripts/fetch-plateau-buildings.mjs --full-city",
     "dev": "node ./scripts/dev-stable.mjs",
     "dev:watch": "vite",
     "dev:ensure": "node ./scripts/ensure-dev.mjs",

@@ -104,6 +104,7 @@ Pages プロジェクト → **Custom domains** でドメインを追加し、�
 | リロード 404 | `_redirects` の `/* /index.html 200` が dist にあるか |
 | タイルが出ない | 本番は地理院へ直接アクセス。端末・ネットワークのブロックを確認 |
 | Actions がスキップ | `CLOUDFLARE_API_TOKEN` 未設定。Secret を追加するか `workflow_dispatch` で確認 |
+| `Authentication error [code: 10000]` / `Invalid access token [code: 9109]` | GitHub Secret の API トークン期限切れ。Cloudflare Dashboard で Pages 編集権限付きトークンを再発行し、`CLOUDFLARE_API_TOKEN` を更新する。ローカルは `wrangler login` し直して `pnpm deploy:web` |
 | 出力ディレクトリが見つからない | `CI=true` でビルドしているか（成果物は `apps/web/dist`） |
 
 ## 関連

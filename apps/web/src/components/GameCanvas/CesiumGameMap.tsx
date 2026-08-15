@@ -55,7 +55,10 @@ import {
   syncOverflowVisualization,
 } from "./overflowVisualization";
 import { createPlaceableZone } from "./placeableZone";
-import { syncProtectionVisualization, clearProtectionVisualization } from "./protectionVisualization";
+import {
+  syncProtectionVisualization,
+  clearProtectionVisualization,
+} from "./protectionVisualization";
 import { nearestPointOnPolyline, resolvePlaceablePosition } from "./riverPlacement";
 import { createRiverWaterSurface, type RiverWaterSurfaceController } from "./riverWaterSurface";
 import { createStructureMaterial } from "./structureMaterials";
@@ -128,6 +131,17 @@ const PLATEAU_TERRAIN_URL = "https://tile.plateauview.mlit.go.jp/terrain/";
 const GSI_SEAMLESS_PHOTO_URL = import.meta.env.DEV
   ? "/gsi-tiles/seamlessphoto/{z}/{x}/{y}.jpg"
   : "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
+
+function resolveCesiumResolutionScale(): number {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+  const dpr = Math.max(1, window.devicePixelRatio || 1);
+  const nativePixels = Math.max(1, window.innerWidth * window.innerHeight * dpr * dpr);
+  const budgetScale = Math.sqrt(CESIUM_TARGET_RENDER_PIXELS / nativePixels);
+  // CSSのHUDは等倍のまま、3Dキャンバスだけを端末負荷に合わせる。
+  return Math.min(1, Math.max(0.65, budgetScale));
+}
 /** 施設ドラッグ移設を開始する画面移動量（CSS px）。 */
 const MOVE_START_MOVE_PX = 14;
 /** モデルを直接拾えなくても中心付近なら選択できる半径（CSS px）。 */
@@ -136,6 +150,15 @@ const PLACEMENT_PICK_RADIUS_PX = 72;
 const NUDGE_METERS = 2.5;
 /** 地形高が取れないとき・NaN のときのフォールバック標高（楕円体高 m）。 */
 const FALLBACK_GROUND_HEIGHT_M = 18;
+/**
+ * 水面・越水・天候は十分滑らかに見える 30fps で統合して更新する。
+ * Cesium の requestRenderMode を活かし、複数の演出が 60fps で競合するのを防ぐ。
+ */
+const DYNAMIC_VISUAL_FRAME_INTERVAL_MS = 1000 / 30;
+/** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
+const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 20;
+/** Cesium の描画バッファ上限。高DPI端末で見えない画素へGPU時間を使いすぎない。 */
+const CESIUM_TARGET_RENDER_PIXELS = 2_000_000;
 
 export type DragGhostStatus = {
   /** ポインタが地図キャンバス上にある。 */
@@ -257,6 +280,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const onCameraFocusChangeRef = useRef(onCameraFocusChange);
     const selectedPlacementIdRef = useRef(selectedPlacementId);
     const dragGhostRafRef = useRef(0);
+    const dragGhostLastComputeAtRef = useRef(0);
+    const dragGhostStatusRef = useRef<DragGhostStatus>({ overMap: false, placeable: false });
     const dragGhostLastKeyRef = useRef("");
     /** ドラッグ中カーソル位置の影響圏（仮配置確定前）。 */
     const dragGhostInfluenceRef = useRef<StructureInfluence | null>(null);
@@ -267,6 +292,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const [isMapReady, setIsMapReady] = useState(false);
     const [visibilityEpoch, setVisibilityEpoch] = useState(0);
 
+    const labelInfluences = useMemo(() => calculateStructureInfluences(placements), [placements]);
+
     const facilityLabels = useMemo(
       () =>
         placements
@@ -275,10 +302,26 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           .map((placement) => {
             const displayName =
               structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設";
+            const influence = labelInfluences.find((item) => item.placementId === placement.id);
+            const hasAdverseEffect = (influence?.adverseSiteIds.length ?? 0) > 0;
+            const tone =
+              influence?.coverageTone === "good" && hasAdverseEffect
+                ? "warn"
+                : (influence?.coverageTone ?? "warn");
             return {
               id: placement.id,
               kind: "facility" as const,
               text: displayName,
+              effectText:
+                tone === "bad"
+                  ? "逆効果・流入増"
+                  : hasAdverseEffect
+                    ? "一部で逆効果"
+                    : tone === "good"
+                      ? (influence?.coverageHint ?? "弱点をカバー")
+                      : "効果範囲外",
+              tone,
+              effectiveness: influence?.effectiveness ?? 0,
               selected: placement.id === selectedPlacementId,
               preview: false,
               longitude: placement.position.longitude,
@@ -289,7 +332,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 12,
             };
           }),
-      [placements, selectedPlacementId, structures],
+      [labelInfluences, placements, selectedPlacementId, structures],
     );
 
     /** 向き変更は仮配置中のみ。確定後はスライダーを出さない。 */
@@ -397,6 +440,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (viewer === null || viewer.isDestroyed()) {
           return { overMap: false, placeable: false };
         }
+        // Safari/iOS は pointermove が高頻度で発火するため、地形ピックと影響範囲計算を間引く。
+        // カーソル座標は次のイベントで自然に追従するので、入力を失わず描画負荷だけを抑えられる。
+        const now = performance.now();
+        if (now - dragGhostLastComputeAtRef.current < DRAG_GHOST_UPDATE_INTERVAL_MS) {
+          return dragGhostStatusRef.current;
+        }
+        dragGhostLastComputeAtRef.current = now;
         const canvas = viewer.scene.canvas;
         const rect = canvas.getBoundingClientRect();
         const screen = new Cartesian2(clientX - rect.left, clientY - rect.top);
@@ -405,7 +455,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           dragGhostLastKeyRef.current = "";
           dragGhostInfluenceRef.current = null;
           refreshProtectionWithDragGhost(viewer, floodStateRef.current, null, mapActiveRef.current);
-          return { overMap: false, placeable: false };
+          dragGhostStatusRef.current = { overMap: false, placeable: false };
+          return dragGhostStatusRef.current;
         }
 
         const picked = pickPlacementPosition(viewer, screen);
@@ -414,7 +465,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           dragGhostLastKeyRef.current = "";
           dragGhostInfluenceRef.current = null;
           refreshProtectionWithDragGhost(viewer, floodStateRef.current, null, mapActiveRef.current);
-          return { overMap: true, placeable: false };
+          dragGhostStatusRef.current = { overMap: true, placeable: false };
+          return dragGhostStatusRef.current;
         }
 
         const resolved = resolvePlaceablePosition(picked);
@@ -426,8 +478,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const key = [
           structureId,
           placeable ? "1" : "0",
-          position.longitude.toFixed(6),
-          position.latitude.toFixed(6),
+          // 1m程度未満の揺れではCesium Entityを作り直さない。
+          position.longitude.toFixed(5),
+          position.latitude.toFixed(5),
           Math.round(headingDegrees),
         ].join("|");
         if (key === dragGhostLastKeyRef.current) {
@@ -435,46 +488,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         }
         dragGhostLastKeyRef.current = key;
 
-        if (dragGhostRafRef.current !== 0) {
-          window.cancelAnimationFrame(dragGhostRafRef.current);
-        }
-        dragGhostRafRef.current = window.requestAnimationFrame(() => {
-          dragGhostRafRef.current = 0;
-          const activeViewer = viewerRef.current;
-          if (activeViewer === null || activeViewer.isDestroyed()) {
-            return;
-          }
-          clearDragGhostEntities(activeViewer);
-          const ghost: PlacedStructure = {
-            id: DRAG_GHOST_PLACEMENT_ID,
-            structureId,
-            position,
-            headingDegrees,
-            preview: true,
-          };
-          try {
-            // 堤防など多パーツ施設は毎フレーム全再生成すると描画例外で白画面になるため簡易体で追従する。
-            addDragGhostSilhouette(activeViewer, ghost, !placeable);
-          } catch (error) {
-            console.error("Failed to render drag ghost model", structureId, error);
-            addFallbackStructureMarker(activeViewer, ghost, false, true, {
-              entityIdPrefix: DRAG_GHOST_ENTITY_PREFIX,
-              invalid: !placeable,
-            });
-          }
-          // 設置前から影響圏を見せ、置き場判断を助ける。
-          const influence = calculateStructureInfluences([ghost])[0] ?? null;
-          dragGhostInfluenceRef.current = influence;
-          refreshProtectionWithDragGhost(
-            activeViewer,
-            floodStateRef.current,
-            influence,
-            mapActiveRef.current,
-          );
-          activeViewer.scene.requestRender();
-        });
+        // ドラッグ中はDOMの追従バッジ（App.tsx）だけを表示する。
+        // Cesium Entityの削除・再生成と影響圏の再計算は、指を離した後の確定処理へ移す。
+        // これによりiOSのWebGLコンテキストを毎フレーム触らず、ポインター追従を滑らかにする。
+        dragGhostStatusRef.current = { overMap: true, placeable };
+        return dragGhostStatusRef.current;
 
-        return { overMap: true, placeable };
       },
       clearDragGhost: () => {
         if (dragGhostRafRef.current !== 0) {
@@ -482,6 +501,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           dragGhostRafRef.current = 0;
         }
         dragGhostLastKeyRef.current = "";
+        dragGhostLastComputeAtRef.current = 0;
+        dragGhostStatusRef.current = { overMap: false, placeable: false };
         dragGhostInfluenceRef.current = null;
         clearDragGhostEntities(viewerRef.current);
         refreshProtectionWithDragGhost(
@@ -517,7 +538,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       let removeCameraMoveEnd: (() => void) | undefined;
       let handleVisibilityChange: (() => void) | undefined;
       let removeContextLost: (() => void) | undefined;
+      let handleViewportResize: (() => void) | undefined;
       let waterRenderFrame = 0;
+      let lastDynamicVisualAt = 0;
 
       try {
         // React StrictMode remounts effects; clear leftover Cesium DOM first.
@@ -567,7 +590,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.globe.maximumScreenSpaceError = 4;
         mapViewer.scene.fog.enabled = false;
         mapViewer.scene.highDynamicRange = false;
-        mapViewer.resolutionScale = window.devicePixelRatio > 1.5 ? 0.85 : 1;
+        const applyResolutionBudget = () => {
+          mapViewer.resolutionScale = resolveCesiumResolutionScale();
+          mapViewer.resize();
+          mapViewer.scene.requestRender();
+        };
+        applyResolutionBudget();
+        handleViewportResize = applyResolutionBudget;
+        window.addEventListener("resize", handleViewportResize, { passive: true });
         if (mapViewer.scene.skyAtmosphere !== undefined) {
           mapViewer.scene.skyAtmosphere.show = true;
         }
@@ -672,7 +702,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           if (disposed || mapViewer.isDestroyed()) {
             return;
           }
-          if (!document.hidden && mapActiveRef.current) {
+          const now = performance.now();
+          if (
+            !document.hidden &&
+            mapActiveRef.current &&
+            now - lastDynamicVisualAt >= DYNAMIC_VISUAL_FRAME_INTERVAL_MS
+          ) {
+            lastDynamicVisualAt = now;
             const latest = getLatestFloodStateRef.current?.();
             if (latest !== undefined) {
               const active =
@@ -720,12 +756,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               // 氾濫原・越水は目標の変化時だけ更新（描画側で補間する）。
               const visualKey = [
                 active ? 1 : 0,
-                latest.riverLevelMeters.toFixed(3),
-                latest.overflowMeters.toFixed(3),
-                latest.floodDepthMeters.toFixed(3),
-                latest.floodedAreaPercent.toFixed(2),
+                latest.riverLevelMeters.toFixed(2),
+                latest.overflowMeters.toFixed(2),
+                latest.floodDepthMeters.toFixed(2),
+                latest.floodedAreaPercent.toFixed(1),
                 latest.overflowSites
-                  .map((site) => `${site.id}:${site.intensity.toFixed(3)}`)
+                  .map((site) => `${site.id}:${site.intensity.toFixed(2)}`)
                   .join(","),
               ].join("|");
               if (visualKey !== lastVisualKey) {
@@ -750,6 +786,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 );
               }
             }
+            // requestRenderMode では、ここだけが連続演出の描画を起こす。
+            // 30fps に揃えることで雨 Canvas と 3D エンティティが取り合わない。
             mapViewer.scene.requestRender();
           }
           waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
@@ -759,7 +797,12 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         // 配置帯は準備／災害中かつ mapActive のときだけ出す（初期化時点では作らない）。
         placeableZoneRef.current?.destroy();
         placeableZoneRef.current = null;
-        syncPlaceableZoneForPhase(mapViewer, placeableZoneRef, floodStateRef.current, mapActiveRef.current);
+        syncPlaceableZoneForPhase(
+          mapViewer,
+          placeableZoneRef,
+          floodStateRef.current,
+          mapActiveRef.current,
+        );
 
         void createRiverWaterSurface(mapViewer)
           .then((controller) => {
@@ -815,8 +858,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         let pointerDown: Cartesian2 | undefined;
         let moveSession: MoveSession | undefined;
+        let livePendingLastAt = 0;
 
         const liveUpdatePending = (placement: PlacedStructure, invalid = false) => {
+          const now = performance.now();
+          if (now - livePendingLastAt < DRAG_GHOST_UPDATE_INTERVAL_MS && !invalid) {
+            return;
+          }
+          livePendingLastAt = now;
           for (const entity of [...mapViewer.entities.values]) {
             if (
               entity.id === `placement-${placement.id}` ||
@@ -968,6 +1017,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (handleVisibilityChange !== undefined) {
           document.removeEventListener("visibilitychange", handleVisibilityChange);
         }
+        if (handleViewportResize !== undefined) {
+          window.removeEventListener("resize", handleViewportResize);
+        }
         removeContextLost?.();
         riverWaterRef.current?.destroy();
         riverWaterRef.current = null;
@@ -1113,10 +1165,22 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return;
       }
 
+      let lastLabelViewMatrix: Matrix4 | undefined;
       const syncOverlayPositions = () => {
         if (viewer.isDestroyed()) {
           return;
         }
+        const currentViewMatrix = viewer.camera.viewMatrix;
+        if (
+          lastLabelViewMatrix !== undefined &&
+          Matrix4.equals(lastLabelViewMatrix, currentViewMatrix)
+        ) {
+          return;
+        }
+        lastLabelViewMatrix = Matrix4.clone(
+          currentViewMatrix,
+          lastLabelViewMatrix ?? new Matrix4(),
+        );
         const facilityLabelAnchors: ScreenLabelAnchor[] = [];
         for (const label of mapLabels) {
           const element = labelElementRefs.current.get(`${label.kind}-${label.id}`);
@@ -1239,9 +1303,22 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
               ref={(element) => {
                 setLabelElementRef(`${label.kind}-${label.id}`, element);
               }}
-              className={`cesium-map-label${label.selected ? " is-selected" : ""}${label.preview ? " is-preview" : ""}`}
+              className={`cesium-map-label is-${label.tone}${label.selected ? " is-selected" : ""}${label.preview ? " is-preview" : ""}`}
             >
-              {label.text}
+              <span className="cesium-map-label__name">{label.text}</span>
+              <span className="cesium-map-label__effect">
+                <b aria-hidden="true">
+                  {label.tone === "good" ? "✓" : label.tone === "bad" ? "!" : "△"}
+                </b>
+                {label.effectText}
+              </span>
+              <span className="cesium-map-label__meter" aria-hidden="true">
+                <i
+                  style={{
+                    width: `${label.tone === "bad" ? 100 : Math.max(18, label.effectiveness * 100)}%`,
+                  }}
+                />
+              </span>
             </div>
           ))}
         </div>

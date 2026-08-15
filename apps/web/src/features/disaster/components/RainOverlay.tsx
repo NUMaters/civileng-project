@@ -16,6 +16,9 @@ type Drop = {
   alpha: number;
 };
 
+/** Canvas と 3D 地図の描画予算を共有する。雨は 30fps でも十分に連続して見える。 */
+const RAIN_FRAME_INTERVAL_MS = 1000 / 30;
+
 /**
  * 画面全体の大雨オーバーレイ。
  * Cesium 負荷を避けるため Canvas 2D の筋雨＋薄闇で表現する。
@@ -63,6 +66,7 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
     let nextFlashAt = performance.now() + 4_000;
     let flashUntil = 0;
     let lastAt = performance.now();
+    let lastDrawAt = 0;
 
     const resize = () => {
       const dpr = Math.min(1.5, window.devicePixelRatio || 1);
@@ -89,6 +93,13 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
     window.addEventListener("resize", onResize);
 
     const tick = (now: number) => {
+      // 高解像度の Canvas 塗りつぶしと多数の stroke を毎フレーム実行しない。
+      // requestAnimationFrame 自体は維持して、表示復帰時・リサイズ時の追従は即時にする。
+      if (now - lastDrawAt < RAIN_FRAME_INTERVAL_MS) {
+        frameId = window.requestAnimationFrame(tick);
+        return;
+      }
+      lastDrawAt = now;
       const dt = Math.min(0.05, Math.max(0.001, (now - lastAt) / 1000));
       lastAt = now;
       const latest = getLatestState();
