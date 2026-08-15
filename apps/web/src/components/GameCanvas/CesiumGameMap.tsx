@@ -72,7 +72,6 @@ import {
 import { resolveRainDrama } from "../../features/disaster/services/rainDrama";
 
 const DRAG_GHOST_ENTITY_PREFIX = "drag-ghost";
-const DRAG_GHOST_PLACEMENT_ID = "cursor";
 
 // Avoid Cesium Ion default basemap requests (we use GSI / PLATEAU tiles).
 Ion.defaultAccessToken = "";
@@ -2169,97 +2168,6 @@ function addFallbackStructureMarker(
       outlineWidth: 1,
       shadows: ShadowMode.DISABLED,
     }),
-  });
-}
-
-/**
- * ドラッグ中の軽量シルエット。堤防のような多層モデルを毎フレーム組むと WebGL / Cesium が落ちるため。
- */
-function addDragGhostSilhouette(
-  viewer: Viewer,
-  placement: PlacedStructure,
-  invalid: boolean,
-): void {
-  const prefix = DRAG_GHOST_ENTITY_PREFIX;
-  const groundHeight = resolveGroundHeightMeters(viewer, placement);
-  const heading = CesiumMath.toRadians(
-    Number.isFinite(placement.headingDegrees) ? placement.headingDegrees : 0,
-  );
-  const footprint = getStructureFootprintMeters(placement.structureId);
-  const fill = Color.fromCssColorString(invalid ? "#ef6b4a" : "#5ec8ff").withAlpha(
-    invalid ? 0.35 : 0.42,
-  );
-  const outline = Color.fromCssColorString(invalid ? "#ffb0a0" : "#9fe4ff").withAlpha(0.9);
-
-  viewer.entities.add({
-    id: `${prefix}-${placement.id}-marker`,
-    position: Cartesian3.fromDegrees(
-      placement.position.longitude,
-      placement.position.latitude,
-      groundHeight + 0.1,
-    ),
-    ellipse: {
-      semiMajorAxis: Math.max(footprint.length, footprint.width) * 0.35,
-      semiMinorAxis: Math.max(footprint.length, footprint.width) * 0.35,
-      material: fill.withAlpha(invalid ? 0.16 : 0.2),
-      outline: true,
-      outlineColor: outline,
-      outlineWidth: 1,
-    },
-  });
-
-  const bodyHeight = Math.min(Math.max(footprint.height, 4), 14);
-  viewer.entities.add({
-    id: `${prefix}-${placement.id}`,
-    position: Cartesian3.fromDegrees(
-      placement.position.longitude,
-      placement.position.latitude,
-      groundHeight + bodyHeight * 0.5,
-    ),
-    orientation: Transforms.headingPitchRollQuaternion(
-      Cartesian3.fromDegrees(
-        placement.position.longitude,
-        placement.position.latitude,
-        groundHeight,
-      ),
-      new HeadingPitchRoll(heading, 0, 0),
-    ),
-    box: new BoxGraphics({
-      dimensions: new Cartesian3(
-        Math.min(footprint.length, 100),
-        Math.min(footprint.width, 48),
-        bodyHeight,
-      ),
-      material: fill,
-      outline: true,
-      outlineColor: outline,
-      outlineWidth: 1,
-      shadows: ShadowMode.DISABLED,
-    }),
-  });
-
-  const tip = offsetLonLatMeters(
-    placement.position.longitude,
-    placement.position.latitude,
-    0,
-    Math.min(footprint.length * 0.45, 48),
-    heading,
-  );
-  viewer.entities.add({
-    id: `${prefix}-${placement.id}-heading`,
-    polyline: {
-      positions: Cartesian3.fromDegreesArrayHeights([
-        placement.position.longitude,
-        placement.position.latitude,
-        groundHeight + bodyHeight + 0.8,
-        tip.longitude,
-        tip.latitude,
-        groundHeight + bodyHeight + 0.8,
-      ]),
-      width: 4,
-      material: outline,
-      clampToGround: false,
-    },
   });
 }
 
