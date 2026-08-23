@@ -131,6 +131,10 @@ polling間隔は **2秒** とする。
 
 ロビー画面では、ルーム状態および参加者状態を2秒ごとに取得する。
 
+`GET /rooms/{roomId}` は `status` と `sessionId` を返す。
+
+参加者はpollingで `status` が `in_game` かつ `sessionId` が設定されたことを検知し、ゲームデータの読み込みとWebSocket接続へ進む。
+
 ### 4.8 ルーム退出
 
 `open` 状態のルームから退出できる。
@@ -149,6 +153,8 @@ polling間隔は **2秒** とする。
 ### 5.1 Sessionの生成
 
 ルーム作成者がゲーム開始を要求した時点でゲームセッションを生成する。
+
+Session生成と同時にRoomを `in_game` に変更する。
 
 生成直後のSessionはゲーム本編を開始せず、参加者のready待ち状態とする。
 
@@ -447,6 +453,23 @@ phaseEndsAt
 
 時刻値はUnix millisecondsとする。
 
+### 11.2 ゲーム結果イベント
+
+ゲーム結果を確定した時点で、同一Session内の全クライアントへ以下を配信する。
+
+```text
+game.ended
+```
+
+payload:
+
+```text
+damagePercent
+isClear
+```
+
+`damagePercent` は最終被災度、`isClear` はGame Serverが確定した勝敗結果を表す。
+
 ---
 
 ## 12. 洪水・被災状態同期
@@ -497,13 +520,13 @@ depth
 
 ## 13. 初期状態同期
 
-WebSocket接続後、クライアントへ以下を送信する。
+最終参加者を確定し、土木技術を割り当てた後、Preparation開始時に各クライアントへ以下を送信する。
 
 ```text
 session.state
 ```
 
-`session.state` は対象クライアントが現在のゲーム状態へ同期するための完全な初期スナップショットとする。
+`session.state` は対象クライアントがPreparation開始時のゲーム状態へ同期するための完全な初期スナップショットとする。
 
 構造は以下とする。
 
@@ -565,6 +588,7 @@ simulation
 | `construction.placed` | 施設配置成功 |
 | `construction.rejected` | 施設配置失敗 |
 | `game.phaseChanged` | ゲームフェーズ変更 |
+| `game.ended` | ゲーム結果通知 |
 | `simulation.updated` | 洪水・被災状態更新 |
 
 
@@ -627,7 +651,7 @@ result
   ↓
 最終結果確定
   ↓
-全Clientへ結果通知
+全Clientへ `game.ended` を配信
   ↓
 WebSocket close
   ↓
@@ -636,7 +660,7 @@ Sessionをメモリから削除
 Room / Session関連DBレコードを削除
 ```
 
-Result画面はWebSocketで受信済みの結果データを表示する。
+Result画面は `game.ended` で受信した結果データを表示する。
 
 ユーザーはResult画面からゲームメニューへ戻る。
 
@@ -729,7 +753,9 @@ Room作成 / 参加
     ↓
 作成者がゲーム開始
     ↓
-Session生成
+Session生成 / Roomをin_gameへ変更
+    ↓
+pollingでsessionIdを取得
     ↓
 ゲームデータ読み込み
     ↓
@@ -743,13 +769,13 @@ session.ready
     ↓
 土木技術割り当て
     ↓
-Preparation
+Preparation開始 / session.state
     ↓
 Disaster
     ↓
 Result
     ↓
-結果通知
+game.ended
     ↓
 WebSocket close
     ↓
