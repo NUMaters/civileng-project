@@ -51,6 +51,32 @@ jobs:
           CI: "true"
         run: pnpm --filter @civilcraft/web build
 
+      - name: Verify build output
+        working-directory: apps/web
+        run: |
+          test -f dist/index.html
+          test -d dist/cesiumStatic/Workers
+          echo "Workers: $(find dist/cesiumStatic/Workers -type f | wc -l)"
+          du -sh dist
+
+      - name: Upload dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: apps/web/dist/
+          retention-days: 7
+
+      - name: Verify Cloudflare API token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          http_code=$(curl -sS -o /tmp/cf-verify.json -w "%{http_code}" \
+            "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
+          echo "verify HTTP ${http_code}"
+          cat /tmp/cf-verify.json
+          test "${http_code}" = "200"
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
@@ -58,3 +84,4 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
           command: pages deploy ./dist --project-name=civilcraft
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
