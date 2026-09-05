@@ -841,6 +841,69 @@
   font-size: 10px;
 }
 
+.cmd-minimap__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.hud-frame__desktop {
+  display: contents;
+}
+
+.cmd-mobile-hud {
+  display: none;
+}
+
+.tutorial-coach {
+  position: fixed;
+  left: 50%;
+  bottom: calc(132px + env(safe-area-inset-bottom));
+  z-index: 40;
+  width: min(360px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border: 1px solid rgba(126, 200, 227, 0.35);
+  border-radius: 12px;
+  background: rgba(8, 20, 30, 0.92);
+  color: #d8e8f2;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  transform: translateX(-50%);
+  animation: hud-slide-up 0.35s ease;
+}
+
+.tutorial-coach__kicker {
+  margin: 0 0 4px;
+  color: #7ec8e3;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tutorial-coach strong {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.tutorial-coach p {
+  margin: 0;
+  color: #9bb4c2;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tutorial-coach__skip {
+  margin-top: 10px;
+  padding: 6px 12px;
+  border: 1px solid rgba(126, 200, 227, 0.45);
+  border-radius: 6px;
+  background: rgba(22, 54, 68, 0.9);
+  color: #e8f1f6;
+  font-size: 12px;
+  cursor: pointer;
+}
+
 .cmd-minimap__actions {
   display: none;
 }
@@ -866,19 +929,42 @@
     width: min(180px, calc(100vw - 28px));
   }
 
-  .cmd-legend,
-  .cmd-minimap {
+  .hud-frame__desktop {
     display: none;
   }
 
-  .placement-bar {
-    bottom: calc(148px + env(safe-area-inset-bottom));
-    width: calc(100vw - 16px);
-    padding: 10px 12px;
+  .cmd-mobile-hud {
+    display: block;
+    position: fixed;
+    left: 12px;
+    bottom: calc(128px + env(safe-area-inset-bottom));
+    z-index: 28;
   }
 
-  .placement-bar__actions {
-    grid-template-columns: 1fr 1fr;
+  .cmd-mobile-hud__toggle {
+    padding: 8px 12px;
+    border: 1px solid rgba(126, 200, 227, 0.35);
+    border-radius: 999px;
+    background: rgba(8, 20, 30, 0.88);
+    color: #d8e8f2;
+    font-size: 12px;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+
+  .cmd-mobile-hud__panel {
+    margin-top: 8px;
+    display: grid;
+    gap: 8px;
+    width: min(280px, calc(100vw - 24px));
+  }
+
+  .cmd-mobile-hud__panel .cmd-legend,
+  .cmd-mobile-hud__panel .cmd-minimap {
+    display: block;
+    position: static;
+    width: 100%;
+    animation: none;
   }
 
   .cmd-dock__tooltip-meta {

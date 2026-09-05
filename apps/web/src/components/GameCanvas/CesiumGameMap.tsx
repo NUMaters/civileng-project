@@ -139,8 +139,10 @@ function resolveCesiumResolutionScale(): number {
   const dpr = Math.max(1, window.devicePixelRatio || 1);
   const nativePixels = Math.max(1, window.innerWidth * window.innerHeight * dpr * dpr);
   const budgetScale = Math.sqrt(CESIUM_TARGET_RENDER_PIXELS / nativePixels);
+  const isNarrow = window.matchMedia("(max-width: 720px)").matches;
+  const floor = isNarrow ? 0.55 : 0.65;
   // CSSのHUDは等倍のまま、3Dキャンバスだけを端末負荷に合わせる。
-  return Math.min(1, Math.max(0.65, budgetScale));
+  return Math.min(1, Math.max(floor, budgetScale));
 }
 /** 施設ドラッグ移設を開始する画面移動量（CSS px）。 */
 const MOVE_START_MOVE_PX = 14;
@@ -267,6 +269,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const getLatestFloodStateRef = useRef(getLatestFloodState);
     const freeCameraLookRef = useRef(freeCameraLook);
     const mapActiveRef = useRef(mapActive);
+    const startWaterAnimatingRef = useRef<(() => void) | null>(null);
     const labelElementRefs = useRef(new Map<string, HTMLDivElement>());
     const orientationHudRef = useRef<HTMLDivElement | null>(null);
     const confirmHudRef = useRef<HTMLDivElement | null>(null);
@@ -378,6 +381,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       if (!mapActive) {
         return;
       }
+      startWaterAnimatingRef.current?.();
       const viewer = viewerRef.current;
       if (viewer === null || viewer.isDestroyed()) {
         return;
@@ -596,7 +600,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.globe.translucency.enabled = false;
         mapViewer.scene.globe.depthTestAgainstTerrain = false;
         mapViewer.scene.globe.show = true;
-        mapViewer.scene.globe.maximumScreenSpaceError = 4;
+        mapViewer.scene.globe.maximumScreenSpaceError =
+          typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches ? 7 : 4;
         mapViewer.scene.fog.enabled = false;
         mapViewer.scene.highDynamicRange = false;
         const applyResolutionBudget = () => {
@@ -618,6 +623,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           }
           if (visible) {
             mapViewer.scene.requestRender();
+            startWaterAnimatingRef.current?.();
           }
         };
         document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -709,99 +715,106 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const stormSky = Color.fromCssColorString("#4a6170");
         const keepWaterAnimating = () => {
           if (disposed || mapViewer.isDestroyed()) {
+            waterRenderFrame = 0;
             return;
           }
-          const now = performance.now();
-          if (
-            !document.hidden &&
-            mapActiveRef.current &&
-            now - lastDynamicVisualAt >= DYNAMIC_VISUAL_FRAME_INTERVAL_MS
-          ) {
-            lastDynamicVisualAt = now;
-            const latest = getLatestFloodStateRef.current?.();
-            if (latest !== undefined) {
-              const active =
-                latest.phase === "disaster" ||
-                latest.phase === "result" ||
-                latest.phase === "review";
-              const mitigationCalm = Math.min(
-                1,
-                latest.mitigation.overflowPrevention * 0.65 +
-                  latest.mitigation.waterLevelReduction * 0.5 +
-                  latest.mitigation.channelCapacityIncrease * 0.2,
-              );
-              riverWaterRef.current?.setHydraulics({
-                riverLevelMeters: latest.riverLevelMeters,
-                rainfallIntensity: latest.rainfallIntensity,
-                overflowMeters: latest.overflowMeters,
-                activeFlood: active,
-                mitigationCalm,
-              });
-
-              const drama = resolveRainDrama({
-                phase: latest.phase,
-                rainfallIntensity: latest.rainfallIntensity,
-                overflowMeters: latest.overflowMeters,
-                floodDepthMeters: latest.floodDepthMeters,
-                damagePercent: latest.damagePercent,
-              });
-              const stormKey = drama.toFixed(2);
-              if (stormKey !== lastStormKey) {
-                lastStormKey = stormKey;
-                Color.lerp(clearSky, stormSky, drama, mapViewer.scene.backgroundColor);
-                if (mapViewer.scene.skyAtmosphere !== undefined) {
-                  mapViewer.scene.skyAtmosphere.hueShift = -0.04 * drama;
-                  mapViewer.scene.skyAtmosphere.saturationShift = -0.3 * drama;
-                  mapViewer.scene.skyAtmosphere.brightnessShift = -0.42 * drama;
-                }
-                mapViewer.scene.fog.enabled = drama > 0.12;
-                mapViewer.scene.fog.density = 0.00015 + drama * 0.00135;
-                mapViewer.scene.fog.minimumBrightness = Math.max(0.08, 0.35 - drama * 0.22);
-                if (mapViewer.scene.light instanceof DirectionalLight) {
-                  mapViewer.scene.light.intensity = 2.2 - drama * 1.15;
-                }
-              }
-
-              // 氾濫原・越水は目標の変化時だけ更新（描画側で補間する）。
-              const visualKey = [
-                active ? 1 : 0,
-                latest.riverLevelMeters.toFixed(2),
-                latest.overflowMeters.toFixed(2),
-                latest.floodDepthMeters.toFixed(2),
-                latest.floodedAreaPercent.toFixed(1),
-                latest.overflowSites
-                  .map((site) => `${site.id}:${site.intensity.toFixed(2)}`)
-                  .join(","),
-              ].join("|");
-              if (visualKey !== lastVisualKey) {
-                lastVisualKey = visualKey;
-                syncNearOverflowFloodplain(mapViewer, {
-                  active,
+          const shouldAnimate = !document.hidden && mapActiveRef.current;
+          if (shouldAnimate) {
+            const now = performance.now();
+            if (now - lastDynamicVisualAt >= DYNAMIC_VISUAL_FRAME_INTERVAL_MS) {
+              lastDynamicVisualAt = now;
+              const latest = getLatestFloodStateRef.current?.();
+              if (latest !== undefined) {
+                const active =
+                  latest.phase === "disaster" ||
+                  latest.phase === "result" ||
+                  latest.phase === "review";
+                const mitigationCalm = Math.min(
+                  1,
+                  latest.mitigation.overflowPrevention * 0.65 +
+                    latest.mitigation.waterLevelReduction * 0.5 +
+                    latest.mitigation.channelCapacityIncrease * 0.2,
+                );
+                riverWaterRef.current?.setHydraulics({
                   riverLevelMeters: latest.riverLevelMeters,
+                  rainfallIntensity: latest.rainfallIntensity,
                   overflowMeters: latest.overflowMeters,
-                  overflowLevelMeters: latest.overflowLevelMeters,
+                  activeFlood: active,
+                  mitigationCalm,
                 });
-                syncOverflowVisualization(
-                  mapViewer,
-                  active ? latest.overflowSites : [],
-                  active ? latest.floodDepthMeters : 0,
-                  active ? latest.floodedAreaPercent : 0,
-                );
-                syncInundationVisualization(
-                  mapViewer,
-                  active ? latest.overflowSites : [],
-                  active ? latest.floodDepthMeters : 0,
-                  active,
-                );
+
+                const drama = resolveRainDrama({
+                  phase: latest.phase,
+                  rainfallIntensity: latest.rainfallIntensity,
+                  overflowMeters: latest.overflowMeters,
+                  floodDepthMeters: latest.floodDepthMeters,
+                  damagePercent: latest.damagePercent,
+                });
+                const stormKey = drama.toFixed(2);
+                if (stormKey !== lastStormKey) {
+                  lastStormKey = stormKey;
+                  Color.lerp(clearSky, stormSky, drama, mapViewer.scene.backgroundColor);
+                  if (mapViewer.scene.skyAtmosphere !== undefined) {
+                    mapViewer.scene.skyAtmosphere.hueShift = -0.04 * drama;
+                    mapViewer.scene.skyAtmosphere.saturationShift = -0.3 * drama;
+                    mapViewer.scene.skyAtmosphere.brightnessShift = -0.42 * drama;
+                  }
+                  mapViewer.scene.fog.enabled = drama > 0.12;
+                  mapViewer.scene.fog.density = 0.00015 + drama * 0.00135;
+                  mapViewer.scene.fog.minimumBrightness = Math.max(0.08, 0.35 - drama * 0.22);
+                  if (mapViewer.scene.light instanceof DirectionalLight) {
+                    mapViewer.scene.light.intensity = 2.2 - drama * 1.15;
+                  }
+                }
+
+                const visualKey = [
+                  active ? 1 : 0,
+                  latest.riverLevelMeters.toFixed(2),
+                  latest.overflowMeters.toFixed(2),
+                  latest.floodDepthMeters.toFixed(2),
+                  latest.floodedAreaPercent.toFixed(1),
+                  latest.overflowSites
+                    .map((site) => `${site.id}:${site.intensity.toFixed(2)}`)
+                    .join(","),
+                ].join("|");
+                if (visualKey !== lastVisualKey) {
+                  lastVisualKey = visualKey;
+                  syncNearOverflowFloodplain(mapViewer, {
+                    active,
+                    riverLevelMeters: latest.riverLevelMeters,
+                    overflowMeters: latest.overflowMeters,
+                    overflowLevelMeters: latest.overflowLevelMeters,
+                  });
+                  syncOverflowVisualization(
+                    mapViewer,
+                    active ? latest.overflowSites : [],
+                    active ? latest.floodDepthMeters : 0,
+                    active ? latest.floodedAreaPercent : 0,
+                  );
+                  syncInundationVisualization(
+                    mapViewer,
+                    active ? latest.overflowSites : [],
+                    active ? latest.floodDepthMeters : 0,
+                    active,
+                  );
+                }
               }
+              mapViewer.scene.requestRender();
             }
-            // requestRenderMode では、ここだけが連続演出の描画を起こす。
-            // 30fps に揃えることで雨 Canvas と 3D エンティティが取り合わない。
-            mapViewer.scene.requestRender();
           }
-          waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
+          if (!disposed && !mapViewer.isDestroyed() && !document.hidden && mapActiveRef.current) {
+            waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
+          } else {
+            waterRenderFrame = 0;
+          }
         };
-        waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
+        const startWaterAnimating = () => {
+          if (waterRenderFrame === 0) {
+            waterRenderFrame = window.requestAnimationFrame(keepWaterAnimating);
+          }
+        };
+        startWaterAnimatingRef.current = startWaterAnimating;
+        startWaterAnimating();
 
         // 配置帯は準備／災害中かつ mapActive のときだけ出す（初期化時点では作らない）。
         placeableZoneRef.current?.destroy();
@@ -1020,6 +1033,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
 
       return () => {
         disposed = true;
+        startWaterAnimatingRef.current = null;
         window.cancelAnimationFrame(waterRenderFrame);
         eventHandler?.destroy();
         removeCameraMoveEnd?.();

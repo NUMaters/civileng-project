@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import heroImageUrl from "../../assets/civilcraft-abukuma-hero.webp";
 import { HowToPlayModal } from "./HowToPlayModal";
+import { markHowToSeen } from "./howtoStorage";
 import type { PlayMode } from "./types";
 
 type GameMenuScreenProps = {
@@ -26,6 +27,11 @@ export function GameMenuScreen({
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [loadProgress, setLoadProgress] = useState(0);
   const [howtoOpen, setHowtoOpen] = useState(openHowtoOnMount);
+
+  const closeHowto = () => {
+    markHowToSeen();
+    setHowtoOpen(false);
+  };
   const titleId = useId();
   const howtoTitleId = useId();
 
@@ -101,6 +107,7 @@ export function GameMenuScreen({
           className="game-menu__howto-btn"
           type="button"
           onClick={() => setHowtoOpen(true)}
+          aria-haspopup="dialog"
         >
           <span aria-hidden="true">?</span> 遊び方
         </button>
@@ -190,9 +197,7 @@ export function GameMenuScreen({
         <span aria-hidden="true">▶</span>
       </button>
 
-      {howtoOpen ? (
-        <HowToPlayModal titleId={howtoTitleId} onClose={() => setHowtoOpen(false)} />
-      ) : null}
+      {howtoOpen ? <HowToPlayModal titleId={howtoTitleId} onClose={closeHowto} /> : null}
     </section>
   );
 }

@@ -8,7 +8,12 @@ import type { GeoPosition } from "./features/construction/types/construction";
 import { CommandStatusPanel } from "./features/hud/CommandStatusPanel";
 import { HudLegend } from "./features/hud/HudLegend";
 import { HudMinimap } from "./features/hud/HudMinimap";
-import { PlacementConfirmBar } from "./features/hud/PlacementConfirmBar";
+import { MobileHudPanel } from "./features/hud/MobileHudPanel";
+import {
+  hasSeenTutorial,
+  markTutorialDone,
+  TutorialCoachmark,
+} from "./features/hud/TutorialCoachmark";
 import "./command-hud.css";
 import {
   FloodHud,
@@ -79,6 +84,7 @@ export function GameplayApp({
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
+  const [showTutorial, setShowTutorial] = useState(() => !hasSeenTutorial());
 
   useEffect(() => {
     if (!inGame) {
@@ -185,6 +191,8 @@ export function GameplayApp({
     if (placement === null) {
       return;
     }
+    markTutorialDone();
+    setShowTutorial(false);
     socket.sendPlaceStructure({
       structureId: placement.structureId,
       position: placement.position,
@@ -402,13 +410,32 @@ export function GameplayApp({
                 socketLabel={playMode === "multi" ? statusLabel[socket.status] : undefined}
               />
 
-              <HudLegend phase={flood.phase} />
+              <div className="hud-frame__desktop">
+                <HudLegend phase={flood.phase} />
+                <HudMinimap
+                  damagePercent={flood.damagePercent}
+                  overflowSiteCount={flood.overflowSites.length}
+                />
+              </div>
 
-              <HudMinimap
+              <MobileHudPanel
+                phase={flood.phase}
                 damagePercent={flood.damagePercent}
                 overflowSiteCount={flood.overflowSites.length}
               />
             </div>
+          ) : null}
+
+          {inGame && showTutorial && !hideConstructionUi ? (
+            <TutorialCoachmark
+              phase={flood.phase}
+              hasPlacement={construction.placements.length > 0}
+              hasPendingPlacement={hasPendingPlacement}
+              onDismiss={() => {
+                markTutorialDone();
+                setShowTutorial(false);
+              }}
+            />
           ) : null}
 
           {inGame && !hideConstructionUi ? (
@@ -422,18 +449,6 @@ export function GameplayApp({
               structures={construction.structures}
               onSelect={construction.selectStructure}
               onDragStart={beginDockDrag}
-            />
-          ) : null}
-
-          {inGame && hasPendingPlacement && construction.pendingPlacement !== null ? (
-            <PlacementConfirmBar
-              structureName={
-                construction.structures.find(
-                  (structure) => structure.id === construction.pendingPlacement?.structureId,
-                )?.displayName ?? "施設"
-              }
-              onConfirm={handleConfirmPlacement}
-              onCancel={construction.cancelPendingPlacement}
             />
           ) : null}
 

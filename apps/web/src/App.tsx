@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useState } from "react";
 import "./App.css";
+import { hasSeenHowTo } from "./features/lobby/howtoStorage";
 import { TitleScreen } from "./features/lobby/TitleScreen";
 import type { LobbyScreen, PlayMode } from "./features/lobby/types";
 
@@ -22,7 +23,7 @@ export function App() {
   const [sessionId, setSessionId] = useState(0);
 
   const enterMenu = useCallback(() => {
-    setMenuHowtoOnMount(false);
+    setMenuHowtoOnMount(!hasSeenHowTo());
     setLobbyScreen("menu");
   }, []);
 
