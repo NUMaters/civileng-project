@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { getHazardKindLabel } from "@civilcraft/game-data/types";
 import { formatBudget } from "../services/constructionService";
 import {
@@ -31,15 +32,31 @@ export function ConstructionMenu({
   onDragStart,
 }: ConstructionMenuProps) {
   const selected = structures.find(({ id }) => id === selectedStructureId);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  useEffect(() => {
+    setDetailsOpen(false);
+  }, [selectedStructureId]);
 
   return (
     <section className="cmd-dock" aria-label="建設ドック">
       {selected !== undefined ? (
-        <div className="cmd-dock__tooltip" key={selected.id}>
+        <div
+          className={`cmd-dock__tooltip${detailsOpen ? " is-expanded" : ""}`}
+          key={selected.id}
+        >
           <header className="cmd-dock__tooltip-head">
             <strong>{selected.displayName}</strong>
             <span>{formatBudget(selected.constructionCost)}</span>
           </header>
+          <button
+            className="cmd-dock__tooltip-toggle"
+            type="button"
+            aria-expanded={detailsOpen}
+            onClick={() => setDetailsOpen((open) => !open)}
+          >
+            {detailsOpen ? "閉じる" : "詳細"}
+          </button>
           <p className="cmd-dock__tooltip-desc">{selected.description}</p>
           <dl className="cmd-dock__tooltip-meta">
             <div>
@@ -66,7 +83,7 @@ export function ConstructionMenu({
       <div className="cmd-dock__bar">
         <div className="cmd-dock__label">
           <span>施設</span>
-          <small>上へドラッグして川の黄色い帯へ</small>
+          <small className="cmd-dock__hint">上へドラッグ → 黄色い帯</small>
         </div>
         <div className="cmd-dock__list">
           {structures.map((structure) => (
