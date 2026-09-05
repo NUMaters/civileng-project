@@ -1,6 +1,12 @@
 import type { HazardKind } from "@civilcraft/game-data/types";
 import type { FloodSimulationState, MitigationSummary } from "../services/floodSimulation";
 import { getHazardLabel } from "../../construction/structureVisuals";
+import {
+  alertLevel,
+  computeImpactStats,
+  missionTitle,
+  precipitationMmPerHour,
+} from "../../hud/commandCenterUtils";
 
 type FloodHudProps = Pick<
   FloodSimulationState,
@@ -12,15 +18,16 @@ type FloodHudProps = Pick<
   | "floodDepthMeters"
   | "damagePercent"
   | "overflowSites"
+  | "floodedAreaPercent"
   | "mitigation"
 > & {
   onStartGame: () => void;
   onStartRainNow: () => void;
 };
 
-const phaseLabel = {
+const phaseBadge = {
   idle: "待機",
-  preparation: "準備中",
+  preparation: "準備",
   disaster: "大雨",
   result: "結果",
   review: "確認",
@@ -35,6 +42,7 @@ export function FloodHud({
   floodDepthMeters,
   damagePercent,
   overflowSites,
+  floodedAreaPercent,
   mitigation,
   onStartGame: _onStartGame,
   onStartRainNow,
@@ -43,84 +51,99 @@ export function FloodHud({
   const overflows = overflowSites ?? [];
   const safeMitigation = sanitizeMitigation(mitigation);
   const hazardSummary = summarizeHazards(overflows);
-  const facilityCount = safeMitigation.activeStructureCount;
-  const showFloodMetrics = phase === "disaster" || phase === "result" || phase === "review";
+  const alert = alertLevel(phase, damagePercent, rainfallIntensity, overflows.length);
+  const impact = computeImpactStats(damagePercent, overflows.length, floodedAreaPercent);
+  const showWeather = phase === "disaster" || phase === "result" || phase === "review";
+  const rainMm = precipitationMmPerHour(rainfallIntensity);
+  const floodThreshold = 5.5;
 
   return (
-    <section className={`flood-hud flood-hud--${phase}`} aria-label="状況">
-      <div className="flood-hud__heading">
-        <span className="flood-hud__phase">{phaseLabel[phase] ?? phase}</span>
+    <section className={`cmd-mission cmd-mission--${phase}`} aria-label="ミッション状況">
+      <header className="cmd-mission__head">
+        <div>
+          <p className="cmd-mission__phase">{phaseBadge[phase] ?? phase}</p>
+          <h2 className="cmd-mission__title">{missionTitle(phase)}</h2>
+        </div>
         {phase !== "idle" ? (
-          <strong className="flood-hud__timer">{formatTime(phaseRemainingSeconds)}</strong>
+          <time className="cmd-mission__timer">{formatTime(phaseRemainingSeconds)}</time>
         ) : null}
-      </div>
+      </header>
 
       {phase === "idle" ? (
-        <>
-          <strong className="flood-hud__title">待機中</strong>
-          <p>メニューから開始</p>
-        </>
+        <p className="cmd-mission__idle">メニューからゲームを開始してください。</p>
       ) : (
         <>
-          {facilityCount > 0 ? (
-            <p className="flood-hud__deploy-count" aria-label="配置数">
-              配置 <strong>{facilityCount}</strong> 基
-            </p>
-          ) : null}
-          {hazardSummary !== "" ? (
-            <p className="flood-hud__hazard-tip">{hazardSummary}</p>
-          ) : null}
-          <div className="flood-hud__metrics">
-            {showFloodMetrics ? (
-              <>
-                <FloodMetric
-                  label="雨勢"
-                  value={rainLabel(finiteOr(rainfallIntensity, 0))}
-                  ratio={finiteOr(rainfallIntensity, 0)}
-                  tone="rain"
-                />
-                <FloodMetric
-                  label="水位"
-                  value={`${finiteOr(riverLevelMeters, 0).toFixed(1)} m`}
-                  ratio={finiteOr(riverLevelMeters, 0) / 7}
-                  tone="water"
-                />
-                <FloodMetric
-                  label="溢れ"
-                  value={
-                    finiteOr(overflowMeters, 0) > 0.02
-                      ? `+${finiteOr(overflowMeters, 0).toFixed(2)} m`
-                      : "安定"
-                  }
-                  ratio={Math.min(1, finiteOr(overflowMeters, 0) / 1.5)}
-                  tone="water"
-                />
-                <FloodMetric
-                  label="水深"
-                  value={`${finiteOr(floodDepthMeters, 0).toFixed(1)} m`}
-                  ratio={finiteOr(floodDepthMeters, 0) / 2}
-                  tone="water"
-                />
-              </>
+          <div className={`cmd-mission__alert is-${alert.tone}`}>
+            <span className="cmd-mission__alert-level">Lv.{alert.level}</span>
+            <strong>{alert.label}</strong>
+            {safeMitigation.activeStructureCount > 0 ? (
+              <span className="cmd-mission__deploy">
+                配置 {safeMitigation.activeStructureCount} 基
+              </span>
             ) : null}
-            <FloodMetric
-              label="決壊口"
-              value={overflows.length > 0 ? `${overflows.length}` : "0"}
-              ratio={Math.min(1, overflows.length / 4)}
-              tone="damage"
-            />
-            <FloodMetric
-              label="被害度"
-              value={`${finiteOr(damagePercent, 0).toFixed(1)}%`}
-              ratio={finiteOr(damagePercent, 0) / 100}
-              tone="damage"
-            />
           </div>
+
+          {showWeather ? (
+            <dl className="cmd-mission__stats">
+              <div>
+                <dt>天候</dt>
+                <dd>{rainLabel(rainfallIntensity)}</dd>
+              </div>
+              <div>
+                <dt>降水量</dt>
+                <dd>{rainMm} mm/h</dd>
+              </div>
+              <div>
+                <dt>水位</dt>
+                <dd>
+                  {finiteOr(riverLevelMeters, 0).toFixed(1)} m
+                  <small> / 氾濫 {floodThreshold.toFixed(1)} m</small>
+                </dd>
+              </div>
+              <div>
+                <dt>溢れ</dt>
+                <dd>
+                  {finiteOr(overflowMeters, 0) > 0.02
+                    ? `+${finiteOr(overflowMeters, 0).toFixed(2)} m`
+                    : "安定"}
+                </dd>
+              </div>
+            </dl>
+          ) : (
+            <p className="cmd-mission__prep">
+              阿武隈川の河岸へ施設を配置し、大雨に備えてください。
+            </p>
+          )}
+
+          {showWeather ? (
+            <div className="cmd-mission__impact">
+              <div>
+                <span>浸水危険世帯</span>
+                <strong>{impact.households.toLocaleString()}</strong>
+              </div>
+              <div>
+                <span>浸水危険人口</span>
+                <strong>{impact.people.toLocaleString()}</strong>
+              </div>
+              <div>
+                <span>被害度</span>
+                <strong>{finiteOr(damagePercent, 0).toFixed(1)}%</strong>
+              </div>
+              <div>
+                <span>水深</span>
+                <strong>{finiteOr(floodDepthMeters, 0).toFixed(1)} m</strong>
+              </div>
+            </div>
+          ) : null}
+
+          {hazardSummary !== "" ? (
+            <p className="cmd-mission__hazard">{hazardSummary}</p>
+          ) : null}
         </>
       )}
 
       {phase === "preparation" ? (
-        <button className="flood-hud__rain-button" type="button" onClick={onStartRainNow}>
+        <button className="cmd-mission__skip" type="button" onClick={onStartRainNow}>
           準備をスキップ
         </button>
       ) : null}
@@ -128,35 +151,10 @@ export function FloodHud({
   );
 }
 
-type FloodMetricProps = {
-  label: string;
-  value: string;
-  ratio: number;
-  tone: "rain" | "water" | "damage";
-};
-
-function FloodMetric({ label, value, ratio, tone }: FloodMetricProps) {
-  const safeRatio = Math.max(0, Math.min(1, finiteOr(ratio, 0)));
-  return (
-    <div className="flood-metric">
-      <div className="flood-metric__copy">
-        <span>{label}</span>
-        <strong>{value}</strong>
-      </div>
-      <div className="flood-metric__track" aria-hidden="true">
-        <span
-          className={`flood-metric__fill flood-metric__fill--${tone}`}
-          style={{ width: `${safeRatio * 100}%` }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function formatTime(seconds: number): string {
   const safeSeconds = Math.max(0, Math.ceil(finiteOr(seconds, 0)));
   const minutes = Math.floor(safeSeconds / 60);
-  return `${minutes}:${String(safeSeconds % 60).padStart(2, "0")}`;
+  return `${String(minutes).padStart(2, "0")}:${String(safeSeconds % 60).padStart(2, "0")}`;
 }
 
 function finiteOr(value: number | undefined, fallback: number): number {
@@ -202,8 +200,6 @@ function summarizeHazards(sites: FloodSimulationState["overflowSites"]): string 
     const key = site.primaryHazard;
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
-  const parts = [...counts.entries()].map(
-    ([kind, count]) => `${getHazardLabel(kind)}×${count}`,
-  );
+  const parts = [...counts.entries()].map(([kind, count]) => `${getHazardLabel(kind)}×${count}`);
   return `警報 ${parts.join("・")}`;
 }

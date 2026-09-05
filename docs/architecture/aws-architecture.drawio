@@ -1,0 +1,117 @@
+<mxfile host="app.diagrams.net" modified="2026-08-02T00:00:00.000Z" agent="Codex" version="24.7.17" type="device">
+  <diagram id="civilcraft-aws" name="CivilCraft AWS Architecture">
+    <mxGraphModel dx="1600" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1000" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="CivilCraft — AWS本番アーキテクチャ" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=24;fontStyle=1;fontColor=#232F3E" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="700" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="users" value="プレイヤー&#xa;スマートフォン / PCブラウザ" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.users;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fillColor=#E8F1FB;strokeColor=#5B9BD5;fontSize=13" vertex="1" parent="1">
+          <mxGeometry x="60" y="145" width="90" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="route53" value="Route 53" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.route_53;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="210" y="145" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="waf" value="AWS WAF" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.waf;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="340" y="145" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="cloudfront" value="CloudFront" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudfront;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="470" y="145" width="80" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="s3web" value="Amazon S3&#xa;Web / Cesium / 3D Tiles" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="620" y="125" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="alb" value="Application&#xa;Load Balancer" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.application_load_balancer;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="780" y="135" width="95" height="95" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="vpc" value="AWS VPC（2 Availability Zones）" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#879596;fillColor=#F7F9FA;fontStyle=1;fontSize=16;verticalAlign=top;spacingTop=12" vertex="1" parent="1">
+          <mxGeometry x="930" y="80" width="600" height="430" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecsapi" value="ECS Fargate&#xa;API Server" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="990" y="145" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecsgame" value="ECS Fargate&#xa;Game Server&#xa;WebSocket" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1160" y="145" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecshint" value="ECS Fargate&#xa;Hint Orchestrator" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecs;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1330" y="145" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="rds" value="Amazon RDS&#xa;PostgreSQL" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.rds;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1030" y="330" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="redis" value="ElastiCache&#xa;for Redis" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.elasticache;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="1210" y="330" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="secrets" value="Secrets Manager" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.secrets_manager;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="1380" y="330" width="90" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="eventbridge" value="EventBridge&#xa;ゲームイベント" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.eventbridge;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="260" y="385" width="95" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="sqs" value="Amazon SQS&#xa;Hint Queue" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.sqs;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="420" y="385" width="95" height="95" as="geometry"/>
+        </mxCell>
+        <mxCell id="bedrock" value="Amazon Bedrock&#xa;LLM" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.amazon_bedrock;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="590" y="350" width="105" height="105" as="geometry"/>
+        </mxCell>
+        <mxCell id="kb" value="Bedrock Knowledge Bases&#xa;治水・土木教材" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.amazon_bedrock;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="760" y="350" width="110" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="logs" value="S3 / CloudWatch Logs&#xa;プレイ・ヒントイベント" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch_logs;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="80" y="650" width="110" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="athena" value="Amazon Athena" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.athena;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="280" y="650" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="quicksight" value="Amazon QuickSight&#xa;LLM Ops分析" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.quicksight;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="460" y="650" width="110" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="ecr" value="Amazon ECR&#xa;Docker Image" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.ecr;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="670" y="650" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="cicd" value="GitHub Actions&#xa;CI/CD" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.codepipeline;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=12" vertex="1" parent="1">
+          <mxGeometry x="850" y="650" width="100" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="monitor" value="CloudWatch&#xa;監視・アラート" style="shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.cloudwatch;html=1;verticalLabelPosition=bottom;verticalAlign=top;align=center;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="1040" y="650" width="105" height="105" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#5B9BD5" edge="1" parent="1" source="users" target="route53"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#5B9BD5" edge="1" parent="1" source="route53" target="waf"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeColor=#5B9BD5" edge="1" parent="1" source="waf" target="cloudfront"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" value="静的配信" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#5B9BD5;fontSize=11" edge="1" parent="1" source="cloudfront" target="s3web"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" value="/api /ws" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#5B9BD5;fontSize=11" edge="1" parent="1" source="cloudfront" target="alb"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" value="/api" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#5B9BD5;fontSize=11" edge="1" parent="1" source="alb" target="ecsapi"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" value="/ws" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#5B9BD5;fontSize=11" edge="1" parent="1" source="alb" target="ecsgame"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#7F8C8D" edge="1" parent="1" source="ecsapi" target="rds"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#7F8C8D" edge="1" parent="1" source="ecsapi" target="redis"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#7F8C8D" edge="1" parent="1" source="ecsgame" target="rds"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#7F8C8D" edge="1" parent="1" source="ecsgame" target="redis"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" value="ゲームイベント" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#F39C12;fontSize=11" edge="1" parent="1" source="ecsgame" target="eventbridge"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#F39C12" edge="1" parent="1" source="eventbridge" target="sqs"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#F39C12" edge="1" parent="1" source="sqs" target="ecshint"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#F39C12" edge="1" parent="1" source="ecshint" target="bedrock"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e16" value="RAG" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#F39C12;fontSize=11" edge="1" parent="1" source="ecshint" target="kb"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e17" value="ヒント結果" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#F39C12;fontSize=11" edge="1" parent="1" source="ecshint" target="ecsgame"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9B59B6" edge="1" parent="1" source="ecsapi" target="logs"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9B59B6" edge="1" parent="1" source="ecsgame" target="logs"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9B59B6" edge="1" parent="1" source="ecshint" target="logs"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9B59B6" edge="1" parent="1" source="logs" target="athena"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#9B59B6" edge="1" parent="1" source="athena" target="quicksight"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#34495E" edge="1" parent="1" source="cicd" target="ecr"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#34495E" edge="1" parent="1" source="ecr" target="ecsapi"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#34495E" edge="1" parent="1" source="ecr" target="ecsgame"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#34495E" edge="1" parent="1" source="ecr" target="ecshint"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e27" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;dashed=1;strokeColor=#7F8C8D" edge="1" parent="1" source="monitor" target="ecsapi"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;dashed=1;strokeColor=#7F8C8D" edge="1" parent="1" source="monitor" target="ecsgame"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e29" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=open;dashed=1;strokeColor=#7F8C8D" edge="1" parent="1" source="monitor" target="ecshint"><mxGeometry relative="1" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

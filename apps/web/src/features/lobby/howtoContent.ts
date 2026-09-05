@@ -23,7 +23,7 @@ export const HOWTO_PURPOSE = {
 export const HOWTO_STEPS: { title: string; body: string }[] = [
   {
     title: "準備（60秒）",
-    body: "ドックから黄色い配置帯へドラッグ → 向きを合わせ → ✓ で確定。",
+    body: "ドックから黄色い配置帯へドラッグ → 向きを合わせ →「配置を確定」。",
   },
   {
     title: "大雨（90秒）",
@@ -31,7 +31,7 @@ export const HOWTO_STEPS: { title: string; body: string }[] = [
   },
   {
     title: "クリア条件",
-    body: "被災度 8% 未満。同じ施設の重ね置きだけでは足りない。相性の悪い場所は逆効果。",
+    body: "被災度 8% 未満。弱点に合う施設を混ぜて配置。同じ施設の重ね置きだけでは足りない。",
   },
 ];
 

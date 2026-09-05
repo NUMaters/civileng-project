@@ -1,5 +1,7 @@
 import { useEffect, useId, useState } from "react";
+import heroImageUrl from "../../assets/civilcraft-abukuma-hero.webp";
 import { HowToPlayModal } from "./HowToPlayModal";
+import { markHowToSeen } from "./howtoStorage";
 import type { PlayMode } from "./types";
 
 type GameMenuScreenProps = {
@@ -21,9 +23,15 @@ export function GameMenuScreen({
   openHowtoOnMount = false,
 }: GameMenuScreenProps) {
   const [mode, setMode] = useState<PlayMode | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [loadProgress, setLoadProgress] = useState(0);
   const [howtoOpen, setHowtoOpen] = useState(openHowtoOnMount);
+
+  const closeHowto = () => {
+    markHowToSeen();
+    setHowtoOpen(false);
+  };
   const titleId = useId();
   const howtoTitleId = useId();
 
@@ -40,7 +48,6 @@ export function GameMenuScreen({
     }, 180);
 
     const load = async () => {
-      const started = performance.now();
       try {
         await Promise.all([
           fetch("/cesiumStatic/Widgets/widgets.css", { cache: "force-cache" }),
@@ -49,9 +56,6 @@ export function GameMenuScreen({
           // スタート押下前に Cesium チャンクを温めてゲーム入場の白画面を短縮する。
           import("../../components/GameCanvas/CesiumGameMap"),
         ]);
-        const elapsed = performance.now() - started;
-        const wait = Math.max(0, 900 - elapsed);
-        await new Promise((resolve) => window.setTimeout(resolve, wait));
         if (cancelled) {
           return;
         }
@@ -71,7 +75,7 @@ export function GameMenuScreen({
       cancelled = true;
       window.clearInterval(tick);
     };
-  }, [mode]);
+  }, [loadAttempt, mode]);
 
   const canStart = mode === "solo" && loadState === "ready";
   const startLabel =
@@ -88,31 +92,34 @@ export function GameMenuScreen({
   return (
     <section className="game-menu" aria-labelledby={titleId}>
       <div className="game-menu__world" aria-hidden="true">
-        <div className="game-menu__sky" />
-        <div className="game-menu__grid" />
-        <div className="game-menu__river-band" />
+        <img className="game-menu__hero" src={heroImageUrl} alt="" />
+        <div className="game-menu__gradient" />
       </div>
 
       <header className="game-menu__header">
         <button className="game-menu__back" type="button" onClick={onBackToTitle}>
-          タイトル
+          <span aria-hidden="true">←</span> タイトル
         </button>
-        <p className="game-menu__brand">CivilCraft</p>
+        <p className="game-menu__brand">
+          <span>Civil</span>Craft
+        </p>
         <button
           className="game-menu__howto-btn"
           type="button"
           onClick={() => setHowtoOpen(true)}
+          aria-haspopup="dialog"
         >
-          遊び方
+          <span aria-hidden="true">?</span> 遊び方
         </button>
       </header>
 
       <div className="game-menu__brief">
         <p className="game-menu__brief-kicker">阿武隈川 · 治水チャレンジ</p>
         <h1 id={titleId} className="game-menu__title">
-          モード選択
+          プレイモードを選択
         </h1>
-        <p className="game-menu__brief-copy">限られた予算と時間で、川沿いの弱点を対策しよう。</p>
+        <p className="game-menu__brief-copy">限られた予算と時間で、川沿いの弱点を対策する。</p>
+        <p className="game-menu__availability">まずは一人でじっくり作戦を考えよう！</p>
       </div>
 
       <div className="game-menu__modes" role="group" aria-label="プレイモード">
@@ -122,7 +129,7 @@ export function GameMenuScreen({
           onClick={() => setMode("solo")}
         >
           <span className="game-menu__mode-index" aria-hidden="true">
-            01
+            1P
           </span>
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">シングルプレイ</span>
@@ -138,7 +145,7 @@ export function GameMenuScreen({
           title="マルチプレイは近日対応"
         >
           <span className="game-menu__mode-index" aria-hidden="true">
-            02
+            MP
           </span>
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">マルチプレイ</span>
@@ -158,7 +165,16 @@ export function GameMenuScreen({
         ) : loadState === "ready" ? (
           <p>準備完了。スタートできます</p>
         ) : loadState === "error" ? (
-          <p>読込失敗。シングルを選び直してください</p>
+          <>
+            <p>読み込みに失敗しました。通信状態を確認して、もう一度お試しください。</p>
+            <button
+              className="game-menu__retry"
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+            >
+              もう一度読み込む
+            </button>
+          </>
         ) : null}
         {mode === "solo" && loadState === "loading" ? (
           <div className="game-menu__track" aria-hidden="true">
@@ -177,12 +193,11 @@ export function GameMenuScreen({
           }
         }}
       >
-        {startLabel}
+        <span>{startLabel}</span>
+        <span aria-hidden="true">▶</span>
       </button>
 
-      {howtoOpen ? (
-        <HowToPlayModal titleId={howtoTitleId} onClose={() => setHowtoOpen(false)} />
-      ) : null}
+      {howtoOpen ? <HowToPlayModal titleId={howtoTitleId} onClose={closeHowto} /> : null}
     </section>
   );
 }

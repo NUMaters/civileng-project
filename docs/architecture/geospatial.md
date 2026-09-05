@@ -44,7 +44,7 @@ CesiumJS の描画結果をゲーム判定の正としない。表示用地形�
 
 現在のプロトタイプは、国土地理院の標高PNGをブラウザ内で32×32のHeightmapへ変換し、`CustomHeightmapTerrainProvider`へ渡す。地表タップにはTerrainとの交点を使用する。ズーム14を超える要求では、標高タイルの最大ズーム14を親タイルとして部分サンプリングする。
 
-建物は郡山市公式 3D Tiles ZIP 内の **`bldg_texture`**（写真テクスチャ付き）を `apps/web/public/plateau/koriyama-bldg-texture/` に展開して表示する（`pnpm --filter @civilcraft/web fetch:plateau`）。PLATEAU VIEW の `07203-bldg-lod2-texture-latest` は CMS 上のテクスチャ無し LOD2 に解決されるため使わない。ローカル展開が無い場合のみ VIEW の LOD1 へフォールバックする。テクスチャを消さないよう `Cesium3DTileStyle` の単色上書きは行わない。
+通常時の建物表示は PLATEAU VIEW の LOD1 3D Tiles をカメラ周辺だけストリーミングする。ゲームのカメラは阿武隈川のプレイ範囲に制限されるため、読込対象は郡山駅からおおむね半径20km以内に収まる。郡山市公式 3D Tiles ZIP 内の **`bldg_texture`**（写真テクスチャ付き）を `apps/web/public/plateau/koriyama-bldg-texture/` に展開する全域取得（約390MB）は、視覚品質検証に限る（`pnpm --filter @civilcraft/web fetch:plateau:full`）。PLATEAU VIEW の `07203-bldg-lod2-texture-latest` は CMS 上のテクスチャ無し LOD2 に解決されるため使わない。テクスチャを消さないよう `Cesium3DTileStyle` の単色上書きは行わない。
 
 初期カメラは日本大学工学部周辺の阿武隈川河道上（おおよそ 140.3837°E, 37.3655°N）。カメラは画面中央の注視点が川中心線から約 950 m 以内に収まるよう操作終了時に補正し（位置クランプはしない）、施設配置は中心線 ± 約 75 m の河道＋河岸コリドー上のみ許可する（市街地・広い氾濫原は不可。判定は `riverPlacement.ts`）。配置可能帯は薄いシアンの Entity コリドーで示し、本川水面は別レイヤの Water マテリアルで描く。写真テクスチャは 2020 年度整備の LOD2 範囲に集中しており、工学部直近は無地のグレー箱が多くなる。建物タイルは `CustomShader`（UNLIT）で両立する。画面空間の色の変化（`dFdx`/`dFdy`）で写真テクスチャ面と無地面を判別し、テクスチャ面はそのまま明るく、無地面は疑似陰影付きのグレー箱として描く。全国 `all-bldg-lod1-2025` には郡山が含まれないため使用しない。地形は **PLATEAU-Terrain**（`https://tile.plateauview.mlit.go.jp/terrain/`、ジオイド補正済み楕円体高）を優先し、失敗時のみ地理院 DEM + 郡山周辺の概算ジオイド高（約 +39.5 m）へフォールバックする。正標高のまま DEM を渡すと建物が浮く。運用版では対象範囲の抽出配信と性能を比較する。表示用3D建物をサーバーの浸水判定へ直接流用しない。
 

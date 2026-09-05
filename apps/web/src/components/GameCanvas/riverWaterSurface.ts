@@ -16,11 +16,11 @@ import {
   type Entity,
 } from "cesium";
 import { ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
+import { getCesiumRenderProfile } from "./cesiumPerformance";
 
 /** Cesium 同梱の水面法線。開発時は `/cesiumStatic` 経由で配信する。 */
 const WATER_NORMAL_MAP_URL = "/cesiumStatic/Assets/Textures/waterNormalsSmall.jpg";
 
-const FLOW_STREAK_COUNT = 18;
 const FLOW_STREAK_SEGMENT_POINTS = 7;
 /** 平常時の流向周期（秒）。短いほど速く見える。下流方向への流れ。 */
 const BASE_FLOW_PERIOD_SECONDS = 8.5;
@@ -62,6 +62,7 @@ type FlowSample = {
 
 type StreakHandle = {
   entity: Entity;
+  positions: ConstantProperty;
   phase: number;
   /** 中心線からの横断オフセット（m）。右岸＋／左岸−。 */
   laneOffsetMeters: number;
@@ -84,6 +85,10 @@ type VisualHydraulics = {
 export async function createRiverWaterSurface(
   viewer: Viewer,
 ): Promise<RiverWaterSurfaceController> {
+  const profile = getCesiumRenderProfile();
+  const flowStreakCount = profile.waterFlowStreakCount;
+  const waterFrameIntervalMs = profile.waterFrameIntervalMs;
+
   await GroundPrimitive.initializeTerrainHeights();
   if (viewer.isDestroyed()) {
     return noopController();
@@ -95,16 +100,20 @@ export async function createRiverWaterSurface(
   const totalLength = samples[samples.length - 1]?.distance ?? 1;
   const centerlinePositions = Cartesian3.fromDegreesArray(centerlineDegrees);
 
-  const waterMaterial = Material.fromType("Water", {
-    baseWaterColor: Color.fromCssColorString("#1f96c9").withAlpha(0.68),
-    blendColor: Color.fromCssColorString("#0b3d5c").withAlpha(0.32),
-    normalMap: WATER_NORMAL_MAP_URL,
-    frequency: 900,
-    animationSpeed: 0.016,
-    amplitude: 2.2,
-    specularIntensity: 0.5,
-    fadeFactor: 0.9,
-  });
+  const waterMaterial = profile.waterUseNormalMap
+    ? Material.fromType("Water", {
+        baseWaterColor: Color.fromCssColorString("#1f96c9").withAlpha(0.68),
+        blendColor: Color.fromCssColorString("#0b3d5c").withAlpha(0.32),
+        normalMap: WATER_NORMAL_MAP_URL,
+        frequency: 900,
+        animationSpeed: 0.016,
+        amplitude: 2.2,
+        specularIntensity: 0.5,
+        fadeFactor: 0.9,
+      })
+    : Material.fromType("Color", {
+        color: Color.fromCssColorString("#1f96c9").withAlpha(0.62),
+      });
 
   // 固定幅の本川水面。幅の増減は下の水量帯 Entity で滑らかに見せる。
   const waterPrimitive = createWaterPrimitive(
@@ -141,10 +150,11 @@ export async function createRiverWaterSurface(
     },
   });
 
-  const streaks = createFlowStreaks(viewer);
+  const streaks = createFlowStreaks(viewer, flowStreakCount);
   let flowPeriodSeconds = BASE_FLOW_PERIOD_SECONDS;
   const startedAt = performance.now();
   let lastFrameAt = startedAt;
+  let lastVisualUpdateAt = 0;
   let lastStreakStyleKey = "";
 
   const applyDisplayed = (visual: VisualHydraulics) => {
@@ -154,20 +164,31 @@ export async function createRiverWaterSurface(
     const muddy = clamp01(levelRatio * 0.85 + overflow * 0.55 + rain * 0.2);
 
     waterMaterial.uniforms.animationSpeed =
-      (0.016 + levelRatio * 0.032 + rain * 0.034 + overflow * 0.022 + activeFlood * 0.016) *
-      calmFactor;
-    waterMaterial.uniforms.amplitude =
-      (2.4 + levelRatio * 3.6 + rain * 2.8 + overflow * 2.8) * calmFactor;
-    waterMaterial.uniforms.baseWaterColor = Color.lerp(
-      Color.fromCssColorString("#1f96c9"),
-      Color.fromCssColorString("#1a3d42"),
-      muddy,
-      new Color(),
-    ).withAlpha(0.68 + levelRatio * 0.22 + Math.min(0.18, overflow * 0.14));
-    waterMaterial.uniforms.blendColor = Color.fromCssColorString("#041820").withAlpha(
-      0.32 + rain * 0.14 + muddy * 0.28 + Math.min(0.2, overflow * 0.12),
-    );
-    waterMaterial.uniforms.specularIntensity = 0.42 + levelRatio * 0.28 + overflow * 0.14;
+      profile.waterUseNormalMap
+        ? (0.016 + levelRatio * 0.032 + rain * 0.034 + overflow * 0.022 + activeFlood * 0.016) *
+          calmFactor
+        : 0;
+    if (profile.waterUseNormalMap) {
+      waterMaterial.uniforms.amplitude =
+        (2.4 + levelRatio * 3.6 + rain * 2.8 + overflow * 2.8) * calmFactor;
+      waterMaterial.uniforms.baseWaterColor = Color.lerp(
+        Color.fromCssColorString("#1f96c9"),
+        Color.fromCssColorString("#1a3d42"),
+        muddy,
+        new Color(),
+      ).withAlpha(0.68 + levelRatio * 0.22 + Math.min(0.18, overflow * 0.14));
+      waterMaterial.uniforms.blendColor = Color.fromCssColorString("#041820").withAlpha(
+        0.32 + rain * 0.14 + muddy * 0.28 + Math.min(0.2, overflow * 0.12),
+      );
+      waterMaterial.uniforms.specularIntensity = 0.42 + levelRatio * 0.28 + overflow * 0.14;
+    } else if (waterMaterial.uniforms.color !== undefined) {
+      waterMaterial.uniforms.color = Color.lerp(
+        Color.fromCssColorString("#1f96c9"),
+        Color.fromCssColorString("#1a3d42"),
+        muddy,
+        new Color(),
+      ).withAlpha(0.58 + levelRatio * 0.2);
+    }
     flowPeriodSeconds = Math.max(
       2.8,
       (BASE_FLOW_PERIOD_SECONDS - levelRatio * 4.2 - rain * 3 - overflow * 2.4 - activeFlood * 1.8) *
@@ -184,7 +205,7 @@ export async function createRiverWaterSurface(
 
     // ストリークの見た目は細かく変えても差が小さいので間引き更新する。
     const streakStyleKey = `${(levelRatio * 20).toFixed(0)}:${(overflow * 10).toFixed(0)}:${activeFlood.toFixed(0)}`;
-    if (streakStyleKey !== lastStreakStyleKey) {
+    if (streakStyleKey !== lastStreakStyleKey && flowStreakCount > 0) {
       lastStreakStyleKey = streakStyleKey;
       for (const streak of streaks) {
         if (streak.entity.polyline !== undefined) {
@@ -210,23 +231,28 @@ export async function createRiverWaterSurface(
       return;
     }
     const now = performance.now();
+    if (now - lastVisualUpdateAt < waterFrameIntervalMs) {
+      return;
+    }
+    lastVisualUpdateAt = now;
     const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - lastFrameAt) / 1000));
     lastFrameAt = now;
 
     const elapsedSeconds = (now - startedAt) / 1000;
-    for (const streak of streaks) {
-      // 下流方向（北→南）へ進む。先頭が下流側になるようウィンドウを取る。
-      const head = (streak.phase + elapsedSeconds / flowPeriodSeconds) % 1;
-      if (streak.entity.polyline !== undefined) {
-        streak.entity.polyline.positions = new ConstantProperty(
-          sampleDownstreamArcWindow(
-            samples,
-            totalLength,
-            head,
-            FLOW_STREAK_LENGTH_M,
-            streak.laneOffsetMeters,
-          ),
-        );
+    if (flowStreakCount > 0) {
+      for (const streak of streaks) {
+        const head = (streak.phase + elapsedSeconds / flowPeriodSeconds) % 1;
+        if (streak.entity.polyline !== undefined) {
+          streak.positions.setValue(
+            sampleDownstreamArcWindow(
+              samples,
+              totalLength,
+              head,
+              FLOW_STREAK_LENGTH_M,
+              streak.laneOffsetMeters,
+            ),
+          );
+        }
       }
     }
 
@@ -342,25 +368,25 @@ function createWaterPrimitive(
   });
 }
 
-function createFlowStreaks(viewer: Viewer): StreakHandle[] {
+function createFlowStreaks(viewer: Viewer, flowStreakCount: number): StreakHandle[] {
   const streaks: StreakHandle[] = [];
+  if (flowStreakCount <= 0) {
+    return streaks;
+  }
   const last = ABUKUMA_RIVER_CENTERLINE[ABUKUMA_RIVER_CENTERLINE.length - 1]!;
   const nearLast = ABUKUMA_RIVER_CENTERLINE[ABUKUMA_RIVER_CENTERLINE.length - 2]!;
-  for (let index = 0; index < FLOW_STREAK_COUNT; index += 1) {
-    const phase = index / FLOW_STREAK_COUNT;
-    // レーンを横断方向に分散（中央寄りを厚く）
-    const laneT = FLOW_STREAK_COUNT <= 1 ? 0 : index / (FLOW_STREAK_COUNT - 1);
+  for (let index = 0; index < flowStreakCount; index += 1) {
+    const phase = index / flowStreakCount;
+    const laneT = flowStreakCount <= 1 ? 0 : index / (flowStreakCount - 1);
     const laneOffsetMeters = (laneT * 2 - 1) * FLOW_LANE_HALF_SPAN_M;
+    const positions = new ConstantProperty(
+      Cartesian3.fromDegreesArray([last.lon, last.lat, nearLast.lon, nearLast.lat]),
+    );
     const entity = viewer.entities.add({
       id: `river-flow-streak-${index}`,
       polyline: {
         // 初期は上流寄り（北）から下流へ向かう短い線
-        positions: Cartesian3.fromDegreesArray([
-          last.lon,
-          last.lat,
-          nearLast.lon,
-          nearLast.lat,
-        ]),
+        positions,
         width: 7,
         clampToGround: true,
         material: new PolylineGlowMaterialProperty({
@@ -370,7 +396,7 @@ function createFlowStreaks(viewer: Viewer): StreakHandle[] {
         }),
       },
     });
-    streaks.push({ entity, phase, laneOffsetMeters });
+    streaks.push({ entity, positions, phase, laneOffsetMeters });
   }
   return streaks;
 }
