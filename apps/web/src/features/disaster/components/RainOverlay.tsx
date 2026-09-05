@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { getCesiumRenderProfile } from "../../../components/GameCanvas/cesiumPerformance";
 import { resolveRainDrama } from "../services/rainDrama";
 import type { FloodSimulationState } from "../services/floodSimulation";
 
@@ -16,8 +17,7 @@ type Drop = {
   alpha: number;
 };
 
-/** Canvas と 3D 地図の描画予算を共有する。雨は 24fps でも十分に連続して見える。 */
-const RAIN_FRAME_INTERVAL_MS = 1000 / 24;
+/** Canvas と 3D 地図の描画予算を共有する。端末性能に応じて雨の更新率を下げる。 */
 
 /**
  * 画面全体の大雨オーバーレイ。
@@ -58,6 +58,10 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
       return;
     }
 
+    const profile = getCesiumRenderProfile();
+    const rainFrameIntervalMs = profile.rainFrameIntervalMs;
+    const rainMaxDrops = profile.rainMaxDrops;
+
     let frameId = 0;
     let width = 0;
     let height = 0;
@@ -69,7 +73,7 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
     let lastDrawAt = 0;
 
     const resize = () => {
-      const dpr = Math.min(1.5, window.devicePixelRatio || 1);
+      const dpr = Math.min(profile.rainCanvasDprCap, window.devicePixelRatio || 1);
       width = Math.max(1, window.innerWidth);
       height = Math.max(1, window.innerHeight);
       canvas.width = Math.floor(width * dpr);
@@ -93,9 +97,11 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
     window.addEventListener("resize", onResize);
 
     const tick = (now: number) => {
-      // 高解像度の Canvas 塗りつぶしと多数の stroke を毎フレーム実行しない。
-      // requestAnimationFrame 自体は維持して、表示復帰時・リサイズ時の追従は即時にする。
-      if (now - lastDrawAt < RAIN_FRAME_INTERVAL_MS) {
+      if (document.hidden) {
+        frameId = window.requestAnimationFrame(tick);
+        return;
+      }
+      if (now - lastDrawAt < rainFrameIntervalMs) {
         frameId = window.requestAnimationFrame(tick);
         return;
       }
@@ -112,7 +118,7 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
       });
       displayedDrama += (targetDrama - displayedDrama) * Math.min(1, dt * 2.4);
 
-      const desiredCount = Math.round(20 + displayedDrama * 90);
+      const desiredCount = Math.round(12 + displayedDrama * (rainMaxDrops - 12));
       if (Math.abs(desiredCount - drops.length) > 8) {
         rebuildDrops(desiredCount);
       }

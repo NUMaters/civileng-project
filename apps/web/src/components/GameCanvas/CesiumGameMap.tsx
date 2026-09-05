@@ -70,6 +70,10 @@ import {
   type StructureInfluence,
 } from "../../features/disaster/services/floodSimulation";
 import { resolveRainDrama } from "../../features/disaster/services/rainDrama";
+import {
+  getCesiumRenderProfile,
+  resolveCesiumResolutionScale,
+} from "./cesiumPerformance";
 
 const DRAG_GHOST_ENTITY_PREFIX = "drag-ghost";
 const DRAG_GHOST_PLACEMENT_ID = "cursor";
@@ -132,18 +136,6 @@ const GSI_SEAMLESS_PHOTO_URL = import.meta.env.DEV
   ? "/gsi-tiles/seamlessphoto/{z}/{x}/{y}.jpg"
   : "https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg";
 
-function resolveCesiumResolutionScale(): number {
-  if (typeof window === "undefined") {
-    return 1;
-  }
-  const dpr = Math.max(1, window.devicePixelRatio || 1);
-  const nativePixels = Math.max(1, window.innerWidth * window.innerHeight * dpr * dpr);
-  const budgetScale = Math.sqrt(CESIUM_TARGET_RENDER_PIXELS / nativePixels);
-  const isNarrow = window.matchMedia("(max-width: 720px)").matches;
-  const floor = isNarrow ? 0.55 : 0.65;
-  // CSSのHUDは等倍のまま、3Dキャンバスだけを端末負荷に合わせる。
-  return Math.min(1, Math.max(floor, budgetScale));
-}
 /** 施設ドラッグ移設を開始する画面移動量（CSS px）。 */
 const MOVE_START_MOVE_PX = 14;
 /** モデルを直接拾えなくても中心付近なら選択できる半径（CSS px）。 */
@@ -152,15 +144,8 @@ const PLACEMENT_PICK_RADIUS_PX = 72;
 const NUDGE_METERS = 2.5;
 /** 地形高が取れないとき・NaN のときのフォールバック標高（楕円体高 m）。 */
 const FALLBACK_GROUND_HEIGHT_M = 18;
-/**
- * 水面・越水・天候は十分滑らかに見える 30fps で統合して更新する。
- * Cesium の requestRenderMode を活かし、複数の演出が 60fps で競合するのを防ぐ。
- */
-const DYNAMIC_VISUAL_FRAME_INTERVAL_MS = 1000 / 30;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
 const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 20;
-/** Cesium の描画バッファ上限。高DPI端末で見えない画素へGPU時間を使いすぎない。 */
-const CESIUM_TARGET_RENDER_PIXELS = 1_500_000;
 
 export type DragGhostStatus = {
   /** ポインタが地図キャンバス上にある。 */
@@ -554,12 +539,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       let handleViewportResize: (() => void) | undefined;
       let waterRenderFrame = 0;
       let lastDynamicVisualAt = 0;
+      const renderProfile = getCesiumRenderProfile();
 
       try {
         // React StrictMode remounts effects; clear leftover Cesium DOM first.
         container.replaceChildren();
 
-        const gsiBaseLayer = createGsiPhotoImageryLayer();
+        const gsiBaseLayer = createGsiPhotoImageryLayer(renderProfile.imageryMaximumLevel);
         viewer = new Viewer(container, {
           animation: false,
           baseLayer: gsiBaseLayer,
@@ -600,21 +586,20 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.globe.translucency.enabled = false;
         mapViewer.scene.globe.depthTestAgainstTerrain = false;
         mapViewer.scene.globe.show = true;
-        mapViewer.scene.globe.maximumScreenSpaceError =
-          typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches ? 7 : 4;
+        mapViewer.scene.globe.maximumScreenSpaceError = renderProfile.globeMaximumScreenSpaceError;
         mapViewer.scene.fog.enabled = false;
         mapViewer.scene.highDynamicRange = false;
+        if (mapViewer.scene.skyAtmosphere !== undefined) {
+          mapViewer.scene.skyAtmosphere.show = renderProfile.skyAtmosphere;
+        }
         const applyResolutionBudget = () => {
-          mapViewer.resolutionScale = resolveCesiumResolutionScale();
+          mapViewer.resolutionScale = resolveCesiumResolutionScale(renderProfile);
           mapViewer.resize();
           mapViewer.scene.requestRender();
         };
         applyResolutionBudget();
         handleViewportResize = applyResolutionBudget;
         window.addEventListener("resize", handleViewportResize, { passive: true });
-        if (mapViewer.scene.skyAtmosphere !== undefined) {
-          mapViewer.scene.skyAtmosphere.show = true;
-        }
         handleVisibilityChange = () => {
           const visible = !document.hidden;
           mapViewer.scene.globe.show = visible;
@@ -660,7 +645,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           }
         });
 
-        void loadAlignedTerrain(mapViewer, () => disposed)
+        void loadAlignedTerrain(mapViewer, () => disposed, renderProfile.usePlateauTerrain)
           .then(() => {
             if (disposed || mapViewer.isDestroyed()) {
               return;
@@ -671,16 +656,19 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             console.warn("Terrain failed to load", error);
           });
 
-        void loadPlateauBuildings(
-          mapViewer,
-          () => disposed,
-          (tileset) => {
-            buildingTilesetRef.current = tileset;
-            tileset.show = !document.hidden;
-          },
-        ).catch((error: unknown) => {
-          console.warn("PLATEAU buildings failed to load", error);
-        });
+        if (renderProfile.loadBuildings) {
+          void loadPlateauBuildings(
+            mapViewer,
+            () => disposed,
+            (tileset) => {
+              buildingTilesetRef.current = tileset;
+              tileset.show = !document.hidden;
+            },
+            renderProfile.buildingMaximumScreenSpaceError,
+          ).catch((error: unknown) => {
+            console.warn("PLATEAU buildings failed to load", error);
+          });
+        }
 
         mapViewer.camera.lookAt(
           Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
@@ -721,7 +709,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           const shouldAnimate = !document.hidden && mapActiveRef.current;
           if (shouldAnimate) {
             const now = performance.now();
-            if (now - lastDynamicVisualAt >= DYNAMIC_VISUAL_FRAME_INTERVAL_MS) {
+            if (now - lastDynamicVisualAt >= renderProfile.dynamicFrameIntervalMs) {
               lastDynamicVisualAt = now;
               const latest = getLatestFloodStateRef.current?.();
               if (latest !== undefined) {
@@ -743,27 +731,29 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                   mitigationCalm,
                 });
 
-                const drama = resolveRainDrama({
-                  phase: latest.phase,
-                  rainfallIntensity: latest.rainfallIntensity,
-                  overflowMeters: latest.overflowMeters,
-                  floodDepthMeters: latest.floodDepthMeters,
-                  damagePercent: latest.damagePercent,
-                });
-                const stormKey = drama.toFixed(2);
-                if (stormKey !== lastStormKey) {
-                  lastStormKey = stormKey;
-                  Color.lerp(clearSky, stormSky, drama, mapViewer.scene.backgroundColor);
-                  if (mapViewer.scene.skyAtmosphere !== undefined) {
-                    mapViewer.scene.skyAtmosphere.hueShift = -0.04 * drama;
-                    mapViewer.scene.skyAtmosphere.saturationShift = -0.3 * drama;
-                    mapViewer.scene.skyAtmosphere.brightnessShift = -0.42 * drama;
-                  }
-                  mapViewer.scene.fog.enabled = drama > 0.12;
-                  mapViewer.scene.fog.density = 0.00015 + drama * 0.00135;
-                  mapViewer.scene.fog.minimumBrightness = Math.max(0.08, 0.35 - drama * 0.22);
-                  if (mapViewer.scene.light instanceof DirectionalLight) {
-                    mapViewer.scene.light.intensity = 2.2 - drama * 1.15;
+                if (renderProfile.stormEffects) {
+                  const drama = resolveRainDrama({
+                    phase: latest.phase,
+                    rainfallIntensity: latest.rainfallIntensity,
+                    overflowMeters: latest.overflowMeters,
+                    floodDepthMeters: latest.floodDepthMeters,
+                    damagePercent: latest.damagePercent,
+                  });
+                  const stormKey = drama.toFixed(2);
+                  if (stormKey !== lastStormKey) {
+                    lastStormKey = stormKey;
+                    Color.lerp(clearSky, stormSky, drama, mapViewer.scene.backgroundColor);
+                    if (mapViewer.scene.skyAtmosphere !== undefined) {
+                      mapViewer.scene.skyAtmosphere.hueShift = -0.04 * drama;
+                      mapViewer.scene.skyAtmosphere.saturationShift = -0.3 * drama;
+                      mapViewer.scene.skyAtmosphere.brightnessShift = -0.42 * drama;
+                    }
+                    mapViewer.scene.fog.enabled = drama > 0.12;
+                    mapViewer.scene.fog.density = 0.00015 + drama * 0.00135;
+                    mapViewer.scene.fog.minimumBrightness = Math.max(0.08, 0.35 - drama * 0.22);
+                    if (mapViewer.scene.light instanceof DirectionalLight) {
+                      mapViewer.scene.light.intensity = 2.2 - drama * 1.15;
+                    }
                   }
                 }
 
@@ -1189,10 +1179,17 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       }
 
       let lastLabelViewMatrix: Matrix4 | undefined;
+      let lastOverlaySyncAt = 0;
+      const overlayIntervalMs = getCesiumRenderProfile().overlayFrameIntervalMs;
       const syncOverlayPositions = () => {
         if (viewer.isDestroyed()) {
           return;
         }
+        const now = performance.now();
+        if (now - lastOverlaySyncAt < overlayIntervalMs) {
+          return;
+        }
+        lastOverlaySyncAt = now;
         const currentViewMatrix = viewer.camera.viewMatrix;
         if (
           lastLabelViewMatrix !== undefined &&
@@ -1567,7 +1564,19 @@ function estimateDockClearancePx(): number {
   return Math.min(Math.max(dock.offsetHeight + 16, 96), 220);
 }
 
-async function loadAlignedTerrain(viewer: Viewer, isDisposed: () => boolean): Promise<void> {
+async function loadAlignedTerrain(
+  viewer: Viewer,
+  isDisposed: () => boolean,
+  usePlateauTerrain: boolean,
+): Promise<void> {
+  if (!usePlateauTerrain) {
+    if (isDisposed() || viewer.isDestroyed()) {
+      return;
+    }
+    viewer.terrainProvider = createGsiTerrainProvider();
+    viewer.scene.requestRender();
+    return;
+  }
   try {
     const provider = await CesiumTerrainProvider.fromUrl(PLATEAU_TERRAIN_URL, {
       // 地表ライティングを無効化しているため法線は取得せず、通信量と展開負荷を抑える。
@@ -1617,12 +1626,13 @@ async function loadPlateauBuildings(
   viewer: Viewer,
   isDisposed: () => boolean,
   onActiveTileset: (tileset: Cesium3DTileset) => void,
+  buildingSse: number,
 ): Promise<Cesium3DTileset | null> {
   if (HIGH_DETAIL_BUILDINGS) {
     try {
       const textured = await loadBuildingTileset(viewer, PLATEAU_BUILDINGS_TEXTURE_URL, {
         isDisposed,
-        maximumScreenSpaceError: 12,
+        maximumScreenSpaceError: Math.max(buildingSse, 12),
         balanceBuildingAppearance: true,
       });
       if (textured !== null) {
@@ -1639,7 +1649,7 @@ async function loadPlateauBuildings(
 
   const lod1 = await loadBuildingTileset(viewer, PLATEAU_BUILDINGS_LOD1_URL, {
     isDisposed,
-    maximumScreenSpaceError: 16,
+    maximumScreenSpaceError: buildingSse,
     balanceBuildingAppearance: false,
   });
   if (lod1 !== null) {
@@ -1707,10 +1717,10 @@ function createBuildingAppearanceShader(): CustomShader {
   });
 }
 
-function createGsiPhotoImageryLayer(): ImageryLayer {
+function createGsiPhotoImageryLayer(maximumLevel = 18): ImageryLayer {
   const provider = new UrlTemplateImageryProvider({
     url: GSI_SEAMLESS_PHOTO_URL,
-    maximumLevel: 18,
+    maximumLevel,
     credit: new Credit(
       '<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>',
     ),
