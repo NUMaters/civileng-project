@@ -1,69 +1,49 @@
-import heroImageUrl from "../../../../../assets/generated/civilcraft-abukuma-hero.webp";
+import heroImageUrl from "../../assets/civilcraft-abukuma-hero.webp";
 
 type TitleScreenProps = {
   onEnter: () => void;
 };
 
-/** 起動直後のタイトル。治水の学びを、明るい街づくりゲームとして見せる。 */
+/** 起動直後のタイトル。治水体験を上品に伝える。 */
 export function TitleScreen({ onEnter }: TitleScreenProps) {
   return (
     <section className="title-screen" aria-label="タイトル">
       <div className="title-screen__world" aria-hidden="true">
         <img className="title-screen__hero" src={heroImageUrl} alt="" />
-        <div className="title-screen__wash" />
-        <i className="title-screen__bubble title-screen__bubble--one" />
-        <i className="title-screen__bubble title-screen__bubble--two" />
-        <i className="title-screen__bubble title-screen__bubble--three" />
-        <span className="title-screen__spark title-screen__spark--one">✦</span>
-        <span className="title-screen__spark title-screen__spark--two">●</span>
-        <span className="title-screen__spark title-screen__spark--three">◆</span>
+        <div className="title-screen__gradient" />
       </div>
 
       <div className="title-screen__content">
-        <p className="title-screen__locale">
-          <span aria-hidden="true">📍</span> 福島・郡山 · 阿武隈川
-        </p>
+        <p className="title-screen__locale">福島・郡山 — 阿武隈川</p>
 
         <div className="title-screen__brand">
-          <p className="title-screen__eyebrow">
-            <span aria-hidden="true">水</span> まちを守る、川づくりゲーム
-          </p>
+          <p className="title-screen__eyebrow">河川治水シミュレーション</p>
           <h1 className="title-screen__logo" aria-label="CivilCraft">
-            <span>Civil</span>
-            <span>Craft</span>
+            CivilCraft
           </h1>
           <p className="title-screen__tagline">
-            <strong>土木の力を、ゲームで体験！</strong>
-            堤防や遊水地をつくって、大雨からまちを守ろう。
+            堤防・遊水地・排水機場を配置し、大雨からまちを守る約3分のチャレンジ。
           </p>
         </div>
 
-        <div className="title-screen__badges" aria-label="ゲームの流れ">
-          <span>
-            <b>1</b> 川をみる
-          </span>
-          <span>
-            <b>2</b> 施設をおく
-          </span>
-          <span>
-            <b>3</b> まちを守る
-          </span>
-        </div>
+        <ol className="title-screen__steps" aria-label="ゲームの流れ">
+          <li>
+            <span>1</span>
+            川を調べる
+          </li>
+          <li>
+            <span>2</span>
+            施設を配置
+          </li>
+          <li>
+            <span>3</span>
+            大雨に耐える
+          </li>
+        </ol>
 
         <button className="title-screen__cta" type="button" onClick={onEnter}>
-          <span className="title-screen__cta-icon" aria-hidden="true">
-            ▶
-          </span>
-          <span>
-            <strong>ゲームをはじめる</strong>
-            <small>約3分の治水チャレンジ</small>
-          </span>
+          はじめる
         </button>
-      </div>
-
-      <div className="title-screen__sticker" aria-hidden="true">
-        <strong>LET&apos;S</strong>
-        <span>治水！</span>
       </div>
 
       <p className="title-screen__foot">NU SoftCon 2026 · Civil Engineering × Game</p>

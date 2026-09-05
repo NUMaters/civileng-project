@@ -16,8 +16,8 @@ type Drop = {
   alpha: number;
 };
 
-/** Canvas と 3D 地図の描画予算を共有する。雨は 30fps でも十分に連続して見える。 */
-const RAIN_FRAME_INTERVAL_MS = 1000 / 30;
+/** Canvas と 3D 地図の描画予算を共有する。雨は 24fps でも十分に連続して見える。 */
+const RAIN_FRAME_INTERVAL_MS = 1000 / 24;
 
 /**
  * 画面全体の大雨オーバーレイ。
@@ -112,7 +112,7 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
       });
       displayedDrama += (targetDrama - displayedDrama) * Math.min(1, dt * 2.4);
 
-      const desiredCount = Math.round(28 + displayedDrama * 140);
+      const desiredCount = Math.round(20 + displayedDrama * 90);
       if (Math.abs(desiredCount - drops.length) > 8) {
         rebuildDrops(desiredCount);
       }

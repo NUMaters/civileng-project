@@ -49,6 +49,16 @@
         <button type="button" onclick="window.location.reload()">再読み込み</button>
       </div>
     </main>
+    <script>
+      window.setTimeout(function () {
+        var el = document.getElementById("boot-fallback");
+        if (!el) return;
+        var p = el.querySelector("p");
+        if (p) {
+          p.textContent = "読み込みが長引いています。再読み込みするか、開発サーバーを再起動してください。";
+        }
+      }, 8000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

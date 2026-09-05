@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import heroImageUrl from "../../../../../assets/generated/civilcraft-abukuma-hero.webp";
+import heroImageUrl from "../../assets/civilcraft-abukuma-hero.webp";
 import { HowToPlayModal } from "./HowToPlayModal";
 import type { PlayMode } from "./types";
 
@@ -42,7 +42,6 @@ export function GameMenuScreen({
     }, 180);
 
     const load = async () => {
-      const started = performance.now();
       try {
         await Promise.all([
           fetch("/cesiumStatic/Widgets/widgets.css", { cache: "force-cache" }),
@@ -51,9 +50,6 @@ export function GameMenuScreen({
           // スタート押下前に Cesium チャンクを温めてゲーム入場の白画面を短縮する。
           import("../../components/GameCanvas/CesiumGameMap"),
         ]);
-        const elapsed = performance.now() - started;
-        const wait = Math.max(0, 900 - elapsed);
-        await new Promise((resolve) => window.setTimeout(resolve, wait));
         if (cancelled) {
           return;
         }
@@ -91,11 +87,7 @@ export function GameMenuScreen({
     <section className="game-menu" aria-labelledby={titleId}>
       <div className="game-menu__world" aria-hidden="true">
         <img className="game-menu__hero" src={heroImageUrl} alt="" />
-        <div className="game-menu__sky" />
-        <i className="game-menu__bubble game-menu__bubble--one" />
-        <i className="game-menu__bubble game-menu__bubble--two" />
-        <span className="game-menu__spark game-menu__spark--one">✦</span>
-        <span className="game-menu__spark game-menu__spark--two">●</span>
+        <div className="game-menu__gradient" />
       </div>
 
       <header className="game-menu__header">
@@ -115,11 +107,11 @@ export function GameMenuScreen({
       </header>
 
       <div className="game-menu__brief">
-        <p className="game-menu__brief-kicker">🌊 阿武隈川 · 治水チャレンジ</p>
+        <p className="game-menu__brief-kicker">阿武隈川 · 治水チャレンジ</p>
         <h1 id={titleId} className="game-menu__title">
-          どの遊び方で<br />チャレンジする？
+          プレイモードを選択
         </h1>
-        <p className="game-menu__brief-copy">限られた予算と時間で、川沿いの弱点を対策しよう。</p>
+        <p className="game-menu__brief-copy">限られた予算と時間で、川沿いの弱点を対策する。</p>
         <p className="game-menu__availability">まずは一人でじっくり作戦を考えよう！</p>
       </div>
 
@@ -130,7 +122,7 @@ export function GameMenuScreen({
           onClick={() => setMode("solo")}
         >
           <span className="game-menu__mode-index" aria-hidden="true">
-            🏗️
+            1P
           </span>
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">シングルプレイ</span>
@@ -146,7 +138,7 @@ export function GameMenuScreen({
           title="マルチプレイは近日対応"
         >
           <span className="game-menu__mode-index" aria-hidden="true">
-            🤝
+            MP
           </span>
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">マルチプレイ</span>

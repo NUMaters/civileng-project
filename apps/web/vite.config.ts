@@ -212,6 +212,9 @@ export default defineConfig(({ command }) => ({
     // 同一 LAN / テザリングのスマホからも届くよう全インターフェースで待ち受ける
     host: "0.0.0.0",
     strictPort: true,
+    fs: {
+      allow: [path.resolve(webRoot, "../..")],
+    },
     // 安定起動（dev-stable）では HMR / 監視を切り、iCloud 起因の停止を防ぐ
     ...(stableDev
       ? { hmr: false, watch: null }

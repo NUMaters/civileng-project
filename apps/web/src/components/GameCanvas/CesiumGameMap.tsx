@@ -72,6 +72,7 @@ import {
 import { resolveRainDrama } from "../../features/disaster/services/rainDrama";
 
 const DRAG_GHOST_ENTITY_PREFIX = "drag-ghost";
+const DRAG_GHOST_PLACEMENT_ID = "cursor";
 
 // Avoid Cesium Ion default basemap requests (we use GSI / PLATEAU tiles).
 Ion.defaultAccessToken = "";
@@ -157,7 +158,7 @@ const DYNAMIC_VISUAL_FRAME_INTERVAL_MS = 1000 / 30;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
 const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 20;
 /** Cesium の描画バッファ上限。高DPI端末で見えない画素へGPU時間を使いすぎない。 */
-const CESIUM_TARGET_RENDER_PIXELS = 2_000_000;
+const CESIUM_TARGET_RENDER_PIXELS = 1_500_000;
 
 export type DragGhostStatus = {
   /** ポインタが地図キャンバス上にある。 */
@@ -487,9 +488,18 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         }
         dragGhostLastKeyRef.current = key;
 
-        // ドラッグ中はDOMの追従バッジ（App.tsx）だけを表示する。
-        // Cesium Entityの削除・再生成と影響圏の再計算は、指を離した後の確定処理へ移す。
-        // これによりiOSのWebGLコンテキストを毎フレーム触らず、ポインター追従を滑らかにする。
+        const ghostPlacement: PlacedStructure = {
+          id: DRAG_GHOST_PLACEMENT_ID,
+          structureId,
+          position,
+          headingDegrees,
+          preview: true,
+        };
+        syncDragGhostModel(viewer, ghostPlacement, !placeable);
+        const influence = calculateStructureInfluences([ghostPlacement])[0] ?? null;
+        dragGhostInfluenceRef.current = influence;
+        refreshProtectionWithDragGhost(viewer, floodStateRef.current, influence, mapActiveRef.current);
+        viewer.scene.requestRender();
         dragGhostStatusRef.current = { overMap: true, placeable };
         return dragGhostStatusRef.current;
 
@@ -1535,9 +1545,10 @@ function estimateDockClearancePx(): number {
   if (typeof document === "undefined") {
     return 120;
   }
-  const dock = document.querySelector(".construction-menu");
+  const dock =
+    document.querySelector(".cmd-dock") ?? document.querySelector(".construction-menu");
   if (!(dock instanceof HTMLElement) || dock.offsetParent === null) {
-    return 24;
+    return 120;
   }
   return Math.min(Math.max(dock.offsetHeight + 16, 96), 220);
 }
@@ -2123,6 +2134,27 @@ function clearDragGhostEntities(viewer: Viewer | null): void {
     if (entity.id.startsWith(`${DRAG_GHOST_ENTITY_PREFIX}-`)) {
       viewer.entities.remove(entity);
     }
+  }
+}
+
+function syncDragGhostModel(
+  viewer: Viewer,
+  placement: PlacedStructure,
+  invalid: boolean,
+): void {
+  clearDragGhostEntities(viewer);
+  try {
+    addCivilEngineeringModel(viewer, placement, true, true, {
+      entityIdPrefix: DRAG_GHOST_ENTITY_PREFIX,
+      invalid,
+      showHeadingCue: false,
+    });
+  } catch (error) {
+    console.error("Failed to draw drag ghost model", placement.structureId, error);
+    addFallbackStructureMarker(viewer, placement, true, true, {
+      entityIdPrefix: DRAG_GHOST_ENTITY_PREFIX,
+      invalid,
+    });
   }
 }
 
