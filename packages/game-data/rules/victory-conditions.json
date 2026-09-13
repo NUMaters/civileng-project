@@ -1,5 +1,5 @@
 {
-  "clearThresholdPercent": 5,
-  "failureThresholdPercent": 5,
+  "clearThresholdPercent": 8,
+  "failureThresholdPercent": 8,
   "description": "被災度が clearThresholdPercent 未満でクリア、以上で失敗"
 }

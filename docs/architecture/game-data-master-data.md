@@ -56,6 +56,17 @@ packages/game-data/structures/<structure-id>.json
     "drainageCapacity": 0,
     "bankProtection": 0.2,
     "channelCapacityIncrease": 0
+  },
+  "role": {
+    "primaryHazard": "overtopping",
+    "strengths": ["低岸の溢れを止める"],
+    "weaknesses": ["内水・岸崩れは苦手"]
+  },
+  "hazardAffinity": {
+    "overtopping": 1,
+    "erosion": 0.3,
+    "inlandPonding": 0.05,
+    "capacityShortage": 0.15
   }
 }
 ```
@@ -71,6 +82,8 @@ packages/game-data/structures/<structure-id>.json
 | `allowedTerrains`          | string[] | 設置可能な地形タイプ                  |
 | `supportedDisasters`       | string[] | 対応災害種別                          |
 | `effects`                  | object   | 効果パラメータ（0.0〜1.0 の正規化値） |
+| `role`                     | object   | 得意 Hazard・強み／弱みの説明         |
+| `hazardAffinity`           | object   | 各 HazardKind への相性（負値は悪化）  |
 
 ### 効果パラメータ
 
@@ -108,31 +121,35 @@ packages/game-data/structures/<structure-id>.json
 
 ```json
 {
-  "clearThresholdPercent": 5,
-  "failureThresholdPercent": 5,
+  "clearThresholdPercent": 8,
+  "failureThresholdPercent": 8,
   "description": "被災度が clearThresholdPercent 未満でクリア、以上で失敗"
 }
 ```
 
-[game-rules.md](../game-design/game-rules.md) の MVP 既定値（被災度 5%）に準拠。
+[game-rules.md](../game-design/game-rules.md) の MVP 既定値（被災度 8%）に準拠。
 
 ### budget-rules.json
 
-初期予算を定義する。
+初期予算・時間補給・上限を定義する。
 
 ```json
 {
-  "initialBudgetSolo": 10000,
-  "initialBudgetMultiplayerPerPlayer": 8000,
-  "description": "ソロは initialBudgetSolo、マルチはプレイヤーごとに initialBudgetMultiplayerPerPlayer を付与"
+  "initialBudgetSolo": 11000,
+  "initialBudgetMultiplayerPerPlayer": 8500,
+  "incomePerSecondPreparation": 90,
+  "incomePerSecondDisaster": 130,
+  "disasterStartGrant": 1800,
+  "maxBudget": 22000,
+  "description": "予算ポイントは多め。準備・災害中の補給と緊急予算で追加配置しやすくする。維持費は毎秒差し引き。所持上限あり。"
 }
 ```
 
-詳細な予算パラメータは [Issue #6](https://github.com/NUMaters/civileng-project/issues/6) で継続検討。
+詳細な予算パラメータは [Issue #6](https://github.com/NUMaters/civileng-project/issues/6) と [game-rules.md](../game-design/game-rules.md) を参照。
 
 ### game-timing.json
 
-1 プレイ 3 分のフェーズ配分（既存）。
+1 プレイ約 180 秒（3 分）のフェーズ配分（準備 60 / 災害 90 / 結果 30）。大雨中の雨量はシミュレーション側でランダムに小康／並雨／強雨へ切り替わる。
 
 ```json
 {

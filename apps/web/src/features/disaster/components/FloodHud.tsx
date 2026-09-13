@@ -1,15 +1,29 @@
+import type { HazardKind } from "@civilcraft/game-data/types";
 import type { FloodSimulationState, MitigationSummary } from "../services/floodSimulation";
+import { getHazardLabel } from "../../construction/structureVisuals";
 
-type FloodHudProps = FloodSimulationState & {
+type FloodHudProps = Pick<
+  FloodSimulationState,
+  | "phase"
+  | "phaseRemainingSeconds"
+  | "rainfallIntensity"
+  | "riverLevelMeters"
+  | "overflowMeters"
+  | "floodDepthMeters"
+  | "damagePercent"
+  | "overflowSites"
+  | "mitigation"
+> & {
   onStartGame: () => void;
   onStartRainNow: () => void;
 };
 
 const phaseLabel = {
-  idle: "待機中",
-  preparation: "準備",
+  idle: "待機",
+  preparation: "準備中",
   disaster: "大雨",
   result: "結果",
+  review: "確認",
 } as const;
 
 export function FloodHud({
@@ -19,22 +33,21 @@ export function FloodHud({
   riverLevelMeters,
   overflowMeters,
   floodDepthMeters,
-  floodplainFillRatio,
-  floodplainHalfWidthMeters,
   damagePercent,
   overflowSites,
   mitigation,
-  protectedBankSites,
-  onStartGame,
+  onStartGame: _onStartGame,
   onStartRainNow,
 }: FloodHudProps) {
-  const bankSites = protectedBankSites ?? [];
+  void _onStartGame;
   const overflows = overflowSites ?? [];
-  const heldSites = bankSites.filter((site) => !site.overflowing).length;
   const safeMitigation = sanitizeMitigation(mitigation);
+  const hazardSummary = summarizeHazards(overflows);
+  const facilityCount = safeMitigation.activeStructureCount;
+  const showFloodMetrics = phase === "disaster" || phase === "result" || phase === "review";
 
   return (
-    <section className={`flood-hud flood-hud--${phase}`} aria-label="災害状況">
+    <section className={`flood-hud flood-hud--${phase}`} aria-label="状況">
       <div className="flood-hud__heading">
         <span className="flood-hud__phase">{phaseLabel[phase] ?? phase}</span>
         {phase !== "idle" ? (
@@ -44,64 +57,60 @@ export function FloodHud({
 
       {phase === "idle" ? (
         <>
-          <strong className="flood-hud__title">阿武隈川・大雨シナリオ</strong>
-          <p>
-            低い河岸ほど氾濫しやすく、施設は河岸の位置・向き・標高で効き方が変わります。弱点を押さえて浸水を5%未満に抑えてください。
-          </p>
-          <button className="flood-hud__primary" type="button" onClick={onStartGame}>
-            ゲーム開始
-          </button>
+          <strong className="flood-hud__title">待機中</strong>
+          <p>メニューから開始</p>
         </>
       ) : (
         <>
-          <MitigationPanel mitigation={safeMitigation} heldSites={heldSites} />
+          {facilityCount > 0 ? (
+            <p className="flood-hud__deploy-count" aria-label="配置数">
+              配置 <strong>{facilityCount}</strong> 基
+            </p>
+          ) : null}
+          {hazardSummary !== "" ? (
+            <p className="flood-hud__hazard-tip">{hazardSummary}</p>
+          ) : null}
           <div className="flood-hud__metrics">
+            {showFloodMetrics ? (
+              <>
+                <FloodMetric
+                  label="雨勢"
+                  value={rainLabel(finiteOr(rainfallIntensity, 0))}
+                  ratio={finiteOr(rainfallIntensity, 0)}
+                  tone="rain"
+                />
+                <FloodMetric
+                  label="水位"
+                  value={`${finiteOr(riverLevelMeters, 0).toFixed(1)} m`}
+                  ratio={finiteOr(riverLevelMeters, 0) / 7}
+                  tone="water"
+                />
+                <FloodMetric
+                  label="溢れ"
+                  value={
+                    finiteOr(overflowMeters, 0) > 0.02
+                      ? `+${finiteOr(overflowMeters, 0).toFixed(2)} m`
+                      : "安定"
+                  }
+                  ratio={Math.min(1, finiteOr(overflowMeters, 0) / 1.5)}
+                  tone="water"
+                />
+                <FloodMetric
+                  label="水深"
+                  value={`${finiteOr(floodDepthMeters, 0).toFixed(1)} m`}
+                  ratio={finiteOr(floodDepthMeters, 0) / 2}
+                  tone="water"
+                />
+              </>
+            ) : null}
             <FloodMetric
-              label="雨量"
-              value={`${Math.round(finiteOr(rainfallIntensity, 0) * 100)}%`}
-              ratio={finiteOr(rainfallIntensity, 0)}
-              tone="rain"
-            />
-            <FloodMetric
-              label="河川水位"
-              value={`${finiteOr(riverLevelMeters, 0).toFixed(1)} m`}
-              ratio={finiteOr(riverLevelMeters, 0) / 7}
-              tone="water"
-            />
-            <FloodMetric
-              label="越水量"
-              value={
-                finiteOr(overflowMeters, 0) > 0.02
-                  ? `+${finiteOr(overflowMeters, 0).toFixed(2)} m`
-                  : "なし"
-              }
-              ratio={Math.min(1, finiteOr(overflowMeters, 0) / 1.5)}
-              tone="water"
-            />
-            <FloodMetric
-              label="氾濫原"
-              value={
-                finiteOr(floodplainFillRatio, 0) > 0.04
-                  ? `片岸 ${Math.round(finiteOr(floodplainHalfWidthMeters, 0))} m`
-                  : "本川のみ"
-              }
-              ratio={finiteOr(floodplainFillRatio, 0)}
-              tone="water"
-            />
-            <FloodMetric
-              label="決壊地点"
-              value={overflows.length > 0 ? `${overflows.length} 箇所` : "なし"}
+              label="決壊口"
+              value={overflows.length > 0 ? `${overflows.length}` : "0"}
               ratio={Math.min(1, overflows.length / 4)}
               tone="damage"
             />
             <FloodMetric
-              label="最大浸水深"
-              value={`${finiteOr(floodDepthMeters, 0).toFixed(2)} m`}
-              ratio={finiteOr(floodDepthMeters, 0) / 2}
-              tone="water"
-            />
-            <FloodMetric
-              label="被災度"
+              label="被害度"
               value={`${finiteOr(damagePercent, 0).toFixed(1)}%`}
               ratio={finiteOr(damagePercent, 0) / 100}
               tone="damage"
@@ -112,60 +121,10 @@ export function FloodHud({
 
       {phase === "preparation" ? (
         <button className="flood-hud__rain-button" type="button" onClick={onStartRainNow}>
-          準備完了・大雨を開始
+          準備をスキップ
         </button>
       ) : null}
     </section>
-  );
-}
-
-function MitigationPanel({
-  mitigation,
-  heldSites,
-}: {
-  mitigation: MitigationSummary;
-  heldSites: number;
-}) {
-  const hasFacilities = mitigation.activeStructureCount > 0;
-  return (
-    <div className="mitigation-panel" aria-label="施設の治水効果">
-      <div className="mitigation-panel__title">
-        <span>治水効果</span>
-        <strong>{hasFacilities ? `${mitigation.activeStructureCount} 施設` : "未配置"}</strong>
-      </div>
-      {hasFacilities ? (
-        <ul className="mitigation-panel__list">
-          <li>
-            <span>越水抑制</span>
-            <strong>{Math.round(mitigation.overflowPrevention * 100)}%</strong>
-          </li>
-          <li>
-            <span>水位低減</span>
-            <strong>{Math.round(mitigation.waterLevelReduction * 100)}%</strong>
-          </li>
-          <li>
-            <span>流下能力</span>
-            <strong>+{mitigation.channelCapacityIncrease.toFixed(1)}</strong>
-          </li>
-          <li>
-            <span>排水</span>
-            <strong>{mitigation.drainageCapacity.toFixed(1)}</strong>
-          </li>
-          <li>
-            <span>弱点を抑制</span>
-            <strong>{heldSites} 箇所</strong>
-          </li>
-          <li>
-            <span>配置効率</span>
-            <strong>{Math.round(mitigation.averageEffectiveness * 100)}%</strong>
-          </li>
-        </ul>
-      ) : (
-        <p className="mitigation-panel__empty">
-          河岸に川沿いへ置くほど効きます。低い岸の弱点を優先してください
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -204,6 +163,19 @@ function finiteOr(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function rainLabel(intensity: number): string {
+  if (intensity < 0.28) {
+    return "小康";
+  }
+  if (intensity < 0.55) {
+    return "並雨";
+  }
+  if (intensity < 0.78) {
+    return "強雨";
+  }
+  return "豪雨";
+}
+
 function sanitizeMitigation(mitigation: MitigationSummary | undefined): MitigationSummary {
   return {
     waterLevelReduction: finiteOr(mitigation?.waterLevelReduction, 0),
@@ -213,5 +185,25 @@ function sanitizeMitigation(mitigation: MitigationSummary | undefined): Mitigati
     channelCapacityIncrease: finiteOr(mitigation?.channelCapacityIncrease, 0),
     activeStructureCount: Math.max(0, Math.round(finiteOr(mitigation?.activeStructureCount, 0))),
     averageEffectiveness: finiteOr(mitigation?.averageEffectiveness, 0),
+    placementInterference: clamp01(finiteOr(mitigation?.placementInterference, 0)),
   };
+}
+
+function clamp01(value: number): number {
+  return Math.min(1, Math.max(0, value));
+}
+
+function summarizeHazards(sites: FloodSimulationState["overflowSites"]): string {
+  if (sites.length === 0) {
+    return "";
+  }
+  const counts = new Map<HazardKind, number>();
+  for (const site of sites) {
+    const key = site.primaryHazard;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const parts = [...counts.entries()].map(
+    ([kind, count]) => `${getHazardLabel(kind)}×${count}`,
+  );
+  return `警報 ${parts.join("・")}`;
 }

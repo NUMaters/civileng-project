@@ -16,21 +16,33 @@ type StructureEffects struct {
 	ChannelCapacityIncrease float64 `json:"channelCapacityIncrease"`
 }
 
+type StructureRole struct {
+	PrimaryHazard string   `json:"primaryHazard"`
+	Strengths     []string `json:"strengths"`
+	Weaknesses    []string `json:"weaknesses"`
+}
+
 type StructureDefinition struct {
-	ID                       string           `json:"id"`
-	DisplayName              string           `json:"displayName"`
-	Description              string           `json:"description"`
-	ConstructionCost         int              `json:"constructionCost"`
-	ConstructionTimeSeconds  int              `json:"constructionTimeSeconds"`
-	MaintenanceCostPerSecond int              `json:"maintenanceCostPerSecond"`
-	AllowedTerrains          []string         `json:"allowedTerrains"`
-	SupportedDisasters       []string         `json:"supportedDisasters"`
-	Effects                  StructureEffects `json:"effects"`
+	ID                       string             `json:"id"`
+	DisplayName              string             `json:"displayName"`
+	Description              string             `json:"description"`
+	ConstructionCost         int                `json:"constructionCost"`
+	ConstructionTimeSeconds  int                `json:"constructionTimeSeconds"`
+	MaintenanceCostPerSecond int                `json:"maintenanceCostPerSecond"`
+	AllowedTerrains          []string           `json:"allowedTerrains"`
+	SupportedDisasters       []string           `json:"supportedDisasters"`
+	Effects                  StructureEffects   `json:"effects"`
+	Role                     StructureRole      `json:"role"`
+	HazardAffinity           map[string]float64 `json:"hazardAffinity"`
 }
 
 type BudgetRules struct {
 	InitialBudgetSolo                 int    `json:"initialBudgetSolo"`
 	InitialBudgetMultiplayerPerPlayer int    `json:"initialBudgetMultiplayerPerPlayer"`
+	IncomePerSecondPreparation        int    `json:"incomePerSecondPreparation"`
+	IncomePerSecondDisaster           int    `json:"incomePerSecondDisaster"`
+	DisasterStartGrant                int    `json:"disasterStartGrant"`
+	MaxBudget                         int    `json:"maxBudget"`
 	Description                       string `json:"description"`
 }
 

@@ -21,7 +21,7 @@ description: "CivilCraft コードレビュー基準"
 
 ## ゲーム設計
 
-- 被災度 5% 未満でクリア（`packages/game-data/rules/victory-conditions.json`）
+- 被災度 8% 未満でクリア（`packages/game-data/rules/victory-conditions.json`）
 - 1 プレイ 3 分（準備 60s / 災害 90s / 結果 30s）
 - 建設中の施設は効果を発揮しない
 - マルチは 2〜4 人、ランダム技術割当

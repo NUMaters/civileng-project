@@ -1,34 +1,41 @@
 import { describe, expect, it } from "vitest";
 import {
   calculateFloodplainExtent,
-  FLOODPLAIN_WARN_LEVEL_METERS,
   FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
   NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
   NORMAL_CHANNEL_HALF_WIDTH_M,
 } from "./floodplainExtent";
 
 describe("calculateFloodplainExtent", () => {
-  it("通常水位では氾濫原を出さない", () => {
-    const extent = calculateFloodplainExtent({
+  it("増水だけでは氾濫原指標を出さない", () => {
+    const calm = calculateFloodplainExtent({
       riverLevelMeters: 2.2,
       overflowMeters: 0,
     });
-    expect(extent.fillRatio).toBe(0);
-    expect(extent.halfWidthMeters).toBe(NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
+    expect(calm.fillRatio).toBe(0);
+    expect(calm.halfWidthMeters).toBe(0);
+
+    const risen = calculateFloodplainExtent({
+      riverLevelMeters: 4.8,
+      overflowMeters: 0,
+      overflowLevelMeters: 4.9,
+    });
+    expect(risen.fillRatio).toBe(0);
+    expect(risen.halfWidthMeters).toBe(0);
   });
 
-  it("警告水位を超えると氾濫原が立ち上がる", () => {
+  it("越水すると決壊近傍の指標が立ち上がる", () => {
     const mid = calculateFloodplainExtent({
-      riverLevelMeters: (FLOODPLAIN_WARN_LEVEL_METERS + 4.9) / 2,
-      overflowMeters: 0,
+      riverLevelMeters: 5.4,
+      overflowMeters: 0.5,
       overflowLevelMeters: 4.9,
     });
     expect(mid.fillRatio).toBeGreaterThan(0.3);
     expect(mid.fillRatio).toBeLessThan(1);
-    expect(mid.halfWidthMeters).toBe(NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
+    expect(mid.halfWidthMeters).toBeGreaterThan(NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M - 1);
   });
 
-  it("越水すると最大片岸幅へ広がる", () => {
+  it("強い越水では最大片岸幅へ近づく", () => {
     const flooded = calculateFloodplainExtent({
       riverLevelMeters: 6.2,
       overflowMeters: 1.4,
@@ -38,7 +45,7 @@ describe("calculateFloodplainExtent", () => {
     expect(flooded.halfWidthMeters).toBe(FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
   });
 
-  it("平常時片岸より氾濫寸前・最大幅の方が広い", () => {
+  it("平常時片岸より越水時の目安幅の方が広い", () => {
     expect(NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M).toBeGreaterThan(NORMAL_CHANNEL_HALF_WIDTH_M);
     expect(FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M).toBeGreaterThan(
       NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,

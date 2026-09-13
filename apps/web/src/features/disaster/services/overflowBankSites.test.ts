@@ -10,6 +10,10 @@ describe("overflowBankSites", () => {
   it("手動弱点と中心線サンプルの候補を返す", () => {
     const candidates = listOverflowCandidates();
     expect(candidates.some((item) => item.id === "campus-core")).toBe(true);
+    expect(candidates.some((item) => item.id === "inland-campus")).toBe(true);
+    expect(candidates.some((item) => item.id === "north-bend" && item.primaryHazard === "erosion")).toBe(
+      true,
+    );
     expect(candidates.some((item) => item.id.startsWith("bank-"))).toBe(true);
     expect(candidates.length).toBeGreaterThan(8);
   });

@@ -1,0 +1,5 @@
+# CivilCraft Web — Cloudflare Pages（ソロ静的公開）
+# 手順: docs/development/deploy-cloudflare-pages.md
+name = "civilcraft"
+compatibility_date = "2026-07-01"
+pages_build_output_dir = "./dist"

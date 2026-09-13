@@ -5,11 +5,15 @@
   "scripts": {
     "copy:cesium": "node ./scripts/copy-cesium-assets.mjs",
     "fetch:plateau": "node ./scripts/fetch-plateau-buildings.mjs",
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "node ./scripts/dev-stable.mjs",
+    "dev:watch": "vite",
+    "dev:ensure": "node ./scripts/ensure-dev.mjs",
+    "stop:dev": "node ./scripts/stop-dev.mjs",
+    "build": "tsc --noEmit && node ./scripts/build-web.mjs",
     "lint": "eslint .",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "node ./scripts/preview-web.mjs",
+    "pages:deploy": "pnpm build && node ./scripts/pages-deploy.mjs"
   },
   "dependencies": {
     "@civilcraft/game-data": "workspace:*",
@@ -29,6 +33,7 @@
     "gensync": "1.0.0-beta.2",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "wrangler": "^4.28.0"
   }
 }

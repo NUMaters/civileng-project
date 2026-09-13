@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react-swc";
 import { createReadStream, cpSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Plugin } from "vite";
@@ -10,6 +11,20 @@ const webRoot = path.dirname(fileURLToPath(import.meta.url));
 const cesiumSource = path.resolve(webRoot, "node_modules/cesium/Build/Cesium");
 const cesiumBaseUrl = "cesiumStatic";
 const cesiumFolders = ["Assets", "Workers", "Widgets", "ThirdParty"] as const;
+/** iCloud Documents 外に置き、キャッシュ読み書きでのハングを避ける。 */
+const viteCacheDir = path.join(homedir(), ".cache", "civilcraft", "vite");
+/**
+ * ビルド出力先。
+ * - CI / 明示指定: CIVILCRAFT_OUT_DIR または相対 dist
+ * - ローカル（iCloud Documents 配下）: ~/.cache/civilcraft/web-dist へ逃がす
+ */
+const viteOutDir =
+  process.env.CIVILCRAFT_OUT_DIR ??
+  (process.env.CI === "true"
+    ? path.resolve(webRoot, "dist")
+    : path.join(homedir(), ".cache", "civilcraft", "web-dist"));
+const includePlateauPublic = process.env.CIVILCRAFT_INCLUDE_PLATEAU === "1";
+const stableDev = process.env.CIVILCRAFT_DEV_STABLE === "1";
 
 const MIME: Record<string, string> = {
   ".js": "text/javascript; charset=utf-8",
@@ -68,7 +83,7 @@ function serveCesiumAssets(): Plugin {
       });
     },
     closeBundle() {
-      const outDir = path.resolve(webRoot, "dist", cesiumBaseUrl);
+      const outDir = path.resolve(viteOutDir, cesiumBaseUrl);
       rmSync(outDir, { recursive: true, force: true });
       mkdirSync(outDir, { recursive: true });
       for (const folder of cesiumFolders) {
@@ -77,6 +92,31 @@ function serveCesiumAssets(): Plugin {
           throw new Error(`Missing Cesium folder: ${from}`);
         }
         cpSync(from, path.join(outDir, folder), { recursive: true });
+      }
+    },
+  };
+}
+
+/** 本番では plateau を除く public だけを成果物へ載せる。 */
+function copySlimPublicAssets(): Plugin {
+  const slimFiles = ["_redirects", "_headers", "manifest.webmanifest"] as const;
+  return {
+    name: "civilcraft-copy-slim-public",
+    apply: "build",
+    closeBundle() {
+      if (includePlateauPublic) {
+        return;
+      }
+      mkdirSync(viteOutDir, { recursive: true });
+      for (const name of slimFiles) {
+        const from = path.join(webRoot, "public", name);
+        if (existsSync(from)) {
+          cpSync(from, path.join(viteOutDir, name));
+        }
+      }
+      const iconsFrom = path.join(webRoot, "public", "icons");
+      if (existsSync(iconsFrom)) {
+        cpSync(iconsFrom, path.join(viteOutDir, "icons"), { recursive: true });
       }
     },
   };
@@ -141,20 +181,45 @@ export default defineConfig({
   define: {
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
   },
-  plugins: [react(), serveCesiumAssets(), proxyGsiTiles()],
+  cacheDir: viteCacheDir,
+  // plateau（巨大）を Vite の public コピーから外す。必要時のみ全コピー。
+  publicDir: includePlateauPublic ? "public" : false,
+  plugins: [react(), serveCesiumAssets(), copySlimPublicAssets(), proxyGsiTiles()],
   optimizeDeps: {
     // Cesium pulls CommonJS deps (e.g. mersenne-twister). Prebundle them so
     // Vite does not request a non-existent default ESM export at runtime.
-    include: ["cesium", "mersenne-twister"],
+    include: [
+      "cesium",
+      "mersenne-twister",
+      "react",
+      "react-dom",
+      "react-dom/client",
+      "react/jsx-dev-runtime",
+      "react/jsx-runtime",
+    ],
+    // iCloud Drive 上の巨大 node_modules クロールで起動が止まるのを防ぐ
+    noDiscovery: true,
+    entries: ["index.html", "src/main.tsx"],
   },
   build: {
+    outDir: viteOutDir,
+    emptyOutDir: true,
     chunkSizeWarningLimit: 5000,
   },
   server: {
     port: 5173,
-    // :: で待ち受け、localhost（IPv6 ::1）と 127.0.0.1 の両方から接続できるようにする
-    host: "::",
+    // 同一 LAN / テザリングのスマホからも届くよう全インターフェースで待ち受ける
+    host: "0.0.0.0",
     strictPort: true,
+    // 安定起動（dev-stable）では HMR / 監視を切り、iCloud 起因の停止を防ぐ
+    ...(stableDev
+      ? { hmr: false, watch: null }
+      : {
+          watch: {
+            // Documents/iCloud 配下の巨大ツリー監視で起動・HMR が止まるのを防ぐ
+            ignored: ["**/node_modules/**", "**/dist/**", "**/.git/**", "**/.cache/**"],
+          },
+        }),
     proxy: {
       // ゲームサーバー WebSocket（cmd/game GET /ws）
       "/ws": {
@@ -162,9 +227,6 @@ export default defineConfig({
         ws: true,
         changeOrigin: true,
       },
-    },
-    watch: {
-      ignored: ["**/node_modules/cesium/**", "**/dist/**"],
     },
   },
   test: {
