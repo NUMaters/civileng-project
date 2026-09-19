@@ -34,7 +34,7 @@ export function FloodResultPanel({
     <div className="result-overlay">
       <section className="result-panel" role="dialog" aria-modal="true" aria-label="結果">
         <span className={`result-panel__badge ${isClear ? "is-clear" : "is-failure"}`}>
-          {isClear ? "CLEAR" : "FAILED"}
+          {isClear ? "成功" : "失敗"}
         </span>
         <h2>{isClear ? "まちを守り切った" : "被害が広がった"}</h2>
         <p>
@@ -90,7 +90,7 @@ export function ReviewModeBar({
     <div className="review-mode-bar" role="region" aria-label="マップ確認">
       <div className="review-mode-bar__meta">
         <span className={`review-mode-bar__badge ${isClear ? "is-clear" : "is-failure"}`}>
-          {isClear ? "CLEAR" : "FAILED"}
+          {isClear ? "成功" : "失敗"}
         </span>
         <strong>マップ確認</strong>
         <span className="review-mode-bar__score">{score.toLocaleString("ja-JP")}</span>

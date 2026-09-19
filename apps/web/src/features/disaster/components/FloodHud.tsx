@@ -23,6 +23,8 @@ type FloodHudProps = Pick<
 > & {
   onStartGame: () => void;
   onStartRainNow: () => void;
+  /** ゲーム途中でも進行を中断してメニューへ戻れる。 */
+  onExit?: () => void;
 };
 
 const phaseBadge = {
@@ -46,6 +48,7 @@ export function FloodHud({
   mitigation,
   onStartGame: _onStartGame,
   onStartRainNow,
+  onExit = () => undefined,
 }: FloodHudProps) {
   void _onStartGame;
   const overflows = overflowSites ?? [];
@@ -65,7 +68,17 @@ export function FloodHud({
           <h2 className="cmd-mission__title">{missionTitle(phase)}</h2>
         </div>
         {phase !== "idle" ? (
-          <time className="cmd-mission__timer">{formatTime(phaseRemainingSeconds)}</time>
+          <div className="cmd-mission__head-actions">
+            <time className="cmd-mission__timer">{formatTime(phaseRemainingSeconds)}</time>
+            <button
+              className="cmd-mission__exit"
+              type="button"
+              onClick={onExit}
+              aria-label="ゲームを中断してメニューへ戻る"
+            >
+              中断
+            </button>
+          </div>
         ) : null}
       </header>
 

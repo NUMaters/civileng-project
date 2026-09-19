@@ -99,6 +99,33 @@
   letter-spacing: 0.04em;
 }
 
+.cmd-mission__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.cmd-mission__exit {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 20%);
+  color: #b7c7d5;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cmd-mission__exit:hover,
+.cmd-mission__exit:focus-visible {
+  border-color: rgb(240 104 88 / 55%);
+  background: rgb(240 104 88 / 14%);
+  color: #ffd2ca;
+}
+
 .cmd-mission__alert {
   display: flex;
   align-items: center;
