@@ -53,7 +53,9 @@ export function FloodHud({
 }: FloodHudProps) {
   void _onStartGame;
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const exitButtonRef = useRef<HTMLButtonElement>(null);
   const cancelExitRef = useRef<HTMLButtonElement>(null);
+  const leaveExitRef = useRef<HTMLButtonElement>(null);
   const overflows = overflowSites ?? [];
   const safeMitigation = sanitizeMitigation(mitigation);
   const hazardSummary = summarizeHazards(overflows);
@@ -76,6 +78,22 @@ export function FloodHud({
       if (event.key === "Escape") {
         event.preventDefault();
         setShowExitConfirm(false);
+        exitButtonRef.current?.focus();
+        return;
+      }
+      if (event.key === "Tab") {
+        const first = cancelExitRef.current;
+        const last = leaveExitRef.current;
+        if (first === null || last === null) {
+          return;
+        }
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
     window.addEventListener("keydown", handleEscape);
@@ -96,6 +114,7 @@ export function FloodHud({
           <div className="cmd-mission__head-actions">
             <time className="cmd-mission__timer">{formatTime(phaseRemainingSeconds)}</time>
             <button
+              ref={exitButtonRef}
               className="cmd-mission__exit"
               type="button"
               onClick={() => setShowExitConfirm(true)}
@@ -187,15 +206,29 @@ export function FloodHud({
       ) : null}
 
       {showExitConfirm ? (
-        <div className="cmd-exit-confirm" role="dialog" aria-modal="true" aria-labelledby="cmd-exit-confirm-title">
+        <div
+          className="cmd-exit-confirm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="cmd-exit-confirm-title"
+          aria-describedby="cmd-exit-confirm-description"
+        >
           <div className="cmd-exit-confirm__panel">
             <strong id="cmd-exit-confirm-title">ゲームを中断しますか？</strong>
-            <p>現在の配置と進行状況は破棄され、メニューへ戻ります。</p>
+            <p id="cmd-exit-confirm-description">現在の配置と進行状況は破棄され、メニューへ戻ります。</p>
             <div className="cmd-exit-confirm__actions">
-              <button ref={cancelExitRef} type="button" className="cmd-exit-confirm__cancel" onClick={() => setShowExitConfirm(false)}>
+              <button
+                ref={cancelExitRef}
+                type="button"
+                className="cmd-exit-confirm__cancel"
+                onClick={() => {
+                  setShowExitConfirm(false);
+                  exitButtonRef.current?.focus();
+                }}
+              >
                 続ける
               </button>
-              <button type="button" className="cmd-exit-confirm__leave" onClick={onExit}>
+              <button ref={leaveExitRef} type="button" className="cmd-exit-confirm__leave" onClick={onExit}>
                 メニューへ戻る
               </button>
             </div>
