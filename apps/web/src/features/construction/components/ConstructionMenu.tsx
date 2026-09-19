@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import { getHazardKindLabel } from "@civilcraft/game-data/types";
 import { formatBudget } from "../services/constructionService";
-import {
-  getStructureEffectLabel,
-  getStructureZoneMeaning,
-} from "../structureVisuals";
+import { getStructureEffectLabel, getStructureZoneMeaning } from "../structureVisuals";
 import type { StructureDefinition } from "../types/construction";
 import { StructureCard } from "./StructureCard";
 import { effectRangeLabel } from "../../hud/commandCenterUtils";
@@ -43,10 +40,7 @@ export function ConstructionMenu({
   return (
     <section className="cmd-dock" aria-label="建設ドック">
       {selected !== undefined ? (
-        <div
-          className={`cmd-dock__tooltip${detailsOpen ? " is-expanded" : ""}`}
-          key={selected.id}
-        >
+        <div className={`cmd-dock__tooltip${detailsOpen ? " is-expanded" : ""}`} key={selected.id}>
           <header className="cmd-dock__tooltip-head">
             <strong>{selected.displayName}</strong>
             <span>{formatBudget(selected.constructionCost)}</span>
@@ -93,6 +87,9 @@ export function ConstructionMenu({
         <div className="cmd-dock__label">
           <span>施設</span>
           <small className="cmd-dock__hint">カードを選択 → 地図へドラッグ / タップで中央配置</small>
+          <small className="cmd-dock__scroll-hint" aria-hidden="true">
+            ← 横にスワイプ →
+          </small>
         </div>
         <div className="cmd-dock__list">
           {structures.map((structure) => (

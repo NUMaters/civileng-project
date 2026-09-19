@@ -73,10 +73,7 @@ import {
   type StructureInfluence,
 } from "../../features/disaster/services/floodSimulation";
 import { resolveRainDrama } from "../../features/disaster/services/rainDrama";
-import {
-  getCesiumRenderProfile,
-  resolveCesiumResolutionScale,
-} from "./cesiumPerformance";
+import { getCesiumRenderProfile, resolveCesiumResolutionScale } from "./cesiumPerformance";
 
 const DRAG_GHOST_ENTITY_PREFIX = "drag-ghost";
 const DRAG_GHOST_PLACEMENT_ID = "cursor";
@@ -158,6 +155,8 @@ export type DragGhostStatus = {
   /** 河道・河岸の配置可能域上にある。 */
   placeable: boolean;
 };
+
+type MapLoadStage = "loading" | "terrain" | "buildings" | "ready" | "degraded";
 
 export type CesiumGameMapHandle = {
   tryDropStructure: (structureId: string, clientX: number, clientY: number) => boolean;
@@ -286,48 +285,49 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     floodStateRef.current = floodState;
     const [mapError, setMapError] = useState<string | null>(null);
     const [isMapReady, setIsMapReady] = useState(false);
+    const [mapLoadStage, setMapLoadStage] = useState<MapLoadStage>("loading");
+    const [frameTimeMs, setFrameTimeMs] = useState<number | null>(null);
     const [visibilityEpoch, setVisibilityEpoch] = useState(0);
 
     const labelInfluences = useMemo(() => calculateStructureInfluences(placements), [placements]);
 
     const facilityLabels = useMemo(
       () =>
-        placements
-          // 仮配置は施設上の ✓／× と向きスライダーだけで足りるのでラベルを出さない。
-          .filter((placement) => placement.preview !== true)
-          .map((placement) => {
-            const displayName =
-              structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設";
-            const influence = labelInfluences.find((item) => item.placementId === placement.id);
-            const hasAdverseEffect = (influence?.adverseSiteIds.length ?? 0) > 0;
-            const tone =
-              influence?.coverageTone === "good" && hasAdverseEffect
-                ? "warn"
-                : (influence?.coverageTone ?? "warn");
-            return {
-              id: placement.id,
-              kind: "facility" as const,
-              text: displayName,
-              effectText:
-                tone === "bad"
-                  ? "逆効果・流入増"
-                  : hasAdverseEffect
-                    ? "一部で逆効果"
-                    : tone === "good"
-                      ? (influence?.coverageHint ?? "弱点をカバー")
-                      : "効果範囲外",
-              tone,
-              effectiveness: influence?.effectiveness ?? 0,
-              selected: placement.id === selectedPlacementId,
-              preview: false,
-              longitude: placement.position.longitude,
-              latitude: placement.position.latitude,
-              height:
-                placement.position.height +
-                getStructureFootprintMeters(placement.structureId).height +
-                12,
-            };
-          }),
+        placements.map((placement) => {
+          const displayName =
+            structures.find(({ id }) => id === placement.structureId)?.displayName ?? "施設";
+          const influence = labelInfluences.find((item) => item.placementId === placement.id);
+          const hasAdverseEffect = (influence?.adverseSiteIds.length ?? 0) > 0;
+          const tone =
+            influence?.coverageTone === "good" && hasAdverseEffect
+              ? "warn"
+              : (influence?.coverageTone ?? "warn");
+          const isPreview = placement.preview === true;
+          return {
+            id: placement.id,
+            kind: "facility" as const,
+            text: displayName,
+            effectText: isPreview
+              ? "仮配置・位置を調整"
+              : tone === "bad"
+                ? "逆効果・流入増"
+                : hasAdverseEffect
+                  ? "一部で逆効果"
+                  : tone === "good"
+                    ? (influence?.coverageHint ?? "弱点をカバー")
+                    : "効果範囲外",
+            tone,
+            effectiveness: influence?.effectiveness ?? 0,
+            selected: placement.id === selectedPlacementId,
+            preview: isPreview,
+            longitude: placement.position.longitude,
+            latitude: placement.position.latitude,
+            height:
+              placement.position.height +
+              getStructureFootprintMeters(placement.structureId).height +
+              12,
+          };
+        }),
       [labelInfluences, placements, selectedPlacementId, structures],
     );
 
@@ -446,11 +446,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           latitude: anchor.lat,
           height: FALLBACK_GROUND_HEIGHT_M,
         };
-        onDropPlaceRef.current(
-          structureId,
-          position,
-          CesiumMath.toDegrees(viewer.camera.heading),
-        );
+        onDropPlaceRef.current(structureId, position, CesiumMath.toDegrees(viewer.camera.heading));
         viewer.scene.requestRender();
         return true;
       },
@@ -522,19 +518,25 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           clearDragGhostEntities(viewer);
           syncDragGhostModel(viewer, ghostPlacement, invalid);
           dragGhostStyleKeyRef.current = styleKey;
-        } else if (!updateCivilEngineeringModelPose(viewer, ghostPlacement, {
-          entityIdPrefix: DRAG_GHOST_ENTITY_PREFIX,
-          showHeadingCue: false,
-        })) {
+        } else if (
+          !updateCivilEngineeringModelPose(viewer, ghostPlacement, {
+            entityIdPrefix: DRAG_GHOST_ENTITY_PREFIX,
+            showHeadingCue: false,
+          })
+        ) {
           syncDragGhostModel(viewer, ghostPlacement, invalid);
         }
         const influence = calculateStructureInfluences([ghostPlacement])[0] ?? null;
         dragGhostInfluenceRef.current = influence;
-        refreshProtectionWithDragGhost(viewer, floodStateRef.current, influence, mapActiveRef.current);
+        refreshProtectionWithDragGhost(
+          viewer,
+          floodStateRef.current,
+          influence,
+          mapActiveRef.current,
+        );
         viewer.scene.requestRender();
         dragGhostStatusRef.current = { overMap: true, placeable };
         return dragGhostStatusRef.current;
-
       },
       clearDragGhost: () => {
         if (dragGhostRafRef.current !== 0) {
@@ -584,9 +586,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       let handleViewportResize: (() => void) | undefined;
       let waterRenderFrame = 0;
       let lastDynamicVisualAt = 0;
+      let lastFrameAt = performance.now();
+      let frameSampleStartedAt = lastFrameAt;
+      let frameSampleTotal = 0;
+      let frameSampleCount = 0;
       const renderProfile = getCesiumRenderProfile();
 
       try {
+        setMapLoadStage("loading");
         // React StrictMode remounts effects; clear leftover Cesium DOM first.
         container.replaceChildren();
 
@@ -621,6 +628,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
 
         viewerRef.current = viewer;
         const mapViewer = viewer;
+        setMapLoadStage("terrain");
 
         const groundTint = Color.fromCssColorString("#c5d4c4");
         mapViewer.scene.backgroundColor = Color.fromCssColorString("#9ec6e0");
@@ -677,6 +685,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
           if (queuedTileCount === 0) {
             setIsMapReady(true);
+            setMapLoadStage(renderProfile.loadBuildings ? "buildings" : "ready");
             // 地形詳細が揃った時点で施設高度を再評価し、地中への埋没を防ぐ。
             for (const placement of placementsRef.current) {
               applyPlacementHeading(
@@ -695,9 +704,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             if (disposed || mapViewer.isDestroyed()) {
               return;
             }
+            if (!renderProfile.loadBuildings) {
+              setMapLoadStage("ready");
+            }
             return sampleOverflowBankElevations(mapViewer);
           })
           .catch((error: unknown) => {
+            setMapLoadStage("degraded");
             console.warn("Terrain failed to load", error);
           });
 
@@ -708,9 +721,11 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             (tileset) => {
               buildingTilesetRef.current = tileset;
               tileset.show = !document.hidden;
+              setMapLoadStage("ready");
             },
             renderProfile.buildingMaximumScreenSpaceError,
           ).catch((error: unknown) => {
+            setMapLoadStage("degraded");
             console.warn("PLATEAU buildings failed to load", error);
           });
         }
@@ -750,6 +765,21 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           if (disposed || mapViewer.isDestroyed()) {
             waterRenderFrame = 0;
             return;
+          }
+          const frameNow = performance.now();
+          const frameDelta = frameNow - lastFrameAt;
+          lastFrameAt = frameNow;
+          if (frameDelta > 0 && frameDelta < 1_000) {
+            frameSampleTotal += frameDelta;
+            frameSampleCount += 1;
+            if (frameNow - frameSampleStartedAt >= 1_000) {
+              if (import.meta.env.DEV && frameSampleCount > 0) {
+                setFrameTimeMs(Math.round((frameSampleTotal / frameSampleCount) * 10) / 10);
+              }
+              frameSampleStartedAt = frameNow;
+              frameSampleTotal = 0;
+              frameSampleCount = 0;
+            }
           }
           const shouldAnimate = !document.hidden && mapActiveRef.current;
           if (shouldAnimate) {
@@ -958,14 +988,24 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             try {
               addCivilEngineeringModel(mapViewer, placement, true, true, { invalid });
             } catch (error) {
-              console.error("Failed to live-update pending placement", placement.structureId, error);
+              console.error(
+                "Failed to live-update pending placement",
+                placement.structureId,
+                error,
+              );
               addFallbackStructureMarker(mapViewer, placement, true, true, { invalid });
             }
-          } else if (!updateCivilEngineeringModelPose(mapViewer, placement, { showHeadingCue: true })) {
+          } else if (
+            !updateCivilEngineeringModelPose(mapViewer, placement, { showHeadingCue: true })
+          ) {
             try {
               addCivilEngineeringModel(mapViewer, placement, true, true, { invalid });
             } catch (error) {
-              console.error("Failed to recover pending placement model", placement.structureId, error);
+              console.error(
+                "Failed to recover pending placement model",
+                placement.structureId,
+                error,
+              );
               addFallbackStructureMarker(mapViewer, placement, true, true, { invalid });
             }
           }
@@ -1094,6 +1134,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           }
         }, 1_500);
       } catch (error) {
+        setMapLoadStage("degraded");
         const message = error instanceof Error ? error.message : "地図の初期化に失敗しました";
         setMapError(message);
       }
@@ -1219,6 +1260,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       // 旧・無関係な固定浸水ゾーンは使わない（決壊地点からの浸水のみ）。
       clearLegacyFloodZones(viewer);
       viewer.scene.requestRender();
+      // floodState is intentionally split into the scalar/collection fields below;
+      // depending on the aggregate snapshot would rebuild the Cesium overlay on every tick.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [
       mapActive,
       floodState?.active,
@@ -1479,9 +1523,15 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             </div>
           </>
         ) : null}
-        {!isMapReady && mapError === null ? (
+        {mapError === null && mapLoadStage !== "ready" ? (
           <div className="cesium-game-map__status" role="status">
-            地図を読み込み中…
+            <strong>{mapLoadStageLabel(mapLoadStage)}</strong>
+            <span>{mapLoadStageDetail(mapLoadStage, getCesiumRenderProfile().loadBuildings)}</span>
+          </div>
+        ) : null}
+        {mapError === null && import.meta.env.DEV && frameTimeMs !== null ? (
+          <div className="cesium-game-map__telemetry" role="status" aria-label="描画フレーム時間">
+            {frameTimeMs.toFixed(1)} ms / frame
           </div>
         ) : null}
         {mapError !== null ? (
@@ -1499,6 +1549,38 @@ type ScreenLabelAnchor = {
   screen: Cartesian2 | undefined;
   selected: boolean;
 };
+
+function mapLoadStageLabel(stage: MapLoadStage): string {
+  switch (stage) {
+    case "loading":
+      return "地図を準備中…";
+    case "terrain":
+      return "地形を読み込み中…";
+    case "buildings":
+      return "街の3Dモデルを読み込み中…";
+    case "degraded":
+      return "簡易表示で起動しました";
+    case "ready":
+      return "地図の準備が完了しました";
+  }
+}
+
+function mapLoadStageDetail(stage: MapLoadStage, loadsBuildings: boolean): string {
+  switch (stage) {
+    case "loading":
+      return "航空写真と地形を準備しています";
+    case "terrain":
+      return loadsBuildings
+        ? "地形のあとに街の3Dモデルを読み込みます"
+        : "航空写真の詳細を整えています";
+    case "buildings":
+      return "操作はできます。詳細モデルを追加しています";
+    case "degraded":
+      return "ネットワーク状況を確認してください";
+    case "ready":
+      return "配置対象を確認できます";
+  }
+}
 
 function applyDeclutteredScreenLabelPositions(anchors: ScreenLabelAnchor[]): void {
   const visible = anchors
@@ -1634,8 +1716,7 @@ function estimateDockClearancePx(): number {
   if (typeof document === "undefined") {
     return 120;
   }
-  const dock =
-    document.querySelector(".cmd-dock") ?? document.querySelector(".construction-menu");
+  const dock = document.querySelector(".cmd-dock") ?? document.querySelector(".construction-menu");
   if (!(dock instanceof HTMLElement) || dock.offsetParent === null) {
     return 120;
   }
@@ -1942,10 +2023,7 @@ function gentlyConstrainCameraFocusNearRiver(
     return undefined;
   }
 
-  const excessRatio = Math.min(
-    1,
-    excessDistance / Math.max(nearest.distanceMeters, 1),
-  );
+  const excessRatio = Math.min(1, excessDistance / Math.max(nearest.distanceMeters, 1));
   const ratio = CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M / nearest.distanceMeters;
   const nextLongitude = nearest.longitude + (longitude - nearest.longitude) * ratio;
   const nextLatitude = nearest.latitude + (latitude - nearest.latitude) * ratio;
@@ -2260,11 +2338,7 @@ function clearDragGhostEntities(viewer: Viewer | null): void {
   }
 }
 
-function syncDragGhostModel(
-  viewer: Viewer,
-  placement: PlacedStructure,
-  invalid: boolean,
-): void {
+function syncDragGhostModel(viewer: Viewer, placement: PlacedStructure, invalid: boolean): void {
   clearDragGhostEntities(viewer);
   try {
     addCivilEngineeringModel(viewer, placement, true, true, {
@@ -2338,12 +2412,14 @@ function updateCivilEngineeringModelPose(
   if (partEntities.some((entity) => entity === undefined)) {
     return false;
   }
-  const headingEntity = options.showHeadingCue ?? true
-    ? viewer.entities.getById(`${prefix}-${placement.id}-heading`)
-    : undefined;
-  const headingTipEntity = options.showHeadingCue ?? true
-    ? viewer.entities.getById(`${prefix}-${placement.id}-heading-tip`)
-    : undefined;
+  const headingEntity =
+    (options.showHeadingCue ?? true)
+      ? viewer.entities.getById(`${prefix}-${placement.id}-heading`)
+      : undefined;
+  const headingTipEntity =
+    (options.showHeadingCue ?? true)
+      ? viewer.entities.getById(`${prefix}-${placement.id}-heading-tip`)
+      : undefined;
   if (
     (options.showHeadingCue ?? true) &&
     (headingEntity?.polyline === undefined || headingTipEntity === undefined)

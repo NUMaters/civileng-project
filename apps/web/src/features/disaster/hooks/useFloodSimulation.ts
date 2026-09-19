@@ -20,7 +20,7 @@ const MAX_CATCH_UP_SECONDS = 0.5;
 
 export type UseFloodSimulationResult = FloodSimulationState & {
   startGame: () => void;
-  startRainNow: () => void;
+  startRainNow: (weatherSeed?: number) => void;
   restart: () => void;
   enterReviewMode: () => void;
   reopenResultPanel: () => void;
@@ -113,11 +113,14 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
     setState(next);
   }, []);
 
-  const startRainNow = useCallback(() => {
+  const startRainNow = useCallback((weatherSeed?: number) => {
     setState((current) => {
       // rAF が進めた最新状態から災害へ移す（間引き表示の遅れを持ち込まない）。
       const base = stateRef.current.phase === current.phase ? stateRef.current : current;
-      const next = refreshPlacementEffects(beginDisaster(base), placementsRef.current);
+      const next = refreshPlacementEffects(
+        beginDisaster(base, weatherSeed === undefined ? undefined : { weatherSeed }),
+        placementsRef.current,
+      );
       stateRef.current = next;
       return next;
     });

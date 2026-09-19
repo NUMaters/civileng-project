@@ -9,11 +9,8 @@ import { CommandStatusPanel } from "./features/hud/CommandStatusPanel";
 import { HudLegend } from "./features/hud/HudLegend";
 import { HudMinimap } from "./features/hud/HudMinimap";
 import { MobileHudPanel } from "./features/hud/MobileHudPanel";
-import {
-  hasSeenTutorial,
-  markTutorialDone,
-  TutorialCoachmark,
-} from "./features/hud/TutorialCoachmark";
+import { TutorialCoachmark } from "./features/hud/TutorialCoachmark";
+import { hasSeenTutorial, markTutorialDone } from "./features/hud/tutorialStorage";
 import "./command-hud.css";
 import {
   FloodHud,
@@ -69,16 +66,26 @@ type GameplayAppProps = {
 };
 
 /** 本編（地図・配置・洪水）。タイトル／メニューからは遅延読込する。 */
-export function GameplayApp({
-  playMode,
-  inGame,
-  sessionId,
-  onReturnToMenu,
-}: GameplayAppProps) {
+export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: GameplayAppProps) {
   const construction = useConstruction();
+  const {
+    budget,
+    beginPendingPlacement,
+    cancelPendingPlacement,
+    confirmPendingPlacement,
+    pendingPlacement,
+    placeConfirmedForTest,
+    placements,
+    resetSession,
+    setBudgetForTest,
+    setEconomyPhase,
+    setMessage,
+    structures,
+  } = construction;
   // 仮配置（preview）も含め、設置調整中から影響圏を地図に出す。
   // 数値の治水効果は floodSimulation 側で preview を除外する。
   const flood = useFloodSimulation(construction.visiblePlacements);
+  const { advanceForTest, getLatestState, phase, restart, startFreshGame, startRainNow } = flood;
   const socket = useGameSocket(REALTIME_ENABLED && playMode === "multi");
   const mapRef = useRef<CesiumGameMapHandle>(null);
   const dragRef = useRef<DockDragState | null>(null);
@@ -91,13 +98,13 @@ export function GameplayApp({
     if (!inGame) {
       return;
     }
-    construction.setEconomyPhase(flood.phase);
-  }, [inGame, flood.phase, construction.setEconomyPhase]);
+    setEconomyPhase(phase);
+  }, [inGame, phase, setEconomyPhase]);
 
   useEffect(() => {
-    construction.resetSession();
-    flood.startFreshGame();
-  }, [sessionId, construction.resetSession, flood.startFreshGame]);
+    resetSession();
+    startFreshGame();
+  }, [sessionId, resetSession, startFreshGame]);
 
   // 開発時のみ E2E から配置・状況取得できるようにする。
   useEffect(() => {
@@ -106,39 +113,30 @@ export function GameplayApp({
     }
     const api = {
       inGame: () => inGame,
-      getFlood: () => flood.getLatestState(),
-      startRain: () => {
-        flood.startRainNow();
+      getFlood: () => getLatestState(),
+      startRain: (weatherSeed?: number) => {
+        startRainNow(weatherSeed);
       },
-      advance: (seconds: number) => flood.advanceForTest(seconds),
+      advance: (seconds: number) => advanceForTest(seconds),
       setBudget: (amount: number) => {
-        construction.setBudgetForTest(amount);
+        setBudgetForTest(amount);
       },
-      place: (
-        structureId: string,
-        longitude: number,
-        latitude: number,
-        headingDegrees: number,
-      ) =>
-        construction.placeConfirmedForTest(
-          structureId,
-          { longitude, latitude, height: 20 },
-          headingDegrees,
-        ),
-      placementCount: () => construction.placements.length,
+      place: (structureId: string, longitude: number, latitude: number, headingDegrees: number) =>
+        placeConfirmedForTest(structureId, { longitude, latitude, height: 20 }, headingDegrees),
+      placementCount: () => placements.length,
     };
     (window as Window & { __civilcraftE2E?: typeof api }).__civilcraftE2E = api;
     return () => {
       delete (window as Window & { __civilcraftE2E?: typeof api }).__civilcraftE2E;
     };
   }, [
-    construction.placeConfirmedForTest,
-    construction.placements.length,
-    construction.setBudgetForTest,
-    flood.advanceForTest,
-    flood.getLatestState,
-    flood.startRainNow,
+    advanceForTest,
+    getLatestState,
     inGame,
+    placeConfirmedForTest,
+    placements.length,
+    setBudgetForTest,
+    startRainNow,
   ]);
 
   const beginDockDrag = useCallback(
@@ -150,12 +148,12 @@ export function GameplayApp({
       y: number,
       pointerId: number,
     ) => {
-      const structure = construction.structures.find(({ id }) => id === structureId);
+      const structure = structures.find(({ id }) => id === structureId);
       if (structure === undefined) {
         return;
       }
-      if (construction.budget < structure.constructionCost) {
-        construction.setMessage("予算不足");
+      if (budget < structure.constructionCost) {
+        setMessage("予算不足");
         return;
       }
       const moved = Math.hypot(x - startX, y - startY);
@@ -177,30 +175,30 @@ export function GameplayApp({
       dragRef.current = next;
       setDrag(next);
     },
-    [construction],
+    [budget, setMessage, structures],
   );
 
   const handleDropPlace = useCallback(
     (structureId: string, position: GeoPosition, headingDegrees: number) => {
-      const pending = construction.beginPendingPlacement(structureId, position, headingDegrees);
+      const pending = beginPendingPlacement(structureId, position, headingDegrees);
       if (pending !== null) {
-        construction.setMessage("仮配置しました。位置と向きを調整して確定してください。", "info");
+        setMessage("仮配置しました。位置と向きを調整して確定してください。", "info");
       }
     },
-    [construction],
+    [beginPendingPlacement, setMessage],
   );
 
   const handleKeyboardPlace = useCallback(
     (structureId: string) => {
       if (mapRef.current?.placeStructureAtDefault(structureId) !== true) {
-        construction.setMessage("地図を準備中です", "info");
+        setMessage("地図を準備中です", "info");
       }
     },
-    [construction.setMessage],
+    [setMessage],
   );
 
   const handleConfirmPlacement = useCallback(() => {
-    const placement = construction.confirmPendingPlacement();
+    const placement = confirmPendingPlacement();
     if (placement === null) {
       return;
     }
@@ -212,16 +210,16 @@ export function GameplayApp({
       headingDegrees: placement.headingDegrees,
       clientPlacementId: placement.id,
     });
-  }, [construction.confirmPendingPlacement, socket]);
+  }, [confirmPendingPlacement, socket]);
 
   useEffect(() => {
-    if (!inGame || construction.pendingPlacement === null) {
+    if (!inGame || pendingPlacement === null) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
-        construction.cancelPendingPlacement();
+        cancelPendingPlacement();
         return;
       }
       if (event.key === "Enter") {
@@ -231,12 +229,7 @@ export function GameplayApp({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [
-    inGame,
-    construction.cancelPendingPlacement,
-    construction.pendingPlacement,
-    handleConfirmPlacement,
-  ]);
+  }, [inGame, cancelPendingPlacement, pendingPlacement, handleConfirmPlacement]);
 
   const handleCameraFocusChange = useCallback(
     (position: GeoPosition) => {
@@ -251,15 +244,15 @@ export function GameplayApp({
   );
 
   const handleReturnToMenu = useCallback(() => {
-    construction.resetSession();
-    flood.restart();
+    resetSession();
+    restart();
     onReturnToMenu();
-  }, [construction.resetSession, flood.restart, onReturnToMenu]);
+  }, [onReturnToMenu, resetSession, restart]);
 
   const isDockDragging = drag !== null;
-  const isReviewing = flood.phase === "review";
-  const hideConstructionUi = !inGame || flood.phase === "result" || isReviewing;
-  const hasPendingPlacement = construction.pendingPlacement !== null;
+  const isReviewing = phase === "review";
+  const hideConstructionUi = !inGame || phase === "result" || isReviewing;
+  const hasPendingPlacement = pendingPlacement !== null;
 
   useEffect(() => {
     if (!inGame || !isDockDragging) {
@@ -275,11 +268,7 @@ export function GameplayApp({
       const moved = Math.hypot(event.clientX - current.startX, event.clientY - current.startY);
       const ghost =
         moved >= DOCK_DRAG_GHOST_THRESHOLD_PX
-          ? mapRef.current?.updateDragGhost(
-              current.structureId,
-              event.clientX,
-              event.clientY,
-            )
+          ? mapRef.current?.updateDragGhost(current.structureId, event.clientX, event.clientY)
           : undefined;
       const next: DockDragState = {
         ...current,
@@ -338,175 +327,189 @@ export function GameplayApp({
       className={`game-shell${drag !== null ? " is-dock-dragging" : ""}${hasPendingPlacement ? " is-pending-placement" : ""}${isReviewing ? " is-reviewing" : ""}${inGame ? "" : " is-dormant"}`}
       aria-hidden={!inGame}
     >
-          <div className="game-shell__veil game-shell__veil--top" aria-hidden="true" />
-          <div className="game-shell__veil game-shell__veil--bottom" aria-hidden="true" />
+      <div className="game-shell__veil game-shell__veil--top" aria-hidden="true" />
+      <div className="game-shell__veil game-shell__veil--bottom" aria-hidden="true" />
 
-          <RainOverlay
-            active={
-              inGame &&
-              (flood.phase === "disaster" ||
-                flood.phase === "result" ||
-                flood.phase === "review")
-            }
-            getLatestState={flood.getLatestState}
+      <RainOverlay
+        active={
+          inGame &&
+          (flood.phase === "disaster" || flood.phase === "result" || flood.phase === "review")
+        }
+        getLatestState={flood.getLatestState}
+      />
+
+      <Suspense fallback={<MapBootFallback />}>
+        <CesiumGameMap
+          ref={mapRef}
+          mapActive={inGame}
+          placements={construction.visiblePlacements}
+          structures={construction.structures}
+          selectedPlacementId={construction.selectedPlacementId}
+          onDropPlace={handleDropPlace}
+          onRotatePlacement={construction.rotatePlacement}
+          onMovePendingPlacement={construction.movePendingPlacement}
+          onSelectPlacement={construction.setSelectedPlacementId}
+          onInvalidPosition={construction.setMessage}
+          onConfirmPendingPlacement={handleConfirmPlacement}
+          onCancelPendingPlacement={construction.cancelPendingPlacement}
+          onCameraFocusChange={handleCameraFocusChange}
+          freeCameraLook={isReviewing}
+          floodState={{
+            active:
+              flood.phase === "disaster" || flood.phase === "result" || flood.phase === "review",
+            phase: flood.phase,
+            rainfallIntensity: flood.rainfallIntensity,
+            riverLevelMeters: flood.riverLevelMeters,
+            overflowMeters: flood.overflowMeters,
+            floodDepthMeters: flood.floodDepthMeters,
+            floodedAreaPercent: flood.floodedAreaPercent,
+            floodplainFillRatio: flood.floodplainFillRatio,
+            floodplainHalfWidthMeters: flood.floodplainHalfWidthMeters,
+            overflowLevelMeters: flood.overflowLevelMeters,
+            overflowSites: flood.overflowSites,
+            protectedBankSites: flood.protectedBankSites,
+            structureInfluences: flood.structureInfluences,
+            mitigationCalm: Math.min(
+              1,
+              flood.mitigation.overflowPrevention * 0.65 +
+                flood.mitigation.waterLevelReduction * 0.5 +
+                flood.mitigation.channelCapacityIncrease * 0.2,
+            ),
+          }}
+          getLatestFloodState={flood.getLatestState}
+        />
+      </Suspense>
+
+      {inGame && !hideConstructionUi ? (
+        <div className="hud-frame" aria-hidden={false}>
+          <FloodHud
+            phase={flood.phase}
+            phaseRemainingSeconds={flood.phaseRemainingSeconds}
+            rainfallIntensity={flood.rainfallIntensity}
+            riverLevelMeters={flood.riverLevelMeters}
+            overflowMeters={flood.overflowMeters}
+            floodDepthMeters={flood.floodDepthMeters}
+            damagePercent={flood.damagePercent}
+            overflowSites={flood.overflowSites}
+            floodedAreaPercent={flood.floodedAreaPercent}
+            mitigation={flood.mitigation}
+            onStartGame={flood.startGame}
+            onStartRainNow={flood.startRainNow}
+            onExit={handleReturnToMenu}
           />
 
-          <Suspense fallback={<MapBootFallback />}>
-            <CesiumGameMap
-              ref={mapRef}
-              mapActive={inGame}
-              placements={construction.visiblePlacements}
-              structures={construction.structures}
-              selectedPlacementId={construction.selectedPlacementId}
-              onDropPlace={handleDropPlace}
-              onRotatePlacement={construction.rotatePlacement}
-              onMovePendingPlacement={construction.movePendingPlacement}
-              onSelectPlacement={construction.setSelectedPlacementId}
-              onInvalidPosition={construction.setMessage}
-              onConfirmPendingPlacement={handleConfirmPlacement}
-              onCancelPendingPlacement={construction.cancelPendingPlacement}
-              onCameraFocusChange={handleCameraFocusChange}
-              freeCameraLook={isReviewing}
-              floodState={{
-                active:
-                  flood.phase === "disaster" ||
-                  flood.phase === "result" ||
-                  flood.phase === "review",
-                phase: flood.phase,
-                rainfallIntensity: flood.rainfallIntensity,
-                riverLevelMeters: flood.riverLevelMeters,
-                overflowMeters: flood.overflowMeters,
-                floodDepthMeters: flood.floodDepthMeters,
-                floodedAreaPercent: flood.floodedAreaPercent,
-                floodplainFillRatio: flood.floodplainFillRatio,
-                floodplainHalfWidthMeters: flood.floodplainHalfWidthMeters,
-                overflowLevelMeters: flood.overflowLevelMeters,
-                overflowSites: flood.overflowSites,
-                protectedBankSites: flood.protectedBankSites,
-                structureInfluences: flood.structureInfluences,
-                mitigationCalm: Math.min(
-                  1,
-                  flood.mitigation.overflowPrevention * 0.65 +
-                    flood.mitigation.waterLevelReduction * 0.5 +
-                    flood.mitigation.channelCapacityIncrease * 0.2,
-                ),
-              }}
-              getLatestFloodState={flood.getLatestState}
-            />
-          </Suspense>
+          <CommandStatusPanel
+            budget={construction.budget}
+            budgetRatio={construction.budgetRatio}
+            incomeLabel={construction.incomeLabel}
+            netIncomePerSecond={construction.netIncomePerSecond}
+            damagePercent={flood.damagePercent}
+            mitigation={flood.mitigation}
+            socketStatus={playMode === "multi" ? socket.status : undefined}
+            socketLabel={playMode === "multi" ? statusLabel[socket.status] : undefined}
+          />
 
-          {inGame && !hideConstructionUi ? (
-            <div className="hud-frame" aria-hidden={false}>
-              <FloodHud
-                phase={flood.phase}
-                phaseRemainingSeconds={flood.phaseRemainingSeconds}
-                rainfallIntensity={flood.rainfallIntensity}
-                riverLevelMeters={flood.riverLevelMeters}
-                overflowMeters={flood.overflowMeters}
-                floodDepthMeters={flood.floodDepthMeters}
-                damagePercent={flood.damagePercent}
-                overflowSites={flood.overflowSites}
-                floodedAreaPercent={flood.floodedAreaPercent}
-                mitigation={flood.mitigation}
-                onStartGame={flood.startGame}
-                onStartRainNow={flood.startRainNow}
-                onExit={handleReturnToMenu}
-              />
-
-              <CommandStatusPanel
-                budget={construction.budget}
-                budgetRatio={construction.budgetRatio}
-                incomeLabel={construction.incomeLabel}
-                netIncomePerSecond={construction.netIncomePerSecond}
-                damagePercent={flood.damagePercent}
-                mitigation={flood.mitigation}
-                socketStatus={playMode === "multi" ? socket.status : undefined}
-                socketLabel={playMode === "multi" ? statusLabel[socket.status] : undefined}
-              />
-
-              <div className="hud-frame__desktop">
-                <HudLegend phase={flood.phase} />
-                <HudMinimap
-                  damagePercent={flood.damagePercent}
-                  overflowSiteCount={flood.overflowSites.length}
-                />
-              </div>
-
-              <MobileHudPanel
-                phase={flood.phase}
-                damagePercent={flood.damagePercent}
-                overflowSiteCount={flood.overflowSites.length}
-              />
-            </div>
-          ) : null}
-
-          {inGame && showTutorial && !hideConstructionUi ? (
-            <TutorialCoachmark
-              phase={flood.phase}
-              hasPlacement={construction.placements.length > 0}
-              hasPendingPlacement={hasPendingPlacement}
-              onDismiss={() => {
-                markTutorialDone();
-                setShowTutorial(false);
-              }}
-            />
-          ) : null}
-
-          {inGame && !hideConstructionUi ? (
-            <GameToast message={construction.message} tone={construction.messageTone} />
-          ) : null}
-
-          {inGame && !hideConstructionUi ? (
-            <ConstructionMenu
-              budget={construction.budget}
-              selectedStructureId={construction.selectedStructureId}
-              structures={construction.structures}
-              onSelect={construction.selectStructure}
-              onKeyboardPlace={handleKeyboardPlace}
-              onDragStart={beginDockDrag}
-            />
-          ) : null}
-
-          {inGame && drag !== null && !drag.overMap ? (
-            <div
-              ref={dragGhostRef}
-              className="dock-drag-ghost dock-drag-ghost--lift"
-              style={{ left: drag.x, top: drag.y }}
-              aria-hidden="true"
-            >
-              <span className="dock-drag-ghost__hint">川へドロップ</span>
-              <span>{drag.displayName}</span>
-            </div>
-          ) : null}
-
-          {inGame ? (
-            <FloodResultPanel
-              phase={flood.phase}
-              isClear={flood.isClear}
+          <div className="hud-frame__desktop">
+            <HudLegend phase={flood.phase} />
+            <HudMinimap
               damagePercent={flood.damagePercent}
-              score={flood.score}
-              placementCount={construction.placements.length}
-              onEnterReview={flood.enterReviewMode}
-              onStartNewGame={handleReturnToMenu}
+              overflowSiteCount={flood.overflowSites.length}
             />
-          ) : null}
+          </div>
 
-          {inGame && isReviewing ? (
-            <>
-              <div className="review-mode-legend" role="region" aria-label="マップ凡例">
-                <strong>マップ凡例</strong>
-                <span><i className="review-mode-legend__swatch review-mode-legend__swatch--flood" aria-hidden="true" />浸水・被災範囲</span>
-                <span><i className="review-mode-legend__swatch review-mode-legend__swatch--influence" aria-hidden="true" />施設の影響圏</span>
-                <span><i className="review-mode-legend__swatch review-mode-legend__swatch--risk" aria-hidden="true" />決壊・注意地点</span>
-              </div>
-              <ReviewModeBar
-                isClear={flood.isClear}
-                score={flood.score}
-                onShowResult={flood.reopenResultPanel}
-                onStartNewGame={handleReturnToMenu}
+          <MobileHudPanel
+            phase={flood.phase}
+            damagePercent={flood.damagePercent}
+            overflowSiteCount={flood.overflowSites.length}
+          />
+        </div>
+      ) : null}
+
+      {inGame && showTutorial && !hideConstructionUi ? (
+        <TutorialCoachmark
+          phase={flood.phase}
+          hasPlacement={construction.placements.length > 0}
+          hasPendingPlacement={hasPendingPlacement}
+          onDismiss={() => {
+            markTutorialDone();
+            setShowTutorial(false);
+          }}
+        />
+      ) : null}
+
+      {inGame && !hideConstructionUi ? (
+        <GameToast message={construction.message} tone={construction.messageTone} />
+      ) : null}
+
+      {inGame && !hideConstructionUi ? (
+        <ConstructionMenu
+          budget={construction.budget}
+          selectedStructureId={construction.selectedStructureId}
+          structures={construction.structures}
+          onSelect={construction.selectStructure}
+          onKeyboardPlace={handleKeyboardPlace}
+          onDragStart={beginDockDrag}
+        />
+      ) : null}
+
+      {inGame && drag !== null && !drag.overMap ? (
+        <div
+          ref={dragGhostRef}
+          className="dock-drag-ghost dock-drag-ghost--lift"
+          style={{ left: drag.x, top: drag.y }}
+          aria-hidden="true"
+        >
+          <span className="dock-drag-ghost__hint">川へドロップ</span>
+          <span>{drag.displayName}</span>
+        </div>
+      ) : null}
+
+      {inGame ? (
+        <FloodResultPanel
+          phase={flood.phase}
+          isClear={flood.isClear}
+          damagePercent={flood.damagePercent}
+          score={flood.score}
+          placementCount={construction.placements.length}
+          onEnterReview={flood.enterReviewMode}
+          onStartNewGame={handleReturnToMenu}
+        />
+      ) : null}
+
+      {inGame && isReviewing ? (
+        <>
+          <div className="review-mode-legend" role="region" aria-label="マップ凡例">
+            <strong>マップ凡例</strong>
+            <span>
+              <i
+                className="review-mode-legend__swatch review-mode-legend__swatch--flood"
+                aria-hidden="true"
               />
-            </>
-          ) : null}
-        </main>
+              浸水・被災範囲
+            </span>
+            <span>
+              <i
+                className="review-mode-legend__swatch review-mode-legend__swatch--influence"
+                aria-hidden="true"
+              />
+              施設の影響圏
+            </span>
+            <span>
+              <i
+                className="review-mode-legend__swatch review-mode-legend__swatch--risk"
+                aria-hidden="true"
+              />
+              決壊・注意地点
+            </span>
+          </div>
+          <ReviewModeBar
+            isClear={flood.isClear}
+            score={flood.score}
+            onShowResult={flood.reopenResultPanel}
+            onStartNewGame={handleReturnToMenu}
+          />
+        </>
+      ) : null}
+    </main>
   );
 }
