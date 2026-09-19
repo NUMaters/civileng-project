@@ -1,10 +1,10 @@
 import { useEffect, useRef } from "react";
 import {
+  hazardChipLabel,
   HOWTO_FACILITIES,
   HOWTO_PURPOSE,
   HOWTO_STEPS,
 } from "./howtoContent";
-import { HowToFacilityCard, useHowToFacilityAccordion } from "./HowToFacilityCard";
 
 type HowToPlayModalProps = {
   titleId: string;
@@ -15,9 +15,6 @@ type HowToPlayModalProps = {
  * 目的・操作・各施設の役割／仕組み／現実の用い方を端的に伝える。
  */
 export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
-  const { openFacilityId, toggleFacility } = useHowToFacilityAccordion(
-    HOWTO_FACILITIES.map((facility) => facility.id),
-  );
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,8 +28,6 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
               "button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])",
             ),
           );
-
-    // Move focus into the dialog and keep keyboard navigation inside it.
     getFocusable()[0]?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
@@ -40,9 +35,7 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
         onClose();
         return;
       }
-      if (event.key !== "Tab") {
-        return;
-      }
+      if (event.key !== "Tab") return;
       const focusable = getFocusable();
       if (focusable.length === 0) {
         event.preventDefault();
@@ -50,9 +43,10 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
       }
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const outside = !panel?.contains(document.activeElement);
+      if (outside || (event.shiftKey && document.activeElement === first)) {
         event.preventDefault();
-        last.focus();
+        (event.shiftKey ? last : first).focus();
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault();
         first.focus();
@@ -61,9 +55,7 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      if (previouslyFocused instanceof HTMLElement) {
-        previouslyFocused.focus();
-      }
+      if (previouslyFocused instanceof HTMLElement) previouslyFocused.focus();
     };
   }, [onClose]);
 
@@ -112,12 +104,39 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
             </p>
             <ul className="howto-modal__facilities">
               {HOWTO_FACILITIES.map((facility) => (
-                <HowToFacilityCard
-                  key={facility.id}
-                  facility={facility}
-                  open={openFacilityId === facility.id}
-                  onToggle={() => toggleFacility(facility.id)}
-                />
+                <li key={facility.id} className="howto-facility">
+                  <div className="howto-facility__head">
+                    <img
+                      className="howto-facility__icon"
+                      src={facility.iconSrc}
+                      alt=""
+                      width={48}
+                      height={48}
+                      decoding="async"
+                    />
+                    <div className="howto-facility__titles">
+                      <strong>{facility.displayName}</strong>
+                      <span className="howto-facility__chip">
+                        {hazardChipLabel(facility.primaryHazard)}
+                      </span>
+                    </div>
+                  </div>
+                  <dl className="howto-facility__meta">
+                    <div>
+                      <dt>役割</dt>
+                      <dd>{facility.role}</dd>
+                    </div>
+                    <div>
+                      <dt>仕組み</dt>
+                      <dd>{facility.mechanism}</dd>
+                    </div>
+                    <div>
+                      <dt>現実では</dt>
+                      <dd>{facility.realWorld}</dd>
+                    </div>
+                  </dl>
+                  <p className="howto-facility__tip">{facility.tip}</p>
+                </li>
               ))}
             </ul>
           </section>
