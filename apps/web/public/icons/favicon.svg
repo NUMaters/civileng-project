@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="CivilCraft">
+  <rect width="64" height="64" rx="16" fill="#0a2f24"/>
+  <path d="M8 39c11-12 19-12 29 0s18 12 19-1" fill="none" stroke="#7ed4ff" stroke-width="7" stroke-linecap="round"/>
+  <path d="M12 27h40" stroke="#f0b429" stroke-width="6" stroke-linecap="round"/>
+</svg>
