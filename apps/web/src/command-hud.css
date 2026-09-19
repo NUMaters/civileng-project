@@ -861,6 +861,53 @@
   display: none;
 }
 
+/* 配置中はモデル確認を優先し、施設カードだけを薄く残す。 */
+.game-shell.is-pending-placement .cmd-dock {
+  bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.game-shell.is-pending-placement .cmd-dock__bar {
+  width: min(620px, calc(100% - 28px));
+  padding: 6px 8px 8px;
+  background: rgb(7 16 26 / 78%);
+}
+
+.game-shell.is-pending-placement .cmd-dock__label {
+  margin-bottom: 3px;
+}
+
+.game-shell.is-pending-placement .cmd-dock__list {
+  gap: 7px;
+  padding: 2px 0 3px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card {
+  min-width: 84px;
+  max-width: 92px;
+  gap: 3px;
+  padding: 5px 5px 4px;
+  border-radius: 11px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__image {
+  width: 34px;
+  height: 34px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__body strong {
+  font-size: 10px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__body small {
+  font-size: 9px;
+}
+
 /* —— Placement confirm bar —— */
 
 .placement-bar {
