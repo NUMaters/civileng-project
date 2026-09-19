@@ -99,6 +99,8 @@ const PLAY_AREA = {
  * 配置帯より広く取り、全体俯瞰しやすくしつつ「川が画面外」を防ぐ。
  */
 const CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M = 950;
+/** 境界付近の数mの揺れでは補正せず、カメラ変更イベントの往復を防ぐ。 */
+const CAMERA_FOCUS_SOFT_CLAMP_DEADBAND_M = 12;
 
 /** ズーム距離（地表〜カメラ）。俯瞰で区間全体が見えるよう上限を緩める。 */
 const CAMERA_MIN_ZOOM_DISTANCE_M = 180;
@@ -1934,14 +1936,14 @@ function gentlyConstrainCameraFocusNearRiver(
   const latitude = CesiumMath.toDegrees(cartographic.latitude);
   const nearest = nearestPointOnPolyline(longitude, latitude, ABUKUMA_RIVER_CENTERLINE);
 
-  if (nearest.distanceMeters <= CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M) {
+  const excessDistance = nearest.distanceMeters - CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M;
+  if (excessDistance <= CAMERA_FOCUS_SOFT_CLAMP_DEADBAND_M) {
     return undefined;
   }
 
   const excessRatio = Math.min(
     1,
-    (nearest.distanceMeters - CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M) /
-      Math.max(nearest.distanceMeters, 1),
+    excessDistance / Math.max(nearest.distanceMeters, 1),
   );
   const ratio = CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M / nearest.distanceMeters;
   const nextLongitude = nearest.longitude + (longitude - nearest.longitude) * ratio;
@@ -2286,6 +2288,9 @@ function updateCivilEngineeringModelPose(
   );
   const groundHeight = resolveGroundHeightMeters(viewer, placement);
   const baseId = `${prefix}-${placement.id}`;
+  // structureId／有効性／previewの見た目が変わる場合は呼び出し側が先に再生成する。
+  // ここでは同じモデル構成のEntityがすべて揃っている場合だけ姿勢を更新し、
+  // 欠落したEntityを別モデルの状態で使い回さない。
   const baseEntity = viewer.entities.getById(baseId);
   if (baseEntity === undefined) {
     return false;
