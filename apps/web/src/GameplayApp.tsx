@@ -397,6 +397,7 @@ export function GameplayApp({
                 mitigation={flood.mitigation}
                 onStartGame={flood.startGame}
                 onStartRainNow={flood.startRainNow}
+                onExit={handleReturnToMenu}
               />
 
               <CommandStatusPanel
