@@ -9,11 +9,7 @@ type MobileHudPanelProps = {
 };
 
 /** 狭幅端末向けの折りたたみ HUD（凡例＋リスク）。 */
-export function MobileHudPanel({
-  phase,
-  damagePercent,
-  overflowSiteCount,
-}: MobileHudPanelProps) {
+export function MobileHudPanel({ phase, damagePercent, overflowSiteCount }: MobileHudPanelProps) {
   const [open, setOpen] = useState(false);
 
   return (

@@ -14,9 +14,7 @@ export function resolveRainDrama(input: {
   }
   const rain = clamp01(input.rainfallIntensity);
   const crisis = clamp01(
-    input.overflowMeters / 1.15 +
-      input.floodDepthMeters / 1.4 +
-      input.damagePercent / 85,
+    input.overflowMeters / 1.15 + input.floodDepthMeters / 1.4 + input.damagePercent / 85,
   );
   // 平常の雨＋危機時の増幅。ピークでほぼ真っ黒な豪雨になる。
   return clamp01(rain * 0.5 + crisis * 0.55 + rain * crisis * 0.4);

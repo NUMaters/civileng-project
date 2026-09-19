@@ -3,8 +3,7 @@ type HudLegendProps = {
 };
 
 export function HudLegend({ phase }: HudLegendProps) {
-  const showFloodLegend =
-    phase === "disaster" || phase === "result" || phase === "review";
+  const showFloodLegend = phase === "disaster" || phase === "result" || phase === "review";
 
   return (
     <aside className="cmd-legend" aria-label="凡例と操作">

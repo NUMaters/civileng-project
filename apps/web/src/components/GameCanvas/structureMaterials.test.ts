@@ -2,13 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createStructureMaterial } from "./structureMaterials";
 import { getStructureModelParts } from "./structureModels";
 
-const IDS = [
-  "levee",
-  "retention-basin",
-  "drainage-pump",
-  "revetment",
-  "channel-dredging",
-] as const;
+const IDS = ["levee", "retention-basin", "drainage-pump", "revetment", "channel-dredging"] as const;
 
 describe("createStructureMaterial", () => {
   for (const id of IDS) {

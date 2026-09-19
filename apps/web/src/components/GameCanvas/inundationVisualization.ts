@@ -59,11 +59,7 @@ type FlowVisual = {
 };
 
 type InundationController = {
-  setTarget: (
-    sites: readonly OverflowSite[],
-    floodDepthMeters: number,
-    active: boolean,
-  ) => void;
+  setTarget: (sites: readonly OverflowSite[], floodDepthMeters: number, active: boolean) => void;
   destroy: () => void;
 };
 
@@ -160,7 +156,6 @@ function createInundationController(viewer: Viewer): InundationController {
         changed = true;
       }
     }
-
 
     if (now - lastFlowPositionAt >= FLOW_POSITION_UPDATE_INTERVAL_MS) {
       lastFlowPositionAt = now;
@@ -284,9 +279,7 @@ function createBandVisual(
       hierarchy: new CallbackProperty(() => visual.hierarchy, false),
       height: 0.06 + bandIndex * 0.04,
       heightReference: HeightReference.RELATIVE_TO_GROUND,
-      material: new ColorMaterialProperty(
-        new CallbackProperty(() => visual.color, false),
-      ),
+      material: new ColorMaterialProperty(new CallbackProperty(() => visual.color, false)),
       outline: false,
       perPositionHeight: false,
     },

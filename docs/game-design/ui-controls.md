@@ -57,8 +57,8 @@ MVP では **スマートフォンのタッチ操作**（地図のパン／ピ�
 
 ## 関連ドキュメント
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [session-flow.md](./session-flow.md) | ロビー → 準備 → 災害 → 結果の流れ |
-| [game-rules.md](./game-rules.md) | 予算・建設時間・マルチプレイルール |
-| [overview.md](./overview.md) | 対応環境・MVP |
+| ドキュメント                         | 内容                               |
+| ------------------------------------ | ---------------------------------- |
+| [session-flow.md](./session-flow.md) | ロビー → 準備 → 災害 → 結果の流れ  |
+| [game-rules.md](./game-rules.md)     | 予算・建設時間・マルチプレイルール |
+| [overview.md](./overview.md)         | 対応環境・MVP                      |

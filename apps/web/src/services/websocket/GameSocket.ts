@@ -15,7 +15,9 @@ export type GameSocketHandlers = {
   onStatus?: (status: SocketStatus) => void;
   onSessionState?: (payload: SessionStatePayload) => void;
   onPong?: (payload: SessionPongPayload) => void;
-  onStructurePlaced?: (payload: ConstructionPlacePayload & { id?: string; placedBy?: string }) => void;
+  onStructurePlaced?: (
+    payload: ConstructionPlacePayload & { id?: string; placedBy?: string },
+  ) => void;
   onMessage?: (envelope: ServerEnvelope) => void;
 };
 

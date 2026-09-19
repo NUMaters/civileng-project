@@ -5,12 +5,8 @@
   "constructionCost": 3800,
   "constructionTimeSeconds": 22,
   "maintenanceCostPerSecond": 3,
-  "allowedTerrains": [
-    "riverChannel"
-  ],
-  "supportedDisasters": [
-    "heavy-rain"
-  ],
+  "allowedTerrains": ["riverChannel"],
+  "supportedDisasters": ["heavy-rain"],
   "effects": {
     "waterLevelReduction": 0.14,
     "overflowPrevention": 0.08,
@@ -20,12 +16,8 @@
   },
   "role": {
     "primaryHazard": "capacityShortage",
-    "strengths": [
-      "水位を下げる"
-    ],
-    "weaknesses": [
-      "湾曲で侵食増"
-    ]
+    "strengths": ["水位を下げる"],
+    "weaknesses": ["湾曲で侵食増"]
   },
   "hazardAffinity": {
     "overtopping": 0.3,

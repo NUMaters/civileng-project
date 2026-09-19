@@ -18,17 +18,11 @@ export type {
   ProtectedBankSite,
   StructureInfluence,
 } from "./services/floodSimulation";
-export {
-  advanceInundationField,
-  resetInundationField,
-} from "./services/inundationField";
+export { advanceInundationField, resetInundationField } from "./services/inundationField";
 export type {
   InundationFieldSnapshot,
   InundationSeed,
   InundationSiteField,
 } from "./services/inundationField";
-export {
-  resolveInfluenceZone,
-  influenceStrengthAt,
-} from "./services/influenceZones";
+export { resolveInfluenceZone, influenceStrengthAt } from "./services/influenceZones";
 export type { InfluenceZone, InfluenceZoneGeometry } from "./services/influenceZones";

@@ -163,11 +163,10 @@ export async function createRiverWaterSurface(
     // 増水で澄んだ水色→濁った暗い青緑へ寄せ、平常時との差をはっきり出す。
     const muddy = clamp01(levelRatio * 0.85 + overflow * 0.55 + rain * 0.2);
 
-    waterMaterial.uniforms.animationSpeed =
-      profile.waterUseNormalMap
-        ? (0.016 + levelRatio * 0.032 + rain * 0.034 + overflow * 0.022 + activeFlood * 0.016) *
-          calmFactor
-        : 0;
+    waterMaterial.uniforms.animationSpeed = profile.waterUseNormalMap
+      ? (0.016 + levelRatio * 0.032 + rain * 0.034 + overflow * 0.022 + activeFlood * 0.016) *
+        calmFactor
+      : 0;
     if (profile.waterUseNormalMap) {
       waterMaterial.uniforms.amplitude =
         (2.4 + levelRatio * 3.6 + rain * 2.8 + overflow * 2.8) * calmFactor;
@@ -191,7 +190,11 @@ export async function createRiverWaterSurface(
     }
     flowPeriodSeconds = Math.max(
       2.8,
-      (BASE_FLOW_PERIOD_SECONDS - levelRatio * 4.2 - rain * 3 - overflow * 2.4 - activeFlood * 1.8) *
+      (BASE_FLOW_PERIOD_SECONDS -
+        levelRatio * 4.2 -
+        rain * 3 -
+        overflow * 2.4 -
+        activeFlood * 1.8) *
         (1 + calm * 0.45),
     );
 

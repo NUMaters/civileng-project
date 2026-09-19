@@ -463,10 +463,7 @@ function createStreakVisual(
       material: new PolylineGlowMaterialProperty({
         glowPower: 0.3,
         taperPower: 0.45,
-        color: new CallbackProperty(
-          () => visual.color,
-          false,
-        ),
+        color: new CallbackProperty(() => visual.color, false),
       }),
     },
   });

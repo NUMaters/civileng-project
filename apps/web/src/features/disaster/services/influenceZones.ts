@@ -149,12 +149,7 @@ export function influenceStrengthAt(
   longitude: number,
   latitude: number,
 ): number {
-  const { east, north } = metersOffset(
-    zone.longitude,
-    zone.latitude,
-    longitude,
-    latitude,
-  );
+  const { east, north } = metersOffset(zone.longitude, zone.latitude, longitude, latitude);
   const heading = toRadians(zone.headingDegrees);
   // 施設前方 = heading、右 = heading+90°
   const along = east * Math.sin(heading) + north * Math.cos(heading);
@@ -165,9 +160,7 @@ export function influenceStrengthAt(
       const halfLen = zone.lengthMeters / 2;
       const halfWid = zone.widthMeters / 2;
       const alongPenalty =
-        Math.abs(along) <= halfLen
-          ? 0
-          : (Math.abs(along) - halfLen) / Math.max(40, halfLen * 0.35);
+        Math.abs(along) <= halfLen ? 0 : (Math.abs(along) - halfLen) / Math.max(40, halfLen * 0.35);
       const lateralPenalty = Math.abs(lateral) / Math.max(12, halfWid);
       const score = Math.exp(-(alongPenalty * 1.1 + lateralPenalty * 1.35));
       return clamp(score, 0, 1);

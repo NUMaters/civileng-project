@@ -1,7 +1,4 @@
-import {
-  getHazardKindLabel,
-  type HazardKind,
-} from "@civilcraft/game-data/types";
+import { getHazardKindLabel, type HazardKind } from "@civilcraft/game-data/types";
 
 export type StructureTone = "amber" | "river" | "ember" | "slate" | "moss";
 

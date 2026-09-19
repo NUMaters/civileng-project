@@ -287,9 +287,7 @@ packages/game-data/npc/
   "scenarioId": "scenario-example",
   "areaId": "area-example",
   "enabled": true,
-  "displayName": [
-    { "text": "ユーザー承認後に設定" }
-  ],
+  "displayName": [{ "text": "ユーザー承認後に設定" }],
   "occupationLabel": [
     { "text": "長年", "reading": "ながねん" },
     { "text": "住んでいる" },
@@ -302,10 +300,10 @@ packages/game-data/npc/
   "interactionRadius": 0,
   "questionIds": ["question-001", "question-002", "question-003"],
   "fallbackResponseIds": {
-  "llmFailure": "fallback-npc-example-llm-failure",
-  "noEvidence": "fallback-npc-example-no-evidence",
-  "outOfScope": "fallback-npc-example-out-of-scope",
-  "inappropriate": "fallback-npc-example-inappropriate"
+    "llmFailure": "fallback-npc-example-llm-failure",
+    "noEvidence": "fallback-npc-example-no-evidence",
+    "outOfScope": "fallback-npc-example-out-of-scope",
+    "inappropriate": "fallback-npc-example-inappropriate"
   }
 }
 ```

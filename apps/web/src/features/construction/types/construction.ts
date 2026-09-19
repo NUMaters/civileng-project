@@ -30,5 +30,4 @@ export type PlacedStructure = {
 };
 
 export type PlacementResult =
-  | { ok: true; placement: PlacedStructure; remainingBudget: number }
-  | { ok: false; reason: string };
+  { ok: true; placement: PlacedStructure; remainingBudget: number } | { ok: false; reason: string };

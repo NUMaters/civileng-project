@@ -61,7 +61,11 @@ export function App() {
       ) : null}
 
       {gameLayerMounted && playMode !== null ? (
-        <Suspense fallback={lobbyScreen === "game" ? <p className="lobby-loading">ゲームを準備しています…</p> : null}>
+        <Suspense
+          fallback={
+            lobbyScreen === "game" ? <p className="lobby-loading">ゲームを準備しています…</p> : null
+          }
+        >
           <GameplayApp
             playMode={playMode}
             inGame={lobbyScreen === "game"}

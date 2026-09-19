@@ -7,14 +7,7 @@ import {
 } from "cesium";
 
 export type StructureMaterialKind =
-  | "earth"
-  | "grass"
-  | "concrete"
-  | "asphalt"
-  | "riprap"
-  | "water"
-  | "metal"
-  | "accent";
+  "earth" | "grass" | "concrete" | "asphalt" | "riprap" | "water" | "metal" | "accent";
 
 const textureCache = new Map<string, HTMLCanvasElement>();
 
@@ -104,7 +97,10 @@ export function createStructureMaterial(
   }
 }
 
-function getOrCreateTexture(key: string, paint: (ctx: CanvasRenderingContext2D, size: number) => void): HTMLCanvasElement {
+function getOrCreateTexture(
+  key: string,
+  paint: (ctx: CanvasRenderingContext2D, size: number) => void,
+): HTMLCanvasElement {
   const cached = textureCache.get(key);
   if (cached !== undefined) {
     return cached;

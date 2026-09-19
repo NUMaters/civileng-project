@@ -16,9 +16,9 @@ CivilCraft における 2〜4 人のマルチプレイヤーについて、プ�
 
 バックエンドは以下の2つのプロセスで構成する。
 
-| プロセス | 責務 |
-|---|---|
-| `apps/server/cmd/api` | プレイヤー発行、ルーム管理、ゲーム開始要求 |
+| プロセス               | 責務                                                                  |
+| ---------------------- | --------------------------------------------------------------------- |
+| `apps/server/cmd/api`  | プレイヤー発行、ルーム管理、ゲーム開始要求                            |
 | `apps/server/cmd/game` | WebSocket通信、ゲームセッション管理、ゲーム状態管理、リアルタイム同期 |
 
 `apps/server/cmd/game` は複数のゲームセッションを同時に管理する。
@@ -39,7 +39,6 @@ apps/server/cmd/game
 
 各ゲームセッションの状態およびWebSocketイベントは完全に分離する。
 
-
 ---
 
 ## 3. プレイヤー
@@ -47,7 +46,6 @@ apps/server/cmd/game
 ### 3.1 プレイヤー識別子
 
 `playerId` は API Server が UUID として発行する。
-
 
 発行された `playerId` はブラウザの `sessionStorage` に保存する。
 
@@ -91,7 +89,6 @@ closed
 
 参加可能な `open` 状態のルームを一覧表示する。
 
-
 一覧上ではルーム作成者の `displayName` を使用してルームを表示する。
 
 例:
@@ -106,7 +103,6 @@ Tanaka のルーム    3 / 4
 ### 4.4 参加方法
 
 プレイヤーはルーム一覧から参加する。
-
 
 ### 4.5 参加条件
 
@@ -147,7 +143,6 @@ polling間隔は **2秒** とする。
 
 ルーム作成者が退出した場合、そのルームを `closed` にする。
 
-
 ---
 
 ## 5. ゲームセッション生成
@@ -178,7 +173,6 @@ ready待ち
 API Serverが作成したSession情報はPostgreSQLへ保存する。
 
 Game Serverは `sessionId` を使用してPostgreSQLからSessionの開始情報を読み込む。
-
 
 ### 5.3 ゲーム開始直前の読み込み
 
@@ -225,11 +219,11 @@ Player D    timeout
 
 人数別の割当数は以下とする。
 
-| 人数 | 割当数 |
-|---:|---|
-| 2 | 3 / 2 |
-| 3 | 2 / 2 / 1 |
-| 4 | 2 / 1 / 1 / 1 |
+| 人数 | 割当数        |
+| ---: | ------------- |
+|    2 | 3 / 2         |
+|    3 | 2 / 2 / 1     |
+|    4 | 2 / 1 / 1 / 1 |
 
 ### 5.7 初期予算
 
@@ -308,7 +302,6 @@ Serverが管理する状態は以下とする。
 ### 9.1 プレイヤー位置の定義
 
 プレイヤー位置は、各プレイヤーがCesiumJS上で現在操作しているマップ上の地点とする。
-
 
 ### 9.2 表示
 
@@ -408,13 +401,13 @@ invalid_position
 placement_conflict
 ```
 
-| reason | 意味 |
-|---|---|
+| reason                   | 意味                                           |
+| ------------------------ | ---------------------------------------------- |
 | `structure_not_assigned` | 対象土木技術がプレイヤーに割り当てられていない |
-| `insufficient_budget` | 予算不足 |
-| `invalid_phase` | 現在のフェーズでは配置できない |
-| `invalid_position` | 配置位置が条件を満たさない |
-| `placement_conflict` | 先に確定した施設と競合する |
+| `insufficient_budget`    | 予算不足                                       |
+| `invalid_phase`          | 現在のフェーズでは配置できない                 |
+| `invalid_position`       | 配置位置が条件を満たさない                     |
+| `placement_conflict`     | 先に確定した施設と競合する                     |
 
 クライアントは `reason` に対応する表示文言を決定する。
 
@@ -431,7 +424,6 @@ disaster
     ↓
 result
 ```
-
 
 Sessionの終了状態はゲームフェーズとは別に管理する。
 
@@ -513,7 +505,6 @@ cellId
 depth
 ```
 
-
 ### 12.4 送信頻度
 
 `simulation.updated` は**シミュレーションtickごと**に同一Session内の全クライアントへ配信する。
@@ -571,28 +562,27 @@ simulation
 
 ### Client → Server
 
-| イベント | 用途 |
-|---|---|
-| `session.ping` | 疎通確認 |
-| `session.ready` | ゲーム開始準備完了 |
-| `player.move` | プレイヤー位置更新 |
-| `construction.place` | 施設配置要求 |
+| イベント             | 用途               |
+| -------------------- | ------------------ |
+| `session.ping`       | 疎通確認           |
+| `session.ready`      | ゲーム開始準備完了 |
+| `player.move`        | プレイヤー位置更新 |
+| `construction.place` | 施設配置要求       |
 
 ### Server → Client
 
-| イベント | 用途 |
-|---|---|
-| `session.pong` | 疎通確認応答 |
-| `session.state` | Session初期状態 |
-| `player.joined` | プレイヤー接続 |
-| `player.left` | プレイヤー切断 |
-| `player.moved` | プレイヤー位置更新 |
-| `construction.placed` | 施設配置成功 |
-| `construction.rejected` | 施設配置失敗 |
-| `game.phaseChanged` | ゲームフェーズ変更 |
-| `game.ended` | ゲーム結果通知 |
-| `simulation.updated` | 洪水・被災状態更新 |
-
+| イベント                | 用途               |
+| ----------------------- | ------------------ |
+| `session.pong`          | 疎通確認応答       |
+| `session.state`         | Session初期状態    |
+| `player.joined`         | プレイヤー接続     |
+| `player.left`           | プレイヤー切断     |
+| `player.moved`          | プレイヤー位置更新 |
+| `construction.placed`   | 施設配置成功       |
+| `construction.rejected` | 施設配置失敗       |
+| `game.phaseChanged`     | ゲームフェーズ変更 |
+| `game.ended`            | ゲーム結果通知     |
+| `simulation.updated`    | 洪水・被災状態更新 |
 
 操作失敗は操作ごとの結果イベントで通知する。
 
@@ -624,9 +614,7 @@ RESTおよびWebSocketで扱うゲーム時刻は **Unix milliseconds** で表�
 - 担当土木技術
 - 配置済み施設
 
-
 切断したプレイヤーの位置マーカーは非表示にする。
-
 
 ### 16.2 全員切断
 
@@ -708,16 +696,15 @@ DELETE /rooms/{roomId}/members/{playerId}
 POST   /rooms/{roomId}/sessions
 ```
 
-| Endpoint | 用途 |
-|---|---|
-| `POST /players` | プレイヤー発行 |
-| `GET /rooms` | 参加可能ルーム一覧 |
-| `POST /rooms` | ルーム作成 |
-| `GET /rooms/{roomId}` | ルーム詳細・ロビーpolling |
-| `POST /rooms/{roomId}/members` | ルーム参加 |
-| `DELETE /rooms/{roomId}/members/{playerId}` | ルーム退出 |
-| `POST /rooms/{roomId}/sessions` | ゲーム開始要求・Session生成 |
-
+| Endpoint                                    | 用途                        |
+| ------------------------------------------- | --------------------------- |
+| `POST /players`                             | プレイヤー発行              |
+| `GET /rooms`                                | 参加可能ルーム一覧          |
+| `POST /rooms`                               | ルーム作成                  |
+| `GET /rooms/{roomId}`                       | ルーム詳細・ロビーpolling   |
+| `POST /rooms/{roomId}/members`              | ルーム参加                  |
+| `DELETE /rooms/{roomId}/members/{playerId}` | ルーム退出                  |
+| `POST /rooms/{roomId}/sessions`             | ゲーム開始要求・Session生成 |
 
 ---
 

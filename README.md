@@ -12,14 +12,14 @@
 
 ## 技術スタック
 
-| 領域           | 技術                                                                                            |
-| -------------- | ----------------------------------------------------------------------------------------------- |
-| フロントエンド | TypeScript, Vite, React（`@vitejs/plugin-react-swc`）, CesiumJS, WebGL（PWA は Phase 5 以降） |
-| バックエンド   | Go（モジュラーモノリス → API Server / Game Server 分離可能）                                    |
-| データベース   | PostgreSQL, Redis                                                                               |
-| 通信           | REST API, WebSocket（サーバー権威型）                                                           |
-| マスターデータ | JSON（`packages/game-data/`）                                                                   |
-| 型定義         | TypeScript（`packages/game-schema/`）                                                           |
+| 領域           | 技術                                                                                                                              |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| フロントエンド | TypeScript, Vite, React（`@vitejs/plugin-react-swc`）, CesiumJS, WebGL（PWA は Phase 5 以降）                                     |
+| バックエンド   | Go（モジュラーモノリス → API Server / Game Server 分離可能）                                                                      |
+| データベース   | PostgreSQL, Redis                                                                                                                 |
+| 通信           | REST API, WebSocket（サーバー権威型）                                                                                             |
+| マスターデータ | JSON（`packages/game-data/`）                                                                                                     |
+| 型定義         | TypeScript（`packages/game-schema/`）                                                                                             |
 | インフラ       | Docker, Docker Compose, Cloudflare Pages（ソロ静的公開）, AWS（ECS, RDS, ElastiCache, S3, CloudFront）, Terraform, GitHub Actions |
 
 起動フローは **タイトル → メニュー（シングル／マルチ・遊び方）→ 読込完了後にスタート → マップ本編**。ロビー UI は阿武隈川の治水を学ぶ雰囲気のストーム／河川ビジュアル（雨筋・河岸シルエット）。文言は軍事調（作戦・防衛など）を避け、治水・配置寄りの表現に揃える。遊び方はボタンから開く（自動表示しない）。遊び方画面では目的・操作の流れに加え、堤防・護岸・排水機場・遊水地・河道掘削の役割／仕組み／現実の用い方を紹介する（`apps/web/src/features/lobby/howtoContent.ts`）。タイトル／メニューでは Cesium を `React.lazy` で遅延読込し、メニューの読込中にチャンクを先読みする。一度マップを開いたあとは破棄せず裏に残し（`visibility: hidden`）、再入場の白画面を防ぐ。マルチは UI 上は暗い無効表示（未実装）。本編は準備 60 秒・大雨 90 秒・結果 30 秒（合計 3 分。`packages/game-data/rules/game-timing.json`）。大雨中の雨量はランダムに小康／並雨／強雨へ切り替わる。予算ポイントは準備・災害中に補給され、クリアは被災度 8% 未満。状況 HUD は準備中は配置／被害／決壊口、災害中に水位系を追加するコンパクト表示。一連動作の E2E は `apps/web/scripts/e2e-playthrough.mjs`（開発サーバー起動中に実行。クリア確認付き）。
@@ -186,28 +186,28 @@ pnpm --filter @civilcraft/web fetch:plateau:full
 
 ## ドキュメント
 
-| 用途               | ドキュメント                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------ |
-| ゲーム概要・MVP    | [docs/game-design/overview.md](./docs/game-design/overview.md)                             |
-| ゲームルール       | [docs/game-design/game-rules.md](./docs/game-design/game-rules.md)                         |
-| セッションフロー   | [docs/game-design/session-flow.md](./docs/game-design/session-flow.md)                     |
-| 操作・UI           | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)                       |
-| 土木技術・災害     | [docs/civil-engineering/](./docs/civil-engineering/)                                       |
-| AI Agent 向け索引  | [docs/agent/guide.md](./docs/agent/guide.md)                                               |
-| 開発原則・命名規則 | [docs/development/](./docs/development/)                                                   |
-| アーキテクチャ     | [docs/architecture/](./docs/architecture/)                                                 |
-| API 命名           | [docs/api/](./docs/api/)                                                                   |
-| Git 運用           | [docs/git/](./docs/git/)                                                                   |
-| マスターデータ設計 | [docs/architecture/game-data-master-data.md](./docs/architecture/game-data-master-data.md) |
-| マップデータ形式 | [docs/architecture/map-data-format.md](./docs/architecture/map-data-format.md) |
-| DB スキーマ（ルーム等） | [docs/architecture/db-schema.md](./docs/architecture/db-schema.md) |
-| game-schema 設計   | [docs/architecture/game-schema-design.md](./docs/architecture/game-schema-design.md)       |
-| ゲーム状態モデル   | [docs/architecture/game-state-model.md](./docs/architecture/game-state-model.md)           |
-| ローカル DB 構成   | [docs/development/local-database.md](./docs/development/local-database.md)                 |
-| 環境変数一覧 | [docs/development/environment-variables.md](./docs/development/environment-variables.md) |
-| MVP 外データ方針 | [docs/development/mvp-scope-data.md](./docs/development/mvp-scope-data.md) |
-| 地理空間アーキテクチャ | [docs/architecture/geospatial.md](./docs/architecture/geospatial.md)                    |
-| CesiumJS 導入作業 | [docs/development/cesium-roadmap.md](./docs/development/cesium-roadmap.md)                  |
+| 用途                    | ドキュメント                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------ |
+| ゲーム概要・MVP         | [docs/game-design/overview.md](./docs/game-design/overview.md)                             |
+| ゲームルール            | [docs/game-design/game-rules.md](./docs/game-design/game-rules.md)                         |
+| セッションフロー        | [docs/game-design/session-flow.md](./docs/game-design/session-flow.md)                     |
+| 操作・UI                | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)                       |
+| 土木技術・災害          | [docs/civil-engineering/](./docs/civil-engineering/)                                       |
+| AI Agent 向け索引       | [docs/agent/guide.md](./docs/agent/guide.md)                                               |
+| 開発原則・命名規則      | [docs/development/](./docs/development/)                                                   |
+| アーキテクチャ          | [docs/architecture/](./docs/architecture/)                                                 |
+| API 命名                | [docs/api/](./docs/api/)                                                                   |
+| Git 運用                | [docs/git/](./docs/git/)                                                                   |
+| マスターデータ設計      | [docs/architecture/game-data-master-data.md](./docs/architecture/game-data-master-data.md) |
+| マップデータ形式        | [docs/architecture/map-data-format.md](./docs/architecture/map-data-format.md)             |
+| DB スキーマ（ルーム等） | [docs/architecture/db-schema.md](./docs/architecture/db-schema.md)                         |
+| game-schema 設計        | [docs/architecture/game-schema-design.md](./docs/architecture/game-schema-design.md)       |
+| ゲーム状態モデル        | [docs/architecture/game-state-model.md](./docs/architecture/game-state-model.md)           |
+| ローカル DB 構成        | [docs/development/local-database.md](./docs/development/local-database.md)                 |
+| 環境変数一覧            | [docs/development/environment-variables.md](./docs/development/environment-variables.md)   |
+| MVP 外データ方針        | [docs/development/mvp-scope-data.md](./docs/development/mvp-scope-data.md)                 |
+| 地理空間アーキテクチャ  | [docs/architecture/geospatial.md](./docs/architecture/geospatial.md)                       |
+| CesiumJS 導入作業       | [docs/development/cesium-roadmap.md](./docs/development/cesium-roadmap.md)                 |
 
 ルートの [AGENT.md](./AGENT.md) は `docs/agent/guide.md` への索引である。
 

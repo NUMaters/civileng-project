@@ -35,9 +35,7 @@ export function computeImpactStats(
 ): { households: number; people: number } {
   const damage = Number.isFinite(damagePercent) ? damagePercent : 0;
   const flooded = Number.isFinite(floodedAreaPercent) ? floodedAreaPercent : 0;
-  const households = Math.round(
-    overflowSiteCount * 420 + flooded * 28 + damage * 42,
-  );
+  const households = Math.round(overflowSiteCount * 420 + flooded * 28 + damage * 42);
   const people = Math.round(households * 2.65);
   return { households, people };
 }
