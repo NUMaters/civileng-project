@@ -23,6 +23,25 @@ export type NpcAnswer = {
   answerText: string;
   factIds: string[];
   sourceIds: string[];
-  mode: "ollama" | "openai" | "fixed";
+  /** `ai` means Main Backend received a validated answer from NPC Backend. */
+  mode: "ai" | "fixed";
   fallbackReason?: string;
+};
+
+/** Private v1 contract: validated Main Backend request to stateless NPC Backend. */
+export type GenerateNpcAnswerRequest = {
+  interactionId: string;
+  gameSessionId: string;
+  npcId: string;
+  scenarioId: string;
+  questionId: string;
+  hintLevel: HintLevel;
+};
+export type NpcGenerationResult =
+  "success" | "no_grounding" | "busy" | "timeout" | "invalid_output" | "unavailable";
+export type GenerateNpcAnswerResponse = {
+  interactionId: string;
+  result: NpcGenerationResult;
+  answerText?: string;
+  sourceIds?: string[];
 };

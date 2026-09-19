@@ -41,12 +41,13 @@ export class NpcConversationClient {
     const hint = question?.hints[level - 1];
     if (!hint) throw new NpcRequestRejected("質問を選び直してください。");
     const requestId = crypto.randomUUID();
+    const allowedAnswers = this.childMode ? hint.childAnswers : hint.answers;
     const fixed: NpcAnswer = {
       requestId,
       npcId: this.npc.id,
       questionId,
       hintLevel: level,
-      answerText: (this.childMode ? hint.childAnswers : hint.answers)[0] ?? "",
+      answerText: allowedAnswers[0] ?? "",
       factIds: hint.factIds,
       sourceIds: sourceIdsForFacts(hint.factIds),
       mode: "fixed",
@@ -75,10 +76,10 @@ export class NpcConversationClient {
         result.questionId !== questionId ||
         result.hintLevel !== level ||
         typeof result.answerText !== "string" ||
-        !hint.answers.includes(result.answerText) ||
+        !allowedAnswers.includes(result.answerText) ||
         !sameIds(result.factIds, fixed.factIds) ||
         !sameIds(result.sourceIds, fixed.sourceIds) ||
-        (result.mode !== "ollama" && result.mode !== "openai" && result.mode !== "fixed")
+        (result.mode !== "ai" && result.mode !== "fixed")
       )
         throw new Error("Invalid NPC response");
       return {

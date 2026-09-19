@@ -36,14 +36,14 @@ describe("NPC API client", () => {
           answerText: hint?.answers[0],
           factIds: hint?.factIds,
           sourceIds: sourceIdsForFacts(hint?.factIds ?? []),
-          mode: "ollama",
+          mode: "ai",
         });
       })
       .mockResolvedValue(response({}));
     vi.stubGlobal("fetch", fetchMock);
     const client = new NpcConversationClient(resident, 60);
     const answer = await client.answer("past", false, 1);
-    expect(answer.mode).toBe("ollama");
+    expect(answer.mode).toBe("ai");
     expect(answer.answerText).toBe(hint?.answers[0]);
     client.close();
     expect(fetchMock.mock.calls.at(-1)?.[1]?.method).toBe("DELETE");
@@ -79,7 +79,7 @@ describe("NPC API client", () => {
     const fetchMock = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(response(session, 201))
-      .mockResolvedValueOnce(response({ answerText: "<script>bad</script>", mode: "ollama" }))
+      .mockResolvedValueOnce(response({ answerText: "<script>bad</script>", mode: "ai" }))
       .mockResolvedValue(response({}));
     vi.stubGlobal("fetch", fetchMock);
     const client = new NpcConversationClient(resident, 60);

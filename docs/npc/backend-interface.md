@@ -7,6 +7,7 @@
 - 位置づけ：正式な API 仕様ではなく、Offline LLMOps / RAGOps の設計前でも Main Backend 側が先行して実装を進められるようにするための暫定契約
 - 正式な通信方式、エンドポイント、イベント名、DTO、エラーコード等は本書では確定しない。最終仕様は API 設計時に決定する
 - 既存文書と競合する場合は、[`requirements.md`](./requirements.md) および既存ゲーム本体の仕様を優先する
+- 選択式質問を使う現在のMVPで実装した具体的な通信契約は、[`main-npc-backend-api.md`](./main-npc-backend-api.md)を参照する
 
 NPC 機能全体の要件は [`requirements.md`](./requirements.md)、ゲーム本体との統合設計は [`detailed-design.md`](./detailed-design.md)、RAG・LLM・LLMOps の専門設計は [`dialogue-ai-design.md`](./dialogue-ai-design.md) を参照する。通信方式の基本方針は [`docs/architecture/communication.md`](../architecture/communication.md) に従う。
 

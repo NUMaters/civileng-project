@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/NUMaters/civileng-project/apps/server/internal/npc/application"
 )
@@ -14,8 +15,14 @@ import (
 const maxRequestBytes = 2048
 
 func Register(mux *http.ServeMux, service *application.Service) {
+	conversationLimiter := newIPRateLimiter(30, time.Minute)
+	answerLimiter := newIPRateLimiter(120, time.Minute)
 	mux.HandleFunc("POST /api/npc/conversations", func(w http.ResponseWriter, r *http.Request) {
 		if !sameOrigin(w, r) {
+			return
+		}
+		if !conversationLimiter.allow(r) {
+			respond(w, http.StatusTooManyRequests, map[string]string{"code": "rate_limited"})
 			return
 		}
 		var request application.CreateRequest
@@ -31,6 +38,10 @@ func Register(mux *http.ServeMux, service *application.Service) {
 	})
 	mux.HandleFunc("POST /api/npc/conversations/{id}/answers", func(w http.ResponseWriter, r *http.Request) {
 		if !sameOrigin(w, r) {
+			return
+		}
+		if !answerLimiter.allow(r) {
+			respond(w, http.StatusTooManyRequests, map[string]string{"code": "rate_limited"})
 			return
 		}
 		var request application.QuestionRequest

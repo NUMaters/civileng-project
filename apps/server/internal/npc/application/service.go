@@ -55,18 +55,19 @@ type Answer struct {
 	FallbackReason string   `json:"fallbackReason,omitempty"`
 }
 type conversation struct {
-	npc          domain.NPC
-	token        string
-	expires      time.Time
-	questionID   string
-	level        int
-	nextQuestion time.Time
-	seen         map[string]bool
-	inFlight     bool
-	cancel       context.CancelFunc
-	audience     string
+	npc           domain.NPC
+	token         string
+	gameSessionID string
+	expires       time.Time
+	questionID    string
+	level         int
+	nextQuestion  time.Time
+	seen          map[string]bool
+	inFlight      bool
+	cancel        context.CancelFunc
+	audience      string
 }
-type Generate func(context.Context, domain.NPC, domain.Question, domain.Hint, []domain.Fact) (string, error)
+type Generate func(context.Context, domain.GenerationRequest) (domain.GenerationResponse, error)
 type Service struct {
 	catalog            *domain.Catalog
 	generate           Generate
@@ -78,12 +79,12 @@ type Service struct {
 }
 
 func NewService(catalog *domain.Catalog, generate Generate, preparationSeconds float64) *Service {
-	return NewServiceWithMode(catalog, generate, preparationSeconds, "ollama")
+	return NewServiceWithMode(catalog, generate, preparationSeconds, "ai")
 }
 
 func NewServiceWithMode(catalog *domain.Catalog, generate Generate, preparationSeconds float64, generateMode string) *Service {
 	if generateMode == "" {
-		generateMode = "ollama"
+		generateMode = "ai"
 	}
 	return &Service{catalog: catalog, generate: generate, generateMode: generateMode, conversations: map[string]*conversation{}, preparationSeconds: preparationSeconds, now: time.Now}
 }
@@ -119,7 +120,7 @@ func (s *Service) Create(request CreateRequest) (ConversationResponse, error) {
 	if len(s.conversations) >= MaxConversations {
 		return ConversationResponse{}, reject("capacity")
 	}
-	s.conversations[id.String()] = &conversation{npc: npc, token: token.String(), expires: s.now().Add(time.Duration(request.RemainingSeconds * float64(time.Second))), seen: map[string]bool{}, audience: request.Audience}
+	s.conversations[id.String()] = &conversation{npc: npc, token: token.String(), gameSessionID: "local-" + id.String(), expires: s.now().Add(time.Duration(request.RemainingSeconds * float64(time.Second))), seen: map[string]bool{}, audience: request.Audience}
 	return ConversationResponse{id.String(), token.String(), s.catalog.Version}, nil
 }
 func (s *Service) prune() {
@@ -203,18 +204,26 @@ func (s *Service) Answer(ctx context.Context, id, token string, request Question
 	if c.audience == "child" {
 		hint.Answers = hint.ChildAnswers
 	}
-	facts, sourceIDs := s.catalog.Facts(hint.FactIDs)
+	_, sourceIDs := s.catalog.Facts(hint.FactIDs)
 	result := Answer{request.RequestID, c.npc.ID, question.ID, level, "", hint.FactIDs, sourceIDs, "fixed", ""}
 	result.AnswerText = hint.Answers[0]
 	start := time.Now()
-	if len(facts) > 0 && s.generate != nil {
+	if len(hint.FactIDs) > 0 && s.generate != nil && c.audience == "adult" {
 		generateCtx, stop := context.WithTimeout(workCtx, LLMTimeout)
-		text, generateErr := s.generate(generateCtx, c.npc, question, hint, facts)
+		generated, generateErr := s.generate(generateCtx, domain.GenerationRequest{
+			InteractionID: request.RequestID,
+			GameSessionID: c.gameSessionID,
+			NPCID:         c.npc.ID,
+			ScenarioID:    s.catalog.ScenarioID,
+			QuestionID:    question.ID,
+			HintLevel:     level,
+		})
 		stop()
-		if generateErr == nil && allowed(text, hint) {
-			result.AnswerText, result.Mode = text, s.generateMode
+		if generateErr == nil && generated.InteractionID == request.RequestID && generated.Result == domain.GenerationSuccess &&
+			allowed(generated.AnswerText, hint) && sameStrings(generated.SourceIDs, sourceIDs) {
+			result.AnswerText, result.Mode = generated.AnswerText, s.generateMode
 		} else {
-			result.FallbackReason = failureReason(generateErr)
+			result.FallbackReason = failureReason(generateErr, generated)
 		}
 	}
 	s.mu.Lock()
@@ -242,15 +251,46 @@ func allowed(text string, hint domain.Hint) bool {
 	}
 	return false
 }
-func failureReason(err error) string {
+func sameStrings(actual, expected []string) bool {
+	if len(actual) != len(expected) {
+		return false
+	}
+	seen := make(map[string]int, len(actual))
+	for _, value := range actual {
+		seen[value]++
+	}
+	for _, value := range expected {
+		seen[value]--
+		if seen[value] < 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func failureReason(err error, response domain.GenerationResponse) string {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return "timeout"
 	}
 	if errors.Is(err, domain.ErrLLMBusy) {
 		return "busy"
 	}
-	if err == nil || errors.Is(err, domain.ErrInvalidOutput) {
+	if err != nil {
+		if errors.Is(err, domain.ErrInvalidOutput) {
+			return "invalid_output"
+		}
+		return "unavailable"
+	}
+	switch response.Result {
+	case domain.GenerationBusy:
+		return "busy"
+	case domain.GenerationTimeout:
+		return "timeout"
+	case domain.GenerationNoGrounding:
+		return "no_grounding"
+	case domain.GenerationUnavailable:
+		return "unavailable"
+	default:
 		return "invalid_output"
 	}
-	return "unavailable"
 }

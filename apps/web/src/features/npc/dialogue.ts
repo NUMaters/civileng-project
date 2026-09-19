@@ -21,7 +21,7 @@ export type DialogueAction =
       deeper: boolean;
       now: number;
       answerText?: string;
-      mode?: "fixed" | "ollama" | "openai";
+      mode?: "fixed" | "ai";
       childMode?: boolean;
     }
   | { type: "facts"; factIds: string[] }

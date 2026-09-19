@@ -27,15 +27,37 @@ func Register(mux *http.ServeMux) error {
 	if err != nil {
 		return err
 	}
+	backend, err := infrastructure.NewBackendClient(
+		env("NPC_BACKEND_URL", "http://127.0.0.1:8082"),
+		env("NPC_BACKEND_TOKEN", ""),
+	)
+	if err != nil {
+		return err
+	}
+	presentation.Register(mux, application.NewServiceWithMode(catalog, backend.Generate, float64(rules.Rules.Timing.Phases.PreparationSeconds), "ai"))
+	return nil
+}
+
+// RegisterBackend configures the private stateless NPC Backend. It is called
+// by cmd/npc, never by the browser-facing Main Backend process.
+func RegisterBackend(mux *http.ServeMux) error {
+	root, err := gamedata.ResolveRoot()
+	if err != nil {
+		return err
+	}
+	catalog, err := infrastructure.LoadCatalog(root)
+	if err != nil {
+		return err
+	}
 	provider := env("NPC_LLM_PROVIDER", "ollama")
-	var generate application.Generate
+	var selectAnswer application.SelectAnswer
 	switch provider {
 	case "ollama":
 		client, err := infrastructure.NewOllama(env("NPC_LLM_BASE_URL", "http://127.0.0.1:11434"), env("NPC_LLM_MODEL", "qwen3:14b"))
 		if err != nil {
 			return err
 		}
-		generate = client.Select
+		selectAnswer = client.Select
 	case "openai":
 		client, err := infrastructure.NewOpenAI(
 			env("OPENAI_API_KEY", ""),
@@ -45,12 +67,12 @@ func Register(mux *http.ServeMux) error {
 		if err != nil {
 			return err
 		}
-		generate = client.Select
+		selectAnswer = client.Select
 	case "fixed":
 	default:
 		return fmt.Errorf("unsupported NPC_LLM_PROVIDER %q", provider)
 	}
-	presentation.Register(mux, application.NewServiceWithMode(catalog, generate, float64(rules.Rules.Timing.Phases.PreparationSeconds), provider))
+	presentation.RegisterBackend(mux, application.NewGenerator(catalog, selectAnswer, provider), env("NPC_BACKEND_TOKEN", ""))
 	return nil
 }
 func env(key, fallback string) string {

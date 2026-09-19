@@ -7,5 +7,5 @@ export type DialogueEntry = {
   question: string;
   answer: string;
   factIds: string[];
-  mode: "fixed" | "ollama" | "openai";
+  mode: "fixed" | "ai";
 };

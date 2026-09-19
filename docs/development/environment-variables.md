@@ -34,11 +34,30 @@ cp .env.example .env
 
 ### Server（`apps/server`）
 
-| 変数            | 既定値（例）         | 用途                                             |
-| --------------- | -------------------- | ------------------------------------------------ |
-| `API_ADDR`      | `:8080`              | `cmd/api` の listen アドレス                     |
-| `GAME_ADDR`     | `:8081`              | `cmd/game` の listen アドレス（WebSocket `/ws`） |
-| `GAME_DATA_DIR` | `packages/game-data` | マスターデータ JSON のルート（相対または絶対）   |
+| 変数                | 既定値（例）             | 用途                                                         |
+| ------------------- | ------------------------ | ------------------------------------------------------------ |
+| `API_ADDR`          | `:8080`                  | `cmd/api` の listen アドレス                                 |
+| `GAME_ADDR`         | `:8081`                  | Main Backend（WebSocket `/ws`・公開NPC API）のlistenアドレス |
+| `GAME_DATA_DIR`     | `packages/game-data`     | マスターデータ JSON のルート（相対または絶対）               |
+| `NPC_BACKEND_URL`   | `http://127.0.0.1:8082`  | Main BackendからNPC Backendへ接続する内部URL                 |
+| `NPC_BACKEND_ADDR`  | `127.0.0.1:8082`         | `cmd/npc` のlistenアドレス                                   |
+| `NPC_BACKEND_TOKEN` | ローカル用共有トークン   | Main BackendとNPC Backend間のBearer認証                      |
+| `NPC_LLM_PROVIDER`  | `fixed`                  | NPC Backendの回答方式（`openai` / `ollama` / `fixed`）       |
+| `NPC_LLM_BASE_URL`  | `http://127.0.0.1:11434` | Ollama API                                                   |
+| `NPC_LLM_MODEL`     | `qwen3:14b`              | Ollamaモデル                                                 |
+| `OPENAI_BASE_URL`   | `https://api.openai.com` | OpenAI API（NPC Backendだけが使用）                          |
+| `OPENAI_MODEL`      | `gpt-4o-mini`            | OpenAIモデル（NPC Backendだけが使用）                        |
+| `OPENAI_API_KEY`    | Secretとして設定         | OpenAIキー。Git・Web・Main Backendへ渡さない                 |
+
+`cmd/game` と `cmd/npc` には同じ `NPC_BACKEND_TOKEN` を設定する。本番の `cmd/npc` をループバック以外でlistenさせる場合、このトークンは必須。公開インターネットへ直接露出せず、Main Backendからのみ到達できるネットワークへ配置する。
+
+Goプロセスは `.env` を自動読込しない。ローカルではシェルの環境変数として設定してから起動する。PowerShellの例：
+
+```powershell
+$env:NPC_BACKEND_TOKEN="local-npc-backend-token"
+$env:NPC_LLM_PROVIDER="openai"
+$env:OPENAI_API_KEY="各自のキー"
+```
 
 ### Web（Vite / `apps/web`）
 

@@ -97,10 +97,10 @@ func TestCatalogAndPhaseValidation(t *testing.T) {
 }
 func TestCloseCancelsInflightAndRejectsLateAnswer(t *testing.T) {
 	started := make(chan struct{})
-	generate := func(ctx context.Context, _ domain.NPC, _ domain.Question, _ domain.Hint, _ []domain.Fact) (string, error) {
+	generate := func(ctx context.Context, _ domain.GenerationRequest) (domain.GenerationResponse, error) {
 		close(started)
 		<-ctx.Done()
-		return "", ctx.Err()
+		return domain.GenerationResponse{}, ctx.Err()
 	}
 	service, session := fixture(t, generate)
 	done := make(chan error, 1)
@@ -130,8 +130,8 @@ func TestTimeoutAndUnfoundedOutputUseKnownAnswer(t *testing.T) {
 		{"", context.DeadlineExceeded, "timeout"},
 		{"この場所なら絶対安全だよ。", nil, "invalid_output"},
 	} {
-		service, session := fixture(t, func(context.Context, domain.NPC, domain.Question, domain.Hint, []domain.Fact) (string, error) {
-			return test.text, test.err
+		service, session := fixture(t, func(_ context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
+			return domain.GenerationResponse{InteractionID: request.InteractionID, Result: domain.GenerationSuccess, AnswerText: test.text}, test.err
 		})
 		answer, err := service.Answer(context.Background(), session.ConversationID, session.Token, question("past", false))
 		if err != nil || answer.Mode != "fixed" || answer.FallbackReason != test.reason || !domain.ValidAnswer(answer.AnswerText) || len(answer.SourceIDs) == 0 {
@@ -140,9 +140,14 @@ func TestTimeoutAndUnfoundedOutputUseKnownAnswer(t *testing.T) {
 	}
 }
 func TestIndependentConversations(t *testing.T) {
-	service, first := fixture(t, func(_ context.Context, _ domain.NPC, _ domain.Question, h domain.Hint, _ []domain.Fact) (string, error) {
-		return h.Answers[0], nil
-	})
+	service, first := fixture(t, nil)
+	service.generate = func(_ context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
+		npc, _ := service.catalog.NPC(request.NPCID)
+		question, _ := npc.Question(request.QuestionID)
+		hint := question.Hints[request.HintLevel-1]
+		_, sourceIDs := service.catalog.Facts(hint.FactIDs)
+		return domain.GenerationResponse{InteractionID: request.InteractionID, Result: domain.GenerationSuccess, AnswerText: hint.Answers[0], SourceIDs: sourceIDs}, nil
+	}
 	second, err := service.Create(CreateRequest{"resident", service.catalog.ScenarioID, service.catalog.Version, "preparation", 60, ""})
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +158,7 @@ func TestIndependentConversations(t *testing.T) {
 		go func(session ConversationResponse) {
 			defer wg.Done()
 			answer, err := service.Answer(context.Background(), session.ConversationID, session.Token, question("past", false))
-			if err != nil || answer.Mode != "ollama" || answer.HintLevel != 1 {
+			if err != nil || answer.Mode != "ai" || answer.HintLevel != 1 {
 				t.Errorf("%+v %v", answer, err)
 			}
 		}(session)
@@ -164,9 +169,9 @@ func TestExpiryDoesNotCommit(t *testing.T) {
 	service, session := fixture(t, nil)
 	clock := time.Now()
 	service.now = func() time.Time { return clock }
-	service.generate = func(_ context.Context, _ domain.NPC, _ domain.Question, h domain.Hint, _ []domain.Fact) (string, error) {
+	service.generate = func(_ context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
 		clock = clock.Add(time.Minute)
-		return h.Answers[0], nil
+		return domain.GenerationResponse{InteractionID: request.InteractionID, Result: domain.GenerationUnavailable}, nil
 	}
 	_, err := service.Answer(context.Background(), session.ConversationID, session.Token, question("past", false))
 	requireCode(t, err, "stale_request")
