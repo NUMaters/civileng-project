@@ -2141,7 +2141,15 @@ function applyLivePlacementHeading(
     placement.id === placementId ? next : placement,
   );
   const selected = placementId === selectedPlacementId || next.preview === true;
-  applyPlacementHeading(viewer, next, selected, next.preview === true);
+  // 回転中は同じモデル構成のEntityを再利用し、位置・姿勢だけを更新する。
+  // 構成がまだ描画されていない場合だけ、通常の再生成へフォールバックする。
+  if (
+    !updateCivilEngineeringModelPose(viewer, next, {
+      showHeadingCue: next.preview === true,
+    })
+  ) {
+    applyPlacementHeading(viewer, next, selected, next.preview === true);
+  }
   visualKeyRef.current.set(placementId, placementVisualKey(next, selected));
 
   const influences = calculateStructureInfluences(placementsRef.current);
@@ -2322,6 +2330,25 @@ function updateCivilEngineeringModelPose(
   if (marker === undefined || beacon === undefined) {
     return false;
   }
+  const partEntities = parts.map((part, index) => {
+    const id = index === 0 ? baseId : `${baseId}-part-${part.id}`;
+    return viewer.entities.getById(id);
+  });
+  if (partEntities.some((entity) => entity === undefined)) {
+    return false;
+  }
+  const headingEntity = options.showHeadingCue ?? true
+    ? viewer.entities.getById(`${prefix}-${placement.id}-heading`)
+    : undefined;
+  const headingTipEntity = options.showHeadingCue ?? true
+    ? viewer.entities.getById(`${prefix}-${placement.id}-heading-tip`)
+    : undefined;
+  if (
+    (options.showHeadingCue ?? true) &&
+    (headingEntity?.polyline === undefined || headingTipEntity === undefined)
+  ) {
+    return false;
+  }
   marker.position = new ConstantPositionProperty(
     Cartesian3.fromDegrees(
       placement.position.longitude,
@@ -2341,8 +2368,7 @@ function updateCivilEngineeringModelPose(
   baseEntity.position = new ConstantPositionProperty(basePose.position);
   baseEntity.orientation = new ConstantProperty(basePose.orientation);
   for (const [index, part] of parts.entries()) {
-    const id = index === 0 ? baseId : `${baseId}-part-${part.id}`;
-    const entity = viewer.entities.getById(id);
+    const entity = partEntities[index];
     if (entity === undefined) {
       return false;
     }
@@ -2359,8 +2385,6 @@ function updateCivilEngineeringModelPose(
       52,
       heading,
     );
-    const headingEntity = viewer.entities.getById(`${prefix}-${placement.id}-heading`);
-    const headingTipEntity = viewer.entities.getById(`${prefix}-${placement.id}-heading-tip`);
     if (headingEntity?.polyline === undefined || headingTipEntity === undefined) {
       return false;
     }
