@@ -186,6 +186,15 @@ export function GameplayApp({
     [construction],
   );
 
+  const handleKeyboardPlace = useCallback(
+    (structureId: string) => {
+      if (mapRef.current?.placeStructureAtDefault(structureId) !== true) {
+        construction.setMessage("地図を準備中です", "info");
+      }
+    },
+    [construction.setMessage],
+  );
+
   const handleConfirmPlacement = useCallback(() => {
     const placement = construction.confirmPendingPlacement();
     if (placement === null) {
@@ -449,6 +458,7 @@ export function GameplayApp({
               selectedStructureId={construction.selectedStructureId}
               structures={construction.structures}
               onSelect={construction.selectStructure}
+              onKeyboardPlace={handleKeyboardPlace}
               onDragStart={beginDockDrag}
             />
           ) : null}
