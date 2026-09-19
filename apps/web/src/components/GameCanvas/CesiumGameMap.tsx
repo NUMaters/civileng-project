@@ -10,6 +10,8 @@ import {
   Credit,
   CustomHeightmapTerrainProvider,
   CustomShader,
+  ConstantPositionProperty,
+  ConstantProperty,
   CylinderGraphics,
   DirectionalLight,
   EllipsoidTerrainProvider,
@@ -97,6 +99,8 @@ const PLAY_AREA = {
  * 配置帯より広く取り、全体俯瞰しやすくしつつ「川が画面外」を防ぐ。
  */
 const CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M = 950;
+/** 境界付近の数mの揺れでは補正せず、カメラ変更イベントの往復を防ぐ。 */
+const CAMERA_FOCUS_SOFT_CLAMP_DEADBAND_M = 12;
 
 /** ズーム距離（地表〜カメラ）。俯瞰で区間全体が見えるよう上限を緩める。 */
 const CAMERA_MIN_ZOOM_DISTANCE_M = 180;
@@ -273,6 +277,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const dragGhostLastComputeAtRef = useRef(0);
     const dragGhostStatusRef = useRef<DragGhostStatus>({ overMap: false, placeable: false });
     const dragGhostLastKeyRef = useRef("");
+    const dragGhostStyleKeyRef = useRef("");
     /** ドラッグ中カーソル位置の影響圏（仮配置確定前）。 */
     const dragGhostInfluenceRef = useRef<StructureInfluence | null>(null);
     /** 施設モデルの描画指紋（同一なら再生成をスキップし、向きスライダーを滑らかにする）。 */
@@ -466,6 +471,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (screen.x < 0 || screen.y < 0 || screen.x > rect.width || screen.y > rect.height) {
           clearDragGhostEntities(viewer);
           dragGhostLastKeyRef.current = "";
+          dragGhostStyleKeyRef.current = "";
           dragGhostInfluenceRef.current = null;
           refreshProtectionWithDragGhost(viewer, floodStateRef.current, null, mapActiveRef.current);
           dragGhostStatusRef.current = { overMap: false, placeable: false };
@@ -476,6 +482,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         if (picked === undefined) {
           clearDragGhostEntities(viewer);
           dragGhostLastKeyRef.current = "";
+          dragGhostStyleKeyRef.current = "";
           dragGhostInfluenceRef.current = null;
           refreshProtectionWithDragGhost(viewer, floodStateRef.current, null, mapActiveRef.current);
           dragGhostStatusRef.current = { overMap: true, placeable: false };
@@ -508,7 +515,18 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           headingDegrees,
           preview: true,
         };
-        syncDragGhostModel(viewer, ghostPlacement, !placeable);
+        const invalid = !placeable;
+        const styleKey = `${structureId}:${invalid ? "invalid" : "placeable"}`;
+        if (styleKey !== dragGhostStyleKeyRef.current) {
+          clearDragGhostEntities(viewer);
+          syncDragGhostModel(viewer, ghostPlacement, invalid);
+          dragGhostStyleKeyRef.current = styleKey;
+        } else if (!updateCivilEngineeringModelPose(viewer, ghostPlacement, {
+          entityIdPrefix: DRAG_GHOST_ENTITY_PREFIX,
+          showHeadingCue: false,
+        })) {
+          syncDragGhostModel(viewer, ghostPlacement, invalid);
+        }
         const influence = calculateStructureInfluences([ghostPlacement])[0] ?? null;
         dragGhostInfluenceRef.current = influence;
         refreshProtectionWithDragGhost(viewer, floodStateRef.current, influence, mapActiveRef.current);
@@ -523,6 +541,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           dragGhostRafRef.current = 0;
         }
         dragGhostLastKeyRef.current = "";
+        dragGhostStyleKeyRef.current = "";
         dragGhostLastComputeAtRef.current = 0;
         dragGhostStatusRef.current = { overMap: false, placeable: false };
         dragGhostInfluenceRef.current = null;
@@ -558,6 +577,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       let eventHandler: ScreenSpaceEventHandler | null = null;
       let viewer: Viewer | null = null;
       let removeCameraMoveEnd: (() => void) | undefined;
+      let removeCameraChanged: (() => void) | undefined;
       let handleVisibilityChange: (() => void) | undefined;
       let removeContextLost: (() => void) | undefined;
       let handleViewportResize: (() => void) | undefined;
@@ -649,10 +669,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           CAMERA_MIN_ZOOM_DISTANCE_M;
         mapViewer.scene.screenSpaceCameraController.maximumZoomDistance =
           CAMERA_MAX_ZOOM_DISTANCE_M;
-        // 境界で入力とクランプが喧嘩してガクガクしないよう、慣性が残らない程度に抑える
-        mapViewer.scene.screenSpaceCameraController.inertiaSpin = 0.5;
-        mapViewer.scene.screenSpaceCameraController.inertiaTranslate = 0.5;
-        mapViewer.scene.screenSpaceCameraController.inertiaZoom = 0.4;
+        // 入力を離したあとも自然に減速させ、境界側はソフトクランプで戻す。
+        mapViewer.scene.screenSpaceCameraController.inertiaSpin = 0.78;
+        mapViewer.scene.screenSpaceCameraController.inertiaTranslate = 0.72;
+        mapViewer.scene.screenSpaceCameraController.inertiaZoom = 0.62;
         mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
           if (queuedTileCount === 0) {
             setIsMapReady(true);
@@ -861,14 +881,34 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             console.warn("River water surface failed to load", error);
           });
 
-        // カメラ「位置」ではなく「見ている地点」を川周辺に制限する（俯瞰時のガクガク防止）
+        // カメラ「位置」ではなく「見ている地点」を川周辺に制限する。
+        // moveEnd で瞬間移動させると入力を離した瞬間に視界が跳ねるため、
+        // camera.changed から毎フレーム少しずつ境界内へ戻す。
+        let correctingCamera = false;
+        let lastCameraCorrectionAt = 0;
+        const softenCameraBoundary = () => {
+          if (correctingCamera || freeCameraLookRef.current) {
+            return;
+          }
+          const now = performance.now();
+          if (now - lastCameraCorrectionAt < 1000 / 60) {
+            return;
+          }
+          lastCameraCorrectionAt = now;
+          const corrected = gentlyConstrainCameraFocusNearRiver(mapViewer, 0.2);
+          if (corrected === undefined) {
+            return;
+          }
+          correctingCamera = true;
+          mapViewer.camera.position = corrected;
+          correctingCamera = false;
+        };
+        removeCameraChanged = mapViewer.camera.changed.addEventListener(softenCameraBoundary);
         const settleCamera = () => {
           if (mapViewer.isDestroyed()) {
             return;
           }
-          if (!freeCameraLookRef.current) {
-            constrainCameraFocusNearRiver(mapViewer);
-          }
+          softenCameraBoundary();
           const focus = pickGroundFocus(mapViewer);
           if (focus === undefined) {
             return;
@@ -895,6 +935,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         let pointerDown: Cartesian2 | undefined;
         let moveSession: MoveSession | undefined;
         let livePendingLastAt = 0;
+        let pendingVisualKey = "";
 
         const liveUpdatePending = (placement: PlacedStructure, invalid = false) => {
           const now = performance.now();
@@ -902,19 +943,30 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             return;
           }
           livePendingLastAt = now;
-          for (const entity of [...mapViewer.entities.values]) {
-            if (
-              entity.id === `placement-${placement.id}` ||
-              entity.id.startsWith(`placement-${placement.id}-`)
-            ) {
-              mapViewer.entities.remove(entity);
+          const visualKey = `${placement.id}:${placement.structureId}:${invalid ? "invalid" : "placeable"}`;
+          if (visualKey !== pendingVisualKey) {
+            for (const entity of [...mapViewer.entities.values]) {
+              if (
+                entity.id === `placement-${placement.id}` ||
+                entity.id.startsWith(`placement-${placement.id}-`)
+              ) {
+                mapViewer.entities.remove(entity);
+              }
             }
-          }
-          try {
-            addCivilEngineeringModel(mapViewer, placement, true, true, { invalid });
-          } catch (error) {
-            console.error("Failed to live-update pending placement", placement.structureId, error);
-            addFallbackStructureMarker(mapViewer, placement, true, true, { invalid });
+            pendingVisualKey = visualKey;
+            try {
+              addCivilEngineeringModel(mapViewer, placement, true, true, { invalid });
+            } catch (error) {
+              console.error("Failed to live-update pending placement", placement.structureId, error);
+              addFallbackStructureMarker(mapViewer, placement, true, true, { invalid });
+            }
+          } else if (!updateCivilEngineeringModelPose(mapViewer, placement, { showHeadingCue: true })) {
+            try {
+              addCivilEngineeringModel(mapViewer, placement, true, true, { invalid });
+            } catch (error) {
+              console.error("Failed to recover pending placement model", placement.structureId, error);
+              addFallbackStructureMarker(mapViewer, placement, true, true, { invalid });
+            }
           }
           mapViewer.scene.requestRender();
         };
@@ -1051,6 +1103,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         window.cancelAnimationFrame(waterRenderFrame);
         eventHandler?.destroy();
         removeCameraMoveEnd?.();
+        removeCameraChanged?.();
         if (handleVisibilityChange !== undefined) {
           document.removeEventListener("visibilitychange", handleVisibilityChange);
         }
@@ -1869,10 +1922,13 @@ function isInsidePlayArea(position: GeoPosition): boolean {
  * カメラ本体ではなく画面中央の注視点を川周辺に戻す。
  * 斜め俯瞰ではカメラ位置がプレイ矩形の外に出るのが正常なので、位置クランプはしない。
  */
-function constrainCameraFocusNearRiver(viewer: Viewer): void {
+function gentlyConstrainCameraFocusNearRiver(
+  viewer: Viewer,
+  correctionStrength: number,
+): Cartesian3 | undefined {
   const focus = pickGroundFocus(viewer);
   if (focus === undefined) {
-    return;
+    return undefined;
   }
 
   const cartographic = Cartographic.fromCartesian(focus);
@@ -1880,10 +1936,15 @@ function constrainCameraFocusNearRiver(viewer: Viewer): void {
   const latitude = CesiumMath.toDegrees(cartographic.latitude);
   const nearest = nearestPointOnPolyline(longitude, latitude, ABUKUMA_RIVER_CENTERLINE);
 
-  if (nearest.distanceMeters <= CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M) {
-    return;
+  const excessDistance = nearest.distanceMeters - CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M;
+  if (excessDistance <= CAMERA_FOCUS_SOFT_CLAMP_DEADBAND_M) {
+    return undefined;
   }
 
+  const excessRatio = Math.min(
+    1,
+    excessDistance / Math.max(nearest.distanceMeters, 1),
+  );
   const ratio = CAMERA_FOCUS_MAX_DISTANCE_FROM_RIVER_M / nearest.distanceMeters;
   const nextLongitude = nearest.longitude + (longitude - nearest.longitude) * ratio;
   const nextLatitude = nearest.latitude + (latitude - nearest.latitude) * ratio;
@@ -1893,7 +1954,12 @@ function constrainCameraFocusNearRiver(viewer: Viewer): void {
     Math.max(0, cartographic.height),
   );
   const delta = Cartesian3.subtract(nextFocus, focus, new Cartesian3());
-  viewer.camera.position = Cartesian3.add(viewer.camera.positionWC, delta, new Cartesian3());
+  const correction = Cartesian3.multiplyByScalar(
+    delta,
+    Math.min(0.28, Math.max(0.04, excessRatio * correctionStrength)),
+    new Cartesian3(),
+  );
+  return Cartesian3.add(viewer.camera.positionWC, correction, new Cartesian3());
 }
 
 function pickGroundFocus(viewer: Viewer): Cartesian3 | undefined {
@@ -2204,6 +2270,121 @@ function syncDragGhostModel(
       invalid,
     });
   }
+}
+
+/**
+ * 既存の施設エンティティを再利用してポーズだけを更新する。
+ * ドラッグ／向き調整のたびにモデルを削除・再生成すると、GPU側の描画登録が揺れて
+ * 施設が点滅し、入力に対して遅れて見えるため、連続操作ではこの経路を使う。
+ */
+function updateCivilEngineeringModelPose(
+  viewer: Viewer,
+  placement: PlacedStructure,
+  options: Pick<StructureModelOptions, "entityIdPrefix" | "showHeadingCue"> = {},
+): boolean {
+  const prefix = options.entityIdPrefix ?? "placement";
+  const heading = CesiumMath.toRadians(
+    Number.isFinite(placement.headingDegrees) ? placement.headingDegrees : 0,
+  );
+  const groundHeight = resolveGroundHeightMeters(viewer, placement);
+  const baseId = `${prefix}-${placement.id}`;
+  // structureId／有効性／previewの見た目が変わる場合は呼び出し側が先に再生成する。
+  // ここでは同じモデル構成のEntityがすべて揃っている場合だけ姿勢を更新し、
+  // 欠落したEntityを別モデルの状態で使い回さない。
+  const baseEntity = viewer.entities.getById(baseId);
+  if (baseEntity === undefined) {
+    return false;
+  }
+
+  const parts = getStructureModelParts(placement.structureId);
+  const pose = (offsetEast = 0, offsetNorth = 0, centerHeight = 0) => {
+    const offset = offsetLonLatMeters(
+      placement.position.longitude,
+      placement.position.latitude,
+      offsetEast,
+      offsetNorth,
+      heading,
+    );
+    const position = Cartesian3.fromDegrees(
+      offset.longitude,
+      offset.latitude,
+      groundHeight + centerHeight,
+    );
+    const orientation = Transforms.headingPitchRollQuaternion(
+      Cartesian3.fromDegrees(offset.longitude, offset.latitude, groundHeight),
+      new HeadingPitchRoll(heading, 0, 0),
+    );
+    return { position, orientation };
+  };
+
+  const marker = viewer.entities.getById(`${prefix}-${placement.id}-marker`);
+  const beacon = viewer.entities.getById(`${prefix}-${placement.id}-beacon`);
+  if (marker === undefined || beacon === undefined) {
+    return false;
+  }
+  marker.position = new ConstantPositionProperty(
+    Cartesian3.fromDegrees(
+      placement.position.longitude,
+      placement.position.latitude,
+      groundHeight + 0.12,
+    ),
+  );
+  beacon.position = new ConstantPositionProperty(
+    Cartesian3.fromDegrees(
+      placement.position.longitude,
+      placement.position.latitude,
+      groundHeight + getStructureFootprintMeters(placement.structureId).height + 6,
+    ),
+  );
+
+  const basePose = pose(0, 0, parts[0]?.centerHeight ?? 0);
+  baseEntity.position = new ConstantPositionProperty(basePose.position);
+  baseEntity.orientation = new ConstantProperty(basePose.orientation);
+  for (const [index, part] of parts.entries()) {
+    const id = index === 0 ? baseId : `${baseId}-part-${part.id}`;
+    const entity = viewer.entities.getById(id);
+    if (entity === undefined) {
+      return false;
+    }
+    const partPose = pose(part.offsetEast ?? 0, part.offsetNorth ?? 0, part.centerHeight);
+    entity.position = new ConstantPositionProperty(partPose.position);
+    entity.orientation = new ConstantProperty(partPose.orientation);
+  }
+
+  if (options.showHeadingCue ?? true) {
+    const tip = offsetLonLatMeters(
+      placement.position.longitude,
+      placement.position.latitude,
+      0,
+      52,
+      heading,
+    );
+    const headingEntity = viewer.entities.getById(`${prefix}-${placement.id}-heading`);
+    const headingTipEntity = viewer.entities.getById(`${prefix}-${placement.id}-heading-tip`);
+    if (headingEntity?.polyline === undefined || headingTipEntity === undefined) {
+      return false;
+    }
+    headingEntity.polyline.positions = new ConstantProperty(
+      Cartesian3.fromDegreesArrayHeights([
+        placement.position.longitude,
+        placement.position.latitude,
+        groundHeight + 1.4,
+        tip.longitude,
+        tip.latitude,
+        groundHeight + 1.4,
+      ]),
+    );
+    headingTipEntity.position = new ConstantPositionProperty(
+      Cartesian3.fromDegrees(tip.longitude, tip.latitude, groundHeight + 2.4),
+    );
+    headingTipEntity.orientation = new ConstantProperty(
+      Transforms.headingPitchRollQuaternion(
+        Cartesian3.fromDegrees(tip.longitude, tip.latitude, groundHeight),
+        new HeadingPitchRoll(heading, -CesiumMath.PI_OVER_TWO, 0),
+      ),
+    );
+  }
+  return true;
 }
 
 function resolveGroundHeightMeters(viewer: Viewer, placement: PlacedStructure): number {
