@@ -182,7 +182,10 @@ export function GameplayApp({
 
   const handleDropPlace = useCallback(
     (structureId: string, position: GeoPosition, headingDegrees: number) => {
-      construction.beginPendingPlacement(structureId, position, headingDegrees);
+      const pending = construction.beginPendingPlacement(structureId, position, headingDegrees);
+      if (pending !== null) {
+        construction.setMessage("仮配置しました。位置と向きを調整して確定してください。", "info");
+      }
     },
     [construction],
   );

@@ -2386,6 +2386,30 @@ a {
   line-height: 1.55;
 }
 
+.result-panel__next-steps {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgb(100 180 210 / 16%);
+  border-radius: 13px;
+  background: rgb(255 255 255 / 4%);
+}
+
+.result-panel__next-steps strong {
+  color: var(--accent-hot);
+  font-family: var(--font-display);
+  font-size: 11px;
+}
+
+.result-panel__next-steps ul {
+  display: grid;
+  gap: 5px;
+  margin: 7px 0 0;
+  padding-left: 16px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .result-panel__score {
   display: flex;
   align-items: baseline;

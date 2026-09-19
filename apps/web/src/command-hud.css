@@ -90,6 +90,71 @@
   line-height: 1.25;
 }
 
+.cmd-mission__title-code {
+  color: var(--cmd-cyan-soft);
+}
+
+.cmd-exit-confirm {
+  position: absolute;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(2 10 16 / 48%);
+  backdrop-filter: blur(5px);
+}
+
+.cmd-exit-confirm__panel {
+  width: min(300px, calc(100vw - 36px));
+  padding: 16px;
+  border: 1px solid var(--cmd-border-strong);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgb(16 34 54 / 98%), rgb(6 12 22 / 98%));
+  box-shadow: 0 18px 44px rgb(0 0 0 / 42%);
+}
+
+.cmd-exit-confirm__panel strong {
+  color: #eef6ff;
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+
+.cmd-exit-confirm__panel p {
+  margin: 8px 0 0;
+  color: var(--cmd-cyan-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cmd-exit-confirm__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cmd-exit-confirm__actions button {
+  min-height: 36px;
+  border-radius: 9px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cmd-exit-confirm__cancel {
+  border: 1px solid rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 6%);
+  color: #d6e5ed;
+}
+
+.cmd-exit-confirm__leave {
+  border: 1px solid rgb(240 104 88 / 50%);
+  background: rgb(240 104 88 / 16%);
+  color: #ffc1b5;
+}
+
 .cmd-mission__timer {
   flex: 0 0 auto;
   color: #fff;
@@ -979,6 +1044,10 @@
   .cmd-mission__title {
     font-size: 12px;
     line-height: 1.2;
+  }
+
+  .cmd-mission__title-code {
+    display: none;
   }
 
   .cmd-mission__phase {
