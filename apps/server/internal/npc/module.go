@@ -1,0 +1,61 @@
+package npc
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+
+	"github.com/NUMaters/civileng-project/apps/server/internal/gamedata"
+	"github.com/NUMaters/civileng-project/apps/server/internal/npc/application"
+	"github.com/NUMaters/civileng-project/apps/server/internal/npc/infrastructure"
+	"github.com/NUMaters/civileng-project/apps/server/internal/npc/presentation"
+)
+
+func Register(mux *http.ServeMux) error {
+	if os.Getenv("NPC_DIALOGUE_ENABLED") == "false" {
+		return nil
+	}
+	root, err := gamedata.ResolveRoot()
+	if err != nil {
+		return err
+	}
+	catalog, err := infrastructure.LoadCatalog(root)
+	if err != nil {
+		return err
+	}
+	rules, err := gamedata.Load(root)
+	if err != nil {
+		return err
+	}
+	provider := env("NPC_LLM_PROVIDER", "ollama")
+	var generate application.Generate
+	switch provider {
+	case "ollama":
+		client, err := infrastructure.NewOllama(env("NPC_LLM_BASE_URL", "http://127.0.0.1:11434"), env("NPC_LLM_MODEL", "qwen3:14b"))
+		if err != nil {
+			return err
+		}
+		generate = client.Select
+	case "openai":
+		client, err := infrastructure.NewOpenAI(
+			env("OPENAI_API_KEY", ""),
+			env("OPENAI_BASE_URL", "https://api.openai.com"),
+			env("OPENAI_MODEL", "gpt-4o-mini"),
+		)
+		if err != nil {
+			return err
+		}
+		generate = client.Select
+	case "fixed":
+	default:
+		return fmt.Errorf("unsupported NPC_LLM_PROVIDER %q", provider)
+	}
+	presentation.Register(mux, application.NewServiceWithMode(catalog, generate, float64(rules.Rules.Timing.Phases.PreparationSeconds), provider))
+	return nil
+}
+func env(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}

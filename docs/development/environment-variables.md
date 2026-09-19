@@ -39,6 +39,13 @@ cp .env.example .env
 | `API_ADDR`      | `:8080`              | `cmd/api` の listen アドレス                     |
 | `GAME_ADDR`     | `:8081`              | `cmd/game` の listen アドレス（WebSocket `/ws`） |
 | `GAME_DATA_DIR` | `packages/game-data` | マスターデータ JSON のルート（相対または絶対）   |
+| `NPC_DIALOGUE_ENABLED` | 有効 | `false` でNPC APIを登録しない |
+| `NPC_LLM_PROVIDER` | `ollama` | `ollama`、`openai`、`fixed` のいずれか |
+| `NPC_LLM_MODEL` | `qwen3:14b` | Ollamaで使うモデル名 |
+| `NPC_LLM_BASE_URL` | `http://127.0.0.1:11434` | Ollamaの接続先 |
+| `OPENAI_API_KEY` | 未設定 | `NPC_LLM_PROVIDER=openai` のときだけGoサーバーが使用。クライアントへ公開しない |
+| `OPENAI_MODEL` | `gpt-4o-mini` | OpenAIで使うモデル名 |
+| `OPENAI_BASE_URL` | `https://api.openai.com` | OpenAI互換APIの接続先 |
 
 ### Web（Vite / `apps/web`）
 
