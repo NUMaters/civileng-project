@@ -42,6 +42,7 @@ Get-ChildItem .\docs\npc\requirements.md,.\docs\npc\detailed-design.md,.\docs\np
 全文を読むもの：
 
 - リポジトリルートの`CLAUDE.md`・`AGENTS.md`（存在するものだけ）
+- リポジトリルートの`README.md`（存在する場合）
 - `docs/npc/overview.md`
 - `docs/agent/claude-code-implementation-guide.md`（本書）
 
@@ -84,7 +85,7 @@ rg -n '^#{1,3} ' docs/npc/requirements.md docs/npc/detailed-design.md docs/npc/d
 - リポジトリ状態：現在のブランチ、`git status`、既存のユーザー変更、モノレポ・ワークスペース構成、ビルド・Lint・テストコマンド、Docker・DB・Redis・Ollama の起動方法
 - フロントエンド：Three.js／3D ワールドの構成、CesiumJS によるマップ表示・地理空間データの構成（マップ表示の主力）、プレイヤー座標・接近判定、施設配置と入力制御、ゲームフェーズ・タイマーの管理、WebSocket クライアント、UI コンポーネント・状態管理、マップデータと 3D アセットの形式
 - バックエンド：モジュール構成・依存方向、NPC機能が連携する既存のゲーム状態管理・通信基盤・マスターデータ基盤の有無（各領域の詳細設計は別エンジニアの担当であり、本書では前提としない。実装単位ごとに実装時点の状況を確認する）
-- AI・RAG：既存 AI／LLM 接続コードの有無、Ollama 接続方法の候補、既存 HTTP クライアント・設定方式、embeddings／vector search の既存実装、PostgreSQL に `pgvector` を追加できるか、簡易検索で初期要件を満たせるか
+- AI・RAG：既存 AI／LLM 接続コードの有無、Ollama 接続方法の候補、既存 HTTP クライアント・設定方式、embeddings／vector search の既存実装、PostgreSQL に `pgvector` を追加できるか、簡易検索で初期要件を満たせるか。モデル名やプロバイダーは固定せず、実装時点の品質・速度・運用条件で選定する
 
 対象選定調査で候補になりうる既存docsの例（実装単位に応じて必要なものだけを選ぶ。すべてを毎回読むわけではない）：
 
@@ -105,6 +106,7 @@ docs/architecture/tech-stack.md
 docs/api/rest-naming.md
 docs/api/websocket-naming.md
 docs/agent/guide.md
+README.md
 docs/development/principles.md
 docs/development/development-rules.md
 docs/development/naming-conventions.md
@@ -129,7 +131,7 @@ docs/git/pull-request.md
 
 - 承認されたIssueまたは実装単位に必要なファイルだけを読む
 - 一度に全NPC機能を実装しない。`requirements.md`・`detailed-design.md`の分割方針に従い、承認された単位ごとに実装する
-- 各段階で、変更したファイル一覧・追加したテスト・動作確認結果をユーザーへ報告する
+- 各段階で、変更したファイル一覧・追加したテスト・動作確認結果・変更理由・対応する要件をユーザーへ報告する
 - 次の段階へ進む前に、必ずユーザーの承認を待つ
 
 ---
@@ -156,7 +158,7 @@ docs/git/
 
 次は今回の実装範囲外である。
 
-- AI ディレクター
+- NPCによるゲーム難易度の自動調整
 - 災害の強度・発生タイミングの自動調整
 - 津波・地震など既存コア外の災害
 - NPC の移動・経路探索・避難
@@ -186,7 +188,7 @@ NPC機能の要件・統合設計・RAG/LLM専門設計は、`requirements.md`�
 - 既存仕様との競合
 - ユーザーの未コミット変更への影響
 
-### 2. 推奨アーキテクチャ
+### 2. アーキテクチャ候補の調査
 
 - フロントエンド配置
 - バックエンド配置
@@ -206,7 +208,7 @@ NPC機能の要件・統合設計・RAG/LLM専門設計は、`requirements.md`�
 - 小規模実証向け簡易検索
 - 外部ベクトル DB
 
-追加依存関係、起動手順、テスト容易性、1〜4 人での実証、5〜50 人への拡張性を比較し、1案を推奨する。
+追加依存関係、起動手順、テスト容易性、1〜4 人での実証、将来の5〜50 人規模への拡張性を比較し、判断理由と候補案を提示する。採用案はユーザー承認後に確定する。
 
 ### 4. 実装分割
 
@@ -306,7 +308,7 @@ Claude Code が次の仮データを提案したら、ファイルへ確定す�
 - 会話本文がサーバー・ブラウザのログへ残らない
 - NPC を無効にすると既存ゲームの画面・通信・結果が変わらない
 - 既存 `docs/` が変更されていない
-- 変更一覧と動作確認結果をユーザーへ提示する
+- 変更一覧、変更理由、対応要件、テストおよび動作確認結果をユーザーへ提示する
 
 ---
 
@@ -337,6 +339,7 @@ CivilCraft に、docs/npc/で定義された「地域情報提供型・住民NPC
 
 全文を読んでよいもの：
 - リポジトリルートのCLAUDE.md・AGENTS.md（存在するものだけ）
+- リポジトリルートのREADME.md（存在する場合）
 - docs/npc/overview.md
 - docs/agent/claude-code-implementation-guide.md
 
@@ -356,7 +359,7 @@ CivilCraft に、docs/npc/で定義された「地域情報提供型・住民NPC
 
 重要な禁止事項：
 - docs/npc/ および docs/agent/claude-code-implementation-guide.md 以外の既存docsを変更しない
-- AIディレクターを実装しない
+- NPCからゲーム難易度を自動調整する仕組みを実装しない
 - NPCに災害難易度・災害イベント・施設配置を制御させない
 - .env、APIキー、秘密情報を表示・コミットしない
 - 私の既存変更を破棄しない
@@ -410,4 +413,4 @@ NPCの名前・性格・自己紹介・質問候補、公的資料から作る�
 - Ollama モデル（GPU 上の日本語品質・速度試験後）
 - 匿名データ保存期間（実験・運用方針の協議後）
 - 研究利用時の説明・同意（実験実施前）
-- 5〜50 人向けクラウド LLM（将来負荷試験後）
+- 5〜50 人向けクラウド LLM（MVP対象外。将来の負荷試験後に別途判断）
