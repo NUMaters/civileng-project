@@ -17,6 +17,7 @@ import {
   EllipsoidTerrainProvider,
   HeadingPitchRange,
   HeadingPitchRoll,
+  HeightReference,
   ImageryLayer,
   Ion,
   LightingModel,
@@ -2356,6 +2357,10 @@ function updateCivilEngineeringModelPose(
       groundHeight + 0.12,
     ),
   );
+  if (marker.ellipse !== undefined) {
+    marker.ellipse.height = new ConstantProperty(groundHeight + 0.12);
+    marker.ellipse.heightReference = new ConstantProperty(HeightReference.NONE);
+  }
   beacon.position = new ConstantPositionProperty(
     Cartesian3.fromDegrees(
       placement.position.longitude,
@@ -2491,6 +2496,8 @@ function addCivilEngineeringModel(
     ellipse: {
       semiMajorAxis: markerRadius,
       semiMinorAxis: markerRadius,
+      height: groundHeight + 0.12,
+      heightReference: HeightReference.NONE,
       material: Color.fromCssColorString(
         invalid ? "#ef6b4a" : preview ? "#5ec8ff" : selected ? "#f0b429" : "#58d5a1",
       ).withAlpha(invalid ? 0.22 : preview ? 0.28 : selected ? 0.24 : 0.1),

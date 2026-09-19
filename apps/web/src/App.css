@@ -1144,6 +1144,25 @@ a {
   backdrop-filter: blur(10px);
 }
 
+.orientation-slider__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 2px 2px;
+  color: rgb(211 232 242 / 72%);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.orientation-slider__header output {
+  color: #f4c45b;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
 .orientation-slider__track {
   display: block;
   min-width: 0;
@@ -1161,6 +1180,10 @@ a {
 
 .cesium-orientation-hud.is-preview .orientation-slider__input {
   accent-color: #3aa0d8;
+}
+
+.cesium-orientation-hud.is-preview .orientation-slider__header output {
+  color: #9fe4ff;
 }
 
 .cesium-map-label {

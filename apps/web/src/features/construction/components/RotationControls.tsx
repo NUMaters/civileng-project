@@ -74,6 +74,10 @@ export function RotationControls({
         event.stopPropagation();
       }}
     >
+      <div className="orientation-slider__header">
+        <span>向き</span>
+        <output aria-live="polite">{String(draftDegrees).padStart(3, "0")}°</output>
+      </div>
       <label className="orientation-slider__track">
         <input
           className="orientation-slider__input"
