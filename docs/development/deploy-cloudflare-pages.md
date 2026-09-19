@@ -92,7 +92,7 @@ pnpm --filter @civilcraft/web pages:deploy
 | `CLOUDFLARE_ACCOUNT_ID`   | アカウント ID                                                     |
 | `ENABLE_CLOUDFLARE_PAGES` | `true` のとき push で自動デプロイ                                 |
 
-`develop` への push（web / game-data 変更時）、または Actions の **Run workflow**（`workflow_dispatch`）で https://civilcraft.pages.dev/ へ公開されます。`main` は現時点でモノレポのルート構成が揃っていないため、自動デプロイ対象から除外しています。PR ではこのデプロイ workflow は実行せず、GitHub Actions の CI と CodeQL のみを実行します。
+`develop` への push（web / game-data 変更時）、または `develop` を対象にした Actions の **Run workflow**（`workflow_dispatch`）で https://civilcraft.pages.dev/ へ公開されます。workflow_dispatch は任意ブランチから起動できますが、workflow 側で `develop` ref 以外を拒否します。`main` は現時点でモノレポのルート構成が揃っていないため、自動デプロイ対象から除外しています。PR ではこのデプロイ workflow は実行せず、GitHub Actions の CI と CodeQL のみを実行します。
 
 GitHub リポジトリ変数 `ENABLE_CLOUDFLARE_PAGES=true` を設定すると自動デプロイが有効になります。Cloudflare の Workers Builds Git 連携は無効にしてください。
 

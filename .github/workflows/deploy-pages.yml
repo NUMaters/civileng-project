@@ -24,8 +24,9 @@ jobs:
   deploy:
     name: Build and deploy web
     runs-on: ubuntu-24.04
-    # Repository variable ENABLE_CLOUDFLARE_PAGES=true のときだけ実行
-    if: ${{ vars.ENABLE_CLOUDFLARE_PAGES == 'true' || github.event_name == 'workflow_dispatch' }}
+    # Repository variable と develop ref の両方が一致したときだけ実行する。
+    # workflow_dispatch も develop 以外の ref からはデプロイしない。
+    if: ${{ vars.ENABLE_CLOUDFLARE_PAGES == 'true' && github.ref == 'refs/heads/develop' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
