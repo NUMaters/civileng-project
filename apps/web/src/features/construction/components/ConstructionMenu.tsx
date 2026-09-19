@@ -14,6 +14,7 @@ type ConstructionMenuProps = {
   selectedStructureId: string;
   structures: StructureDefinition[];
   onSelect: (structureId: string) => void;
+  onKeyboardPlace: (structureId: string) => void;
   onDragStart: (
     structureId: string,
     startX: number,
@@ -29,6 +30,7 @@ export function ConstructionMenu({
   selectedStructureId,
   structures,
   onSelect,
+  onKeyboardPlace,
   onDragStart,
 }: ConstructionMenuProps) {
   const selected = structures.find(({ id }) => id === selectedStructureId);
@@ -77,6 +79,13 @@ export function ConstructionMenu({
             </div>
           </dl>
           <p className="cmd-dock__tooltip-zone">{getStructureZoneMeaning(selected.id)}</p>
+          <button
+            className="cmd-dock__keyboard-place"
+            type="button"
+            onClick={() => onKeyboardPlace(selected.id)}
+          >
+            キーボードで配置
+          </button>
         </div>
       ) : null}
 
