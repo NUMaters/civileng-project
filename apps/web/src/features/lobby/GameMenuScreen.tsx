@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import heroImageUrl from "../../assets/civilcraft-abukuma-hero.webp";
 import { HowToPlayModal } from "./HowToPlayModal";
 import { markHowToSeen } from "./howtoStorage";
@@ -28,10 +28,10 @@ export function GameMenuScreen({
   const [loadProgress, setLoadProgress] = useState(0);
   const [howtoOpen, setHowtoOpen] = useState(openHowtoOnMount);
 
-  const closeHowto = () => {
+  const closeHowto = useCallback(() => {
     markHowToSeen();
     setHowtoOpen(false);
-  };
+  }, []);
   const titleId = useId();
   const howtoTitleId = useId();
 
