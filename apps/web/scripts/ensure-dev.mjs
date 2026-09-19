@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, openSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withEsbuildEnv } from "./resolve-esbuild-path.mjs";
 
 const webRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cacheRoot = path.join(homedir(), ".cache", "civilcraft");
@@ -39,15 +40,15 @@ const child = spawn(process.execPath, [script], {
   cwd: webRoot,
   detached: true,
   stdio: ["ignore", out, out],
-  env: {
+  env: withEsbuildEnv({
     ...process.env,
     CIVILCRAFT_DEV_STABLE: "1",
-  },
+  }),
 });
 child.unref();
 console.log(`[ensure-dev] spawned pid=${child.pid} log=${logPath}`);
 
-for (let i = 0; i < 40; i += 1) {
+for (let i = 0; i < 240; i += 1) {
   await new Promise((r) => setTimeout(r, 500));
   try {
     const res = await fetch("http://127.0.0.1:5173/__civilcraft_health", {

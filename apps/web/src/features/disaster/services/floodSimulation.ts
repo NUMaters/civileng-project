@@ -1,5 +1,9 @@
 import { loadRules, loadStructures } from "@civilcraft/game-data/load";
-import { getHazardKindLabel, type HazardKind, type StructureEffects } from "@civilcraft/game-data/types";
+import {
+  getHazardKindLabel,
+  type HazardKind,
+  type StructureEffects,
+} from "@civilcraft/game-data/types";
 import type { PlacedStructure } from "../../construction";
 import {
   getStructureEffectLabel,
@@ -17,11 +21,7 @@ import {
   resolveCandidateVulnerability,
   type OverflowCandidate,
 } from "./overflowBankSites";
-import {
-  influenceStrengthAt,
-  resolveInfluenceZone,
-  type InfluenceZone,
-} from "./influenceZones";
+import { influenceStrengthAt, resolveInfluenceZone, type InfluenceZone } from "./influenceZones";
 
 export type GamePhase = "idle" | "preparation" | "disaster" | "result" | "review";
 
@@ -71,6 +71,8 @@ export type StructureInfluence = {
   coverageHint: string;
   /** 影響圏内で相性の良い弱点 ID。 */
   coveredSiteIds: string[];
+  /** 影響圏内で相性が悪く、流入増などの干渉につながる弱点 ID。 */
+  adverseSiteIds: string[];
   /** 位置・向き・標高から見た配置有効率 0〜1。 */
   effectiveness: number;
   /** 仮配置のプレビュー影響圏。 */
@@ -189,8 +191,7 @@ export function beginDisaster(
   options: BeginDisasterOptions = {},
 ): FloodSimulationState {
   const weatherSeed =
-    options.weatherSeed ??
-    (Math.floor(Math.random() * 0x7fff_ffff) || DEFAULT_WEATHER_SEED);
+    options.weatherSeed ?? (Math.floor(Math.random() * 0x7fff_ffff) || DEFAULT_WEATHER_SEED);
   let weatherRng = weatherSeed >>> 0 || DEFAULT_WEATHER_SEED;
   const first = pickWeatherTarget(0, weatherRng);
   weatherRng = first.weatherRng;
@@ -576,9 +577,7 @@ export function getStructureInfluenceRadiusMeters(structureId: string): number {
 
 export { getStructureEffectLabel, getStructureZoneMeaning, getRiverPlacementContext };
 
-export function calculateStructureInfluences(
-  placements: PlacedStructure[],
-): StructureInfluence[] {
+export function calculateStructureInfluences(placements: PlacedStructure[]): StructureInfluence[] {
   // 仮配置も含める（向き調整中に影響圏が追従して見えるようにする）。
   // 治水効果の数値計算側は preview を除外する。
   return placements.map((placement) => {
@@ -598,6 +597,7 @@ export function calculateStructureInfluences(
       coverageTone: coverage.tone,
       coverageHint: coverage.hint,
       coveredSiteIds: coverage.coveredSiteIds,
+      adverseSiteIds: coverage.adverseSiteIds,
       effectiveness,
       preview: placement.preview === true,
     };
@@ -611,16 +611,27 @@ export function calculateStructureInfluences(
 function resolveInfluenceCoverage(
   placement: PlacedStructure,
   zone: InfluenceZone,
-): { tone: "good" | "warn" | "bad"; hint: string; coveredSiteIds: string[] } {
+): {
+  tone: "good" | "warn" | "bad";
+  hint: string;
+  coveredSiteIds: string[];
+  adverseSiteIds: string[];
+} {
   const definition = structureById.get(placement.structureId);
   if (definition === undefined) {
-    return { tone: "warn", hint: "影響範囲を弱点へ合わせる", coveredSiteIds: [] };
+    return {
+      tone: "warn",
+      hint: "影響範囲を弱点へ合わせる",
+      coveredSiteIds: [],
+      adverseSiteIds: [],
+    };
   }
 
   let bestGood = 0;
   let bestGoodHazard: HazardKind | null = null;
   let bestMismatch = 0;
   const coveredSiteIds: string[] = [];
+  const adverseSiteIds: string[] = [];
 
   for (const candidate of listOverflowCandidates()) {
     const strength = influenceStrengthAt(zone, candidate.longitude, candidate.latitude);
@@ -636,7 +647,11 @@ function resolveInfluenceCoverage(
         bestGoodHazard = candidate.primaryHazard;
       }
     } else if (affinity < 0.15) {
-      bestMismatch = Math.max(bestMismatch, strength * (affinity < 0 ? 1.2 : 0.7));
+      const mismatch = strength * (affinity < 0 ? 1.2 : 0.7);
+      bestMismatch = Math.max(bestMismatch, mismatch);
+      if (mismatch >= 0.12) {
+        adverseSiteIds.push(candidate.id);
+      }
     }
   }
 
@@ -645,6 +660,7 @@ function resolveInfluenceCoverage(
       tone: "good",
       hint: `${getHazardKindLabel(bestGoodHazard)}の弱点をカバー`,
       coveredSiteIds,
+      adverseSiteIds,
     };
   }
   if (bestMismatch >= 0.12) {
@@ -652,12 +668,14 @@ function resolveInfluenceCoverage(
       tone: "bad",
       hint: "相性の悪い弱点に当たっている",
       coveredSiteIds,
+      adverseSiteIds,
     };
   }
   return {
     tone: "warn",
     hint: "弱点が範囲外 — 位置・向きを調整",
     coveredSiteIds,
+    adverseSiteIds,
   };
 }
 
@@ -716,15 +734,12 @@ export function calculateMitigation(placements: PlacedStructure[]): MitigationSu
       effects.bankProtection * scale * Math.max(0, affinity.erosion),
     );
     combined.channelCapacityIncrease +=
-      effects.channelCapacityIncrease *
-      scale *
-      Math.max(0, affinity.capacityShortage);
+      effects.channelCapacityIncrease * scale * Math.max(0, affinity.capacityShortage);
     combined.activeStructureCount += 1;
   }
 
   // 施設が多いほど干渉が残りやすい（スパム抑制）。適所混成の 4〜5 基は許容する。
-  const spamPressure =
-    active.length <= 4 ? 0 : clamp((active.length - 4) * 0.07, 0, 0.3);
+  const spamPressure = active.length <= 4 ? 0 : clamp((active.length - 4) * 0.07, 0, 0.3);
   const placementInterference = clamp(
     interferenceSum / Math.max(1, active.length) + spamPressure,
     0,
@@ -739,9 +754,7 @@ export function calculateMitigation(placements: PlacedStructure[]): MitigationSu
     channelCapacityIncrease: softCap(combined.channelCapacityIncrease, 1.0, 1.45),
     activeStructureCount: combined.activeStructureCount,
     averageEffectiveness:
-      combined.activeStructureCount > 0
-        ? effectivenessSum / combined.activeStructureCount
-        : 0,
+      combined.activeStructureCount > 0 ? effectivenessSum / combined.activeStructureCount : 0,
     placementInterference,
   };
 }
@@ -805,9 +818,7 @@ function resolveMismatchPenalty(placement: PlacedStructure): number {
     return clamp(0.22 + (0.15 - affinity) * 1.2, 0, 0.75);
   }
   const roleMismatch =
-    nearest.primaryHazard !== definition.role.primaryHazard && affinity < 0.4
-      ? 0.12
-      : 0;
+    nearest.primaryHazard !== definition.role.primaryHazard && affinity < 0.4 ? 0.12 : 0;
   return roleMismatch;
 }
 
@@ -848,8 +859,7 @@ export function calculatePlacementEffectiveness(placement: PlacedStructure): num
   const weaknessBoost = nearestWeaknessBoost(placement);
   const roleFit = resolveRoleFit(placement);
   const mismatch = resolveMismatchPenalty(placement);
-  const combined =
-    hydraulic * 0.62 + weaknessBoost * 0.22 + roleFit * 0.28 - mismatch * 0.35;
+  const combined = hydraulic * 0.62 + weaknessBoost * 0.22 + roleFit * 0.28 - mismatch * 0.35;
   if (!Number.isFinite(combined)) {
     return 0.3;
   }

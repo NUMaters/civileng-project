@@ -177,13 +177,14 @@ function proxyGsiTiles(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   define: {
     CESIUM_BASE_URL: JSON.stringify(`/${cesiumBaseUrl}`),
   },
   cacheDir: viteCacheDir,
-  // plateau（巨大）を Vite の public コピーから外す。必要時のみ全コピー。
-  publicDir: includePlateauPublic ? "public" : false,
+  // 開発時はアイコン等をそのまま配信する。ビルド時だけ巨大な plateau を除外し、
+  // copySlimPublicAssets で必要な公開ファイルだけを成果物へ入れる。
+  publicDir: command === "serve" || includePlateauPublic ? "public" : false,
   plugins: [react(), serveCesiumAssets(), copySlimPublicAssets(), proxyGsiTiles()],
   optimizeDeps: {
     // Cesium pulls CommonJS deps (e.g. mersenne-twister). Prebundle them so
@@ -211,6 +212,9 @@ export default defineConfig({
     // 同一 LAN / テザリングのスマホからも届くよう全インターフェースで待ち受ける
     host: "0.0.0.0",
     strictPort: true,
+    fs: {
+      allow: [path.resolve(webRoot, "../..")],
+    },
     // 安定起動（dev-stable）では HMR / 監視を切り、iCloud 起因の停止を防ぐ
     ...(stableDev
       ? { hmr: false, watch: null }
@@ -232,4 +236,4 @@ export default defineConfig({
   test: {
     environment: "node",
   },
-});
+}));

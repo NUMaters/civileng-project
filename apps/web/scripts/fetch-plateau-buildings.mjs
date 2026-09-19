@@ -19,16 +19,27 @@ const ZIP_URL =
   "https://gic-plateau.s3.ap-northeast-1.amazonaws.com/2020/07203_koriyama-shi_2020_3Dtiles_etc_1_op.zip";
 const ZIP_INNER_PREFIX =
   "07203_koriyama-shi_2020_3Dtiles_etc_1_op/01_building/07203_koriyama-shi_2020_bldg_texture/";
+const fetchFullCity = process.argv.includes("--full-city");
 
 if (existsSync(tilesetPath) && !process.argv.includes("--force")) {
   console.log(`Already present: ${tilesetPath}`);
   process.exit(0);
 }
 
+if (!fetchFullCity) {
+  console.log(
+    "Skipping the full-city textured PLATEAU download. The default 3D Tiles layer streams only tiles around the map view (the game area is within roughly 20km of Koriyama Station).",
+  );
+  console.log(
+    "Use `pnpm --filter @civilcraft/web fetch:plateau:full` only when you need the full-city textured data for visual QA.",
+  );
+  process.exit(0);
+}
+
 mkdirSync(dirname(cacheZip), { recursive: true });
 
 if (!existsSync(cacheZip) || process.argv.includes("--force")) {
-  console.log("Downloading Koriyama textured 3D Tiles zip (~390MB)...");
+  console.log("Downloading full-city Koriyama textured 3D Tiles zip (~390MB)...");
   const response = await fetch(ZIP_URL);
   if (!response.ok || response.body === null) {
     throw new Error(`Download failed: ${response.status} ${response.statusText}`);
@@ -43,11 +54,9 @@ rmSync(extractRoot, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 mkdirSync(extractRoot, { recursive: true });
 
-execFileSync(
-  "unzip",
-  ["-o", cacheZip, `${ZIP_INNER_PREFIX}*`, "-d", extractRoot],
-  { stdio: "inherit" },
-);
+execFileSync("unzip", ["-o", cacheZip, `${ZIP_INNER_PREFIX}*`, "-d", extractRoot], {
+  stdio: "inherit",
+});
 
 const extracted = join(
   extractRoot,

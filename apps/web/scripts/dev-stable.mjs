@@ -20,6 +20,7 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withEsbuildEnv } from "./resolve-esbuild-path.mjs";
 
 const webRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const cacheRoot = path.join(homedir(), ".cache", "civilcraft");
@@ -92,6 +93,7 @@ function releaseLock() {
 }
 
 process.title = "civilcraft-web-dev";
+Object.assign(process.env, withEsbuildEnv(process.env));
 process.env.CIVILCRAFT_DEV_STABLE = "1";
 
 let stopping = false;
