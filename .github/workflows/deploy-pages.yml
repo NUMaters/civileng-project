@@ -3,9 +3,7 @@ name: Deploy Cloudflare Pages
 on:
   push:
     branches:
-      - main
       - develop
-      - feat/web-water-flood-ux
     paths:
       - "apps/web/**"
       - "packages/game-data/**"
@@ -26,8 +24,9 @@ jobs:
   deploy:
     name: Build and deploy web
     runs-on: ubuntu-24.04
-    # Repository variable ENABLE_CLOUDFLARE_PAGES=true のときだけ実行
-    if: ${{ vars.ENABLE_CLOUDFLARE_PAGES == 'true' || github.event_name == 'workflow_dispatch' }}
+    # Repository variable と develop ref の両方が一致したときだけ実行する。
+    # workflow_dispatch も develop 以外の ref からはデプロイしない。
+    if: ${{ vars.ENABLE_CLOUDFLARE_PAGES == 'true' && github.ref == 'refs/heads/develop' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,9 +68,10 @@ jobs:
       - name: Verify Cloudflare API token
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           http_code=$(curl -sS -o /tmp/cf-verify.json -w "%{http_code}" \
-            "https://api.cloudflare.com/client/v4/user/tokens/verify" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/tokens/verify" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}")
           echo "verify HTTP ${http_code}"
           cat /tmp/cf-verify.json

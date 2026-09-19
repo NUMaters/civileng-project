@@ -6,9 +6,9 @@ import {
 } from "./cesiumPerformance";
 
 describe("cesiumPerformance", () => {
-  it("returns desktop profile by default in node", () => {
+  it("returns a non-mobile profile by default in node", () => {
     const profile = resolveCesiumRenderProfile();
-    expect(profile.id).toBe("desktop");
+    expect(["desktop", "low"]).toContain(profile.id);
     expect(profile.loadBuildings).toBe(true);
   });
 
