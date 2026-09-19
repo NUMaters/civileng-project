@@ -29,6 +29,11 @@ export function FloodResultPanel({
     damagePercent >= CLEAR_THRESHOLD + 4
       ? "弱点の種類に合う施設を、河岸の適所へ混ぜて配置してみよう。"
       : `あと ${Math.max(0.1, damagePercent - CLEAR_THRESHOLD + 0.1).toFixed(1)}% 抑えればクリア。配置のタイミングも見直してみよう。`;
+  const failureSteps = [
+    "浸水・被災範囲と施設の影響圏が重なる場所を探す",
+    "決壊・注意地点の近くへ施設を仮配置して効果を比べる",
+    "大雨が始まる前に配置を確定し、予算を残す",
+  ];
 
   return (
     <div className="result-overlay">
@@ -42,6 +47,16 @@ export function FloodResultPanel({
             ? `被災度 ${damagePercent.toFixed(1)}% — クリア条件（${CLEAR_THRESHOLD}% 未満）を達成。`
             : `被災度 ${damagePercent.toFixed(1)}%。クリアは ${CLEAR_THRESHOLD}% 未満。${failureHint}`}
         </p>
+        {!isClear ? (
+          <div className="result-panel__next-steps">
+            <strong>次の一手</strong>
+            <ul>
+              {failureSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         <div className="result-panel__score">
           <span>SCORE</span>

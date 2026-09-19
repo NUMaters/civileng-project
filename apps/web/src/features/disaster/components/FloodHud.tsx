@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { HazardKind } from "@civilcraft/game-data/types";
 import type { FloodSimulationState, MitigationSummary } from "../services/floodSimulation";
 import { getHazardLabel } from "../../construction/structureVisuals";
@@ -51,6 +52,8 @@ export function FloodHud({
   onExit = () => undefined,
 }: FloodHudProps) {
   void _onStartGame;
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const cancelExitRef = useRef<HTMLButtonElement>(null);
   const overflows = overflowSites ?? [];
   const safeMitigation = sanitizeMitigation(mitigation);
   const hazardSummary = summarizeHazards(overflows);
@@ -59,13 +62,35 @@ export function FloodHud({
   const showWeather = phase === "disaster" || phase === "result" || phase === "review";
   const rainMm = precipitationMmPerHour(rainfallIntensity);
   const floodThreshold = 5.5;
+  const mission = missionTitle(phase);
+  const missionSeparator = mission.indexOf(": ");
+  const missionCode = missionSeparator >= 0 ? mission.slice(0, missionSeparator) : "";
+  const missionLabel = missionSeparator >= 0 ? mission.slice(missionSeparator + 2) : mission;
+
+  useEffect(() => {
+    if (!showExitConfirm) {
+      return;
+    }
+    cancelExitRef.current?.focus();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setShowExitConfirm(false);
+      }
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [showExitConfirm]);
 
   return (
     <section className={`cmd-mission cmd-mission--${phase}`} aria-label="ミッション状況">
       <header className="cmd-mission__head">
         <div>
           <p className="cmd-mission__phase">{phaseBadge[phase] ?? phase}</p>
-          <h2 className="cmd-mission__title">{missionTitle(phase)}</h2>
+          <h2 className="cmd-mission__title" aria-label={mission}>
+            {missionCode ? <span className="cmd-mission__title-code">{missionCode}: </span> : null}
+            {missionLabel}
+          </h2>
         </div>
         {phase !== "idle" ? (
           <div className="cmd-mission__head-actions">
@@ -73,7 +98,7 @@ export function FloodHud({
             <button
               className="cmd-mission__exit"
               type="button"
-              onClick={onExit}
+              onClick={() => setShowExitConfirm(true)}
               aria-label="ゲームを中断してメニューへ戻る"
             >
               中断
@@ -159,6 +184,23 @@ export function FloodHud({
         <button className="cmd-mission__skip" type="button" onClick={onStartRainNow}>
           準備をスキップ
         </button>
+      ) : null}
+
+      {showExitConfirm ? (
+        <div className="cmd-exit-confirm" role="dialog" aria-modal="true" aria-labelledby="cmd-exit-confirm-title">
+          <div className="cmd-exit-confirm__panel">
+            <strong id="cmd-exit-confirm-title">ゲームを中断しますか？</strong>
+            <p>現在の配置と進行状況は破棄され、メニューへ戻ります。</p>
+            <div className="cmd-exit-confirm__actions">
+              <button ref={cancelExitRef} type="button" className="cmd-exit-confirm__cancel" onClick={() => setShowExitConfirm(false)}>
+                続ける
+              </button>
+              <button type="button" className="cmd-exit-confirm__leave" onClick={onExit}>
+                メニューへ戻る
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </section>
   );
