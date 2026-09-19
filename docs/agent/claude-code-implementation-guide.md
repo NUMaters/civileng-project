@@ -3,8 +3,8 @@
 ## 文書の状態
 
 - 状態：実装未承認
-- 対象：[`overview.md`](../npc/overview.md)・[`requirements.md`](../npc/requirements.md)・[`detailed-design.md`](../npc/detailed-design.md)・[`dialogue-ai-design.md`](../npc/dialogue-ai-design.md) で定義した住民 NPC、およびよみやすさ設定（readingLevel）
-- 実装開始条件：`requirements.md`・`detailed-design.md`・`dialogue-ai-design.md` と、Claude Code の読み取り専用調査計画をユーザーが承認すること
+- 対象：[`overview.md`](../npc/overview.md)・[`requirements.md`](../npc/requirements.md)・[`detailed-design.md`](../npc/detailed-design.md)・[`dialogue-ai-design.md`](../npc/dialogue-ai-design.md)・[`backend-interface.md`](../npc/backend-interface.md) で定義した住民 NPC、およびよみやすさ設定（readingLevel）
+- 実装開始条件：`requirements.md`・`detailed-design.md`・`dialogue-ai-design.md`・`backend-interface.md` と、Claude Code の読み取り専用調査計画をユーザーが承認すること
 - 本書は「実装承認済み」「実装開始可能」の状態ではない。実装着手には、本書に従った段階的調査の結果をユーザーが承認する必要がある
 - 配置方針：ゲームの仕様書（NPC機能の要件・設計）は `docs/npc/` で、AI Agent 向けの実装手順・調査手順は `docs/agent/` で、それぞれ別に管理する
 
@@ -36,7 +36,7 @@
 `rg`が利用できないPowerShell環境では、次を使用する。
 
 ```powershell
-Get-ChildItem .\docs\npc\requirements.md,.\docs\npc\detailed-design.md,.\docs\npc\dialogue-ai-design.md | Select-String -Encoding UTF8 -Pattern '^#{1,3} '
+Get-ChildItem .\docs\npc\requirements.md,.\docs\npc\detailed-design.md,.\docs\npc\dialogue-ai-design.md,.\docs\npc\backend-interface.md | Select-String -Encoding UTF8 -Pattern '^#{1,3} '
 ```
 
 全文を読むもの：
@@ -50,11 +50,12 @@ Get-ChildItem .\docs\npc\requirements.md,.\docs\npc\detailed-design.md,.\docs\np
 - `docs/npc/requirements.md`
 - `docs/npc/detailed-design.md`
 - `docs/npc/dialogue-ai-design.md`
+- `docs/npc/backend-interface.md`
 
 見出し確認には、全文表示ではなく、次のような見出し検索を使用する。
 
 ```text
-rg -n '^#{1,3} ' docs/npc/requirements.md docs/npc/detailed-design.md docs/npc/dialogue-ai-design.md
+rg -n '^#{1,3} ' docs/npc/requirements.md docs/npc/detailed-design.md docs/npc/dialogue-ai-design.md docs/npc/backend-interface.md
 ```
 
 リポジトリについて確認するもの：
@@ -343,6 +344,7 @@ CivilCraft に、docs/npc/で定義された「地域情報提供型・住民NPC
 - docs/npc/requirements.md
 - docs/npc/detailed-design.md
 - docs/npc/dialogue-ai-design.md
+- docs/npc/backend-interface.md
 
 リポジトリについて確認するもの：
 - git status
