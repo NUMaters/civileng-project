@@ -193,9 +193,7 @@ export function FloodHud({
             </div>
           ) : null}
 
-          {hazardSummary !== "" ? (
-            <p className="cmd-mission__hazard">{hazardSummary}</p>
-          ) : null}
+          {hazardSummary !== "" ? <p className="cmd-mission__hazard">{hazardSummary}</p> : null}
         </>
       )}
 
@@ -215,7 +213,9 @@ export function FloodHud({
         >
           <div className="cmd-exit-confirm__panel">
             <strong id="cmd-exit-confirm-title">ゲームを中断しますか？</strong>
-            <p id="cmd-exit-confirm-description">現在の配置と進行状況は破棄され、メニューへ戻ります。</p>
+            <p id="cmd-exit-confirm-description">
+              現在の配置と進行状況は破棄され、メニューへ戻ります。
+            </p>
             <div className="cmd-exit-confirm__actions">
               <button
                 ref={cancelExitRef}
@@ -228,7 +228,12 @@ export function FloodHud({
               >
                 続ける
               </button>
-              <button ref={leaveExitRef} type="button" className="cmd-exit-confirm__leave" onClick={onExit}>
+              <button
+                ref={leaveExitRef}
+                type="button"
+                className="cmd-exit-confirm__leave"
+                onClick={onExit}
+              >
                 メニューへ戻る
               </button>
             </div>

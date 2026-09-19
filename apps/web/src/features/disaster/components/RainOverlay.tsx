@@ -169,10 +169,7 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
   }, [active, getLatestState]);
 
   return (
-    <div
-      className={`rain-overlay${active ? " is-active" : ""}`}
-      aria-hidden="true"
-    >
+    <div className={`rain-overlay${active ? " is-active" : ""}`} aria-hidden="true">
       <div ref={mistRef} className="rain-overlay__mist" />
       <canvas ref={canvasRef} className="rain-overlay__canvas" />
       <div ref={flashRef} className="rain-overlay__flash" />

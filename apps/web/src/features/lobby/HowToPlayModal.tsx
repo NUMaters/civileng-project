@@ -1,10 +1,5 @@
 import { useEffect, useRef } from "react";
-import {
-  hazardChipLabel,
-  HOWTO_FACILITIES,
-  HOWTO_PURPOSE,
-  HOWTO_STEPS,
-} from "./howtoContent";
+import { hazardChipLabel, HOWTO_FACILITIES, HOWTO_PURPOSE, HOWTO_STEPS } from "./howtoContent";
 
 type HowToPlayModalProps = {
   titleId: string;
@@ -61,7 +56,12 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
 
   return (
     <div className="howto-modal" role="presentation">
-      <button className="howto-modal__backdrop" type="button" aria-label="閉じる" onClick={onClose} />
+      <button
+        className="howto-modal__backdrop"
+        type="button"
+        aria-label="閉じる"
+        onClick={onClose}
+      />
       <div
         ref={panelRef}
         className="howto-modal__panel"

@@ -11,9 +11,9 @@ describe("overflowBankSites", () => {
     const candidates = listOverflowCandidates();
     expect(candidates.some((item) => item.id === "campus-core")).toBe(true);
     expect(candidates.some((item) => item.id === "inland-campus")).toBe(true);
-    expect(candidates.some((item) => item.id === "north-bend" && item.primaryHazard === "erosion")).toBe(
-      true,
-    );
+    expect(
+      candidates.some((item) => item.id === "north-bend" && item.primaryHazard === "erosion"),
+    ).toBe(true);
     expect(candidates.some((item) => item.id.startsWith("bank-"))).toBe(true);
     expect(candidates.length).toBeGreaterThan(8);
   });
@@ -35,9 +35,7 @@ describe("overflowBankSites", () => {
       ...candidates.slice(2).map((item) => ({ id: item.id, heightMeters: 20 })),
     ]);
 
-    expect(resolveCandidateVulnerability(low)).toBeGreaterThan(
-      resolveCandidateVulnerability(high),
-    );
+    expect(resolveCandidateVulnerability(low)).toBeGreaterThan(resolveCandidateVulnerability(high));
     clearOverflowTerrainElevations();
   });
 });

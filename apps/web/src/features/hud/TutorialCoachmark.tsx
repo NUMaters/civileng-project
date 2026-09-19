@@ -1,27 +1,9 @@
-const TUTORIAL_DONE_KEY = "civilcraft.tutorialDone";
-
 type TutorialCoachmarkProps = {
   phase: string;
   hasPlacement: boolean;
   hasPendingPlacement: boolean;
   onDismiss: () => void;
 };
-
-export function hasSeenTutorial(): boolean {
-  try {
-    return localStorage.getItem(TUTORIAL_DONE_KEY) === "1";
-  } catch {
-    return true;
-  }
-}
-
-export function markTutorialDone(): void {
-  try {
-    localStorage.setItem(TUTORIAL_DONE_KEY, "1");
-  } catch {
-    // ignore
-  }
-}
 
 /** 初回プレイ時の配置チュートリアル。 */
 export function TutorialCoachmark({

@@ -59,9 +59,7 @@ function serveCesiumAssets(): Plugin {
           return;
         }
 
-        const relativePath = decodeURIComponent(
-          url.slice(prefix.length).split("?")[0] ?? "",
-        );
+        const relativePath = decodeURIComponent(url.slice(prefix.length).split("?")[0] ?? "");
         if (relativePath === "" || relativePath.includes("..")) {
           res.statusCode = 400;
           res.end("bad path");
@@ -122,9 +120,9 @@ function copySlimPublicAssets(): Plugin {
   };
 }
 
-function attachGsiTileProxy(
-  middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void },
-): void {
+function attachGsiTileProxy(middlewares: {
+  use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void;
+}): void {
   middlewares.use((req: IncomingMessage, res: ServerResponse, next) => {
     const url = req.url ?? "";
     if (!url.startsWith("/gsi-tiles/")) {
@@ -149,10 +147,7 @@ function attachGsiTileProxy(
         }
         const buffer = Buffer.from(await upstream.arrayBuffer());
         res.statusCode = 200;
-        res.setHeader(
-          "Content-Type",
-          upstream.headers.get("content-type") ?? "image/jpeg",
-        );
+        res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "image/jpeg");
         res.setHeader("Cache-Control", "public, max-age=86400");
         res.end(buffer);
       })

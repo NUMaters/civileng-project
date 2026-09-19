@@ -23,13 +23,13 @@ packages/game-data/maps/
 
 ## `metadata.json`
 
-| フィールド | 型 | 必須 | 説明 |
-|------------|-----|:----:|------|
-| `id` | string | ○ | マップ識別子 |
-| `displayName` | string | ○ | UI 表示名 |
-| `bounds` | `{ west, south, east, north }` | ○ | プレイ矩形（WGS84 度） |
-| `initialCamera` | object | ○ | 初期カメラ（lon/lat/heading/pitch/range） |
-| `sources` | string[] | ○ | データ出典の人間可読リスト |
+| フィールド      | 型                             | 必須 | 説明                                      |
+| --------------- | ------------------------------ | :--: | ----------------------------------------- |
+| `id`            | string                         |  ○   | マップ識別子                              |
+| `displayName`   | string                         |  ○   | UI 表示名                                 |
+| `bounds`        | `{ west, south, east, north }` |  ○   | プレイ矩形（WGS84 度）                    |
+| `initialCamera` | object                         |  ○   | 初期カメラ（lon/lat/heading/pitch/range） |
+| `sources`       | string[]                       |  ○   | データ出典の人間可読リスト                |
 
 現行の郡山マップは日本大学工学部周辺の阿武隈川区間。bounds / initialCamera は web の `PLAY_AREA` / `INITIAL_VIEW` と整合させる。
 
@@ -37,11 +37,11 @@ packages/game-data/maps/
 
 ## `terrain.json`
 
-| フィールド | 型 | 必須 | 説明 |
-|------------|-----|:----:|------|
-| `coordinateSystem` | string | ○ | 既定 `EPSG:4326` |
-| `placeableRegion` | string | ○ | 配置可能域の論理名（例: `abukuma-river-corridor`） |
-| `note` | string | — | 実装メモ |
+| フィールド         | 型     | 必須 | 説明                                               |
+| ------------------ | ------ | :--: | -------------------------------------------------- |
+| `coordinateSystem` | string |  ○   | 既定 `EPSG:4326`                                   |
+| `placeableRegion`  | string |  ○   | 配置可能域の論理名（例: `abukuma-river-corridor`） |
+| `note`             | string |  —   | 実装メモ                                           |
 
 ### 現行プロトタイプとの関係
 
@@ -69,12 +69,12 @@ packages/game-data/maps/
 
 ## `objects.json`
 
-| フィールド | 型 | 説明 |
-|------------|-----|------|
-| `rivers` | array | 河川。`id` / `displayName` / `source` |
-| `roads` | array | 道路（MVP では空可） |
-| `protectedAreas` | array | 保全区域など（MVP では空可） |
-| `existingStructures` | array | 既存インフラ（MVP では空可） |
+| フィールド           | 型    | 説明                                  |
+| -------------------- | ----- | ------------------------------------- |
+| `rivers`             | array | 河川。`id` / `displayName` / `source` |
+| `roads`              | array | 道路（MVP では空可）                  |
+| `protectedAreas`     | array | 保全区域など（MVP では空可）          |
+| `existingStructures` | array | 既存インフラ（MVP では空可）          |
 
 幾何本体（ポリゴン座標）はファイルサイズと更新頻度の都合で、**表示用は Cesium／OSM／PLATEAU**、**ゲーム判定用は web 内の軽量ジオメトリ**に置く。objects.json はカタログと出典の索引とする。
 
@@ -84,11 +84,11 @@ packages/game-data/maps/
 
 ## web / server の参照
 
-| 利用者 | 参照方法 | 使うファイル |
-|--------|----------|--------------|
-| web | `@civilcraft/game-data` | metadata（将来 HUD）、structures / rules が主。河道は現状コード内ジオメトリ |
-| server | `GAME_DATA_DIR` + Go loader | maps を一覧・検証。配置検証は今後 `placeableRegion` とグリッドへ |
-| `tools/map-converter` | 入力→ `packages/game-data/maps/<id>/` | OSM / DEM から terrain・objects を生成する想定（ツール実装は別 Issue） |
+| 利用者                | 参照方法                              | 使うファイル                                                                |
+| --------------------- | ------------------------------------- | --------------------------------------------------------------------------- |
+| web                   | `@civilcraft/game-data`               | metadata（将来 HUD）、structures / rules が主。河道は現状コード内ジオメトリ |
+| server                | `GAME_DATA_DIR` + Go loader           | maps を一覧・検証。配置検証は今後 `placeableRegion` とグリッドへ            |
+| `tools/map-converter` | 入力→ `packages/game-data/maps/<id>/` | OSM / DEM から terrain・objects を生成する想定（ツール実装は別 Issue）      |
 
 ---
 
@@ -102,8 +102,8 @@ packages/game-data/maps/
 
 ## 関連ドキュメント
 
-| ドキュメント | 内容 |
-|--------------|------|
-| [geospatial.md](./geospatial.md) | Cesium・DEM・配置コリドー |
-| [game-data-master-data.md](./game-data-master-data.md) | マスターデータ全体 |
-| [civil-engineering/setting.md](../civil-engineering/setting.md) | 舞台設定 |
+| ドキュメント                                                    | 内容                      |
+| --------------------------------------------------------------- | ------------------------- |
+| [geospatial.md](./geospatial.md)                                | Cesium・DEM・配置コリドー |
+| [game-data-master-data.md](./game-data-master-data.md)          | マスターデータ全体        |
+| [civil-engineering/setting.md](../civil-engineering/setting.md) | 舞台設定                  |

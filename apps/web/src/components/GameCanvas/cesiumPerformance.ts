@@ -81,7 +81,12 @@ export function resolveCesiumRenderProfile(): CesiumRenderProfile {
     return MOBILE_PROFILE;
   }
   if (isLowEndDevice()) {
-    return { ...MOBILE_PROFILE, id: "low", loadBuildings: true, buildingMaximumScreenSpaceError: 28 };
+    return {
+      ...MOBILE_PROFILE,
+      id: "low",
+      loadBuildings: true,
+      buildingMaximumScreenSpaceError: 28,
+    };
   }
   return DESKTOP_PROFILE;
 }

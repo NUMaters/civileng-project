@@ -70,6 +70,10 @@
   gap: 12px;
 }
 
+.cmd-mission__head > div:first-child {
+  min-width: 0;
+}
+
 .cmd-mission__phase {
   margin: 0;
   color: var(--cmd-cyan-soft);
@@ -554,7 +558,12 @@
   width: 116%;
   height: 18px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgb(40 120 180 / 20%), rgb(72 196 255 / 55%), rgb(40 120 180 / 20%));
+  background: linear-gradient(
+    90deg,
+    rgb(40 120 180 / 20%),
+    rgb(72 196 255 / 55%),
+    rgb(40 120 180 / 20%)
+  );
   transform: rotate(-18deg);
 }
 
@@ -749,6 +758,12 @@
   font-size: 10px;
 }
 
+.cmd-dock__scroll-hint {
+  display: none;
+  color: var(--cmd-cyan-soft) !important;
+  white-space: nowrap;
+}
+
 .cmd-dock__list {
   display: flex;
   gap: 10px;
@@ -859,6 +874,20 @@
 
 .game-shell.is-pending-placement .cmd-dock__tooltip {
   display: none;
+}
+
+.game-shell.is-pending-placement .cmd-mission__prep {
+  display: none;
+}
+
+.game-shell.is-pending-placement .cmd-mission {
+  padding-bottom: 8px;
+}
+
+.game-shell.is-pending-placement .cmd-status {
+  opacity: 0.78;
+  transform: scale(0.92);
+  transform-origin: top right;
 }
 
 /* 配置中はモデル確認を優先し、施設カードだけを薄く残す。 */
@@ -1081,16 +1110,37 @@
 }
 
 @media (max-width: 720px) {
+  .cesium-game-map__telemetry {
+    top: calc(112px + env(safe-area-inset-top));
+    font-size: 8px;
+  }
+
   .cmd-mission {
     top: calc(8px + env(safe-area-inset-top));
     left: 10px;
-    width: min(158px, 44vw);
+    width: min(170px, 44vw);
     padding: 8px 10px;
   }
 
   .cmd-mission__title {
     font-size: 12px;
     line-height: 1.2;
+  }
+
+  .cmd-mission__head {
+    position: relative;
+    min-height: 30px;
+  }
+
+  .cmd-mission__head-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    gap: 4px;
+  }
+
+  .cmd-mission__head > div:first-child {
+    max-width: calc(100% - 64px);
   }
 
   .cmd-mission__title-code {
@@ -1143,7 +1193,7 @@
     flex-direction: row;
     align-items: stretch;
     gap: 6px;
-    width: min(196px, 52vw);
+    width: min(196px, 49vw);
   }
 
   .cmd-status__panel {
@@ -1273,6 +1323,7 @@
 
   .cmd-dock__label {
     margin-bottom: 4px;
+    align-items: center;
   }
 
   .cmd-dock__keyboard-place {
@@ -1295,6 +1346,15 @@
 
   .cmd-dock__label span {
     font-size: 11px;
+  }
+
+  .cmd-dock__hint {
+    max-width: 15em;
+  }
+
+  .cmd-dock__scroll-hint {
+    display: inline;
+    font-size: 9px;
   }
 
   .cmd-dock__list {

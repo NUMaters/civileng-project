@@ -8,13 +8,7 @@ import {
   refreshPlacementEffects,
 } from "../services/floodSimulation";
 
-const IDS = [
-  "levee",
-  "retention-basin",
-  "drainage-pump",
-  "revetment",
-  "channel-dredging",
-] as const;
+const IDS = ["levee", "retention-basin", "drainage-pump", "revetment", "channel-dredging"] as const;
 
 describe("FloodHud render after placement", () => {
   for (const structureId of IDS) {

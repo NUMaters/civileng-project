@@ -9,9 +9,15 @@
   },
   "typesVersions": {
     "*": {
-      "common/*": ["common/*"],
-      "rest/*": ["rest/*"],
-      "websocket/*": ["websocket/*"]
+      "common/*": [
+        "common/*"
+      ],
+      "rest/*": [
+        "rest/*"
+      ],
+      "websocket/*": [
+        "websocket/*"
+      ]
     }
   },
   "scripts": {

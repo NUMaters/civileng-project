@@ -10,7 +10,11 @@ export type DockPointerIntent = "pending" | "scroll" | "drag";
  * - 下方向の縦移動はドラッグにしない（誤開始防止）
  * 斜めはヒステリシスで上方向ドラッグを少し優先しつつ、横送りも守りやすい。
  */
-export function resolveDockPointerIntent(dx: number, dy: number, lockPx = DOCK_GESTURE_LOCK_PX): DockPointerIntent {
+export function resolveDockPointerIntent(
+  dx: number,
+  dy: number,
+  lockPx = DOCK_GESTURE_LOCK_PX,
+): DockPointerIntent {
   const ax = Math.abs(dx);
   const ay = Math.abs(dy);
   if (ax < lockPx && ay < lockPx) {

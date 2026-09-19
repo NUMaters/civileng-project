@@ -134,7 +134,9 @@ export function GameMenuScreen({
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">シングルプレイ</span>
             <strong>一人で治水に挑戦</strong>
-            <span className="game-menu__mode-meta">準備 60 秒 · 大雨 90 秒 · 被害 8% 未満でクリア</span>
+            <span className="game-menu__mode-meta">
+              準備 60 秒 · 大雨 90 秒 · 被害 8% 未満でクリア
+            </span>
           </span>
         </button>
         <button

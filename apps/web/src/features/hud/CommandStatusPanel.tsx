@@ -62,7 +62,10 @@ export function CommandStatusPanel({
           <small>/100</small>
         </strong>
         <div className="cmd-status__track cmd-status__track--safety" aria-hidden="true">
-          <span className="cmd-status__fill cmd-status__fill--safety" style={{ width: `${safetyScore}%` }} />
+          <span
+            className="cmd-status__fill cmd-status__fill--safety"
+            style={{ width: `${safetyScore}%` }}
+          />
         </div>
       </div>
 

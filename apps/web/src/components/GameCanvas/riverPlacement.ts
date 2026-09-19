@@ -8,10 +8,7 @@ import {
   type LonLat,
 } from "./abukumaRiverGeometry";
 
-export {
-  NORMAL_CHANNEL_HALF_WIDTH_M,
-  PLACEABLE_CORRIDOR_HALF_WIDTH_M,
-};
+export { NORMAL_CHANNEL_HALF_WIDTH_M, PLACEABLE_CORRIDOR_HALF_WIDTH_M };
 
 export type RiverNearestPoint = {
   longitude: number;

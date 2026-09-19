@@ -172,7 +172,11 @@ export function buildCenterlineCorridorRing(
   const ring = [...left, ...right.reverse()];
   const first = ring[0];
   const last = ring[ring.length - 1];
-  if (first !== undefined && last !== undefined && (first.lon !== last.lon || first.lat !== last.lat)) {
+  if (
+    first !== undefined &&
+    last !== undefined &&
+    (first.lon !== last.lon || first.lat !== last.lat)
+  ) {
     ring.push({ ...first });
   }
   return ring;
@@ -191,12 +195,16 @@ export const ABUKUMA_PLACEABLE_CORRIDOR: ReadonlyArray<LonLat> = buildCenterline
 export const ABUKUMA_PLACEABLE_POLYGON = ABUKUMA_PLACEABLE_CORRIDOR;
 
 /** 氾濫寸前の河道沿い氾濫原（中心線 ± 200 m）。 */
-export const ABUKUMA_NEAR_OVERFLOW_FLOODPLAIN: ReadonlyArray<LonLat> =
-  buildCenterlineCorridorRing(ABUKUMA_RIVER_CENTERLINE, NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
+export const ABUKUMA_NEAR_OVERFLOW_FLOODPLAIN: ReadonlyArray<LonLat> = buildCenterlineCorridorRing(
+  ABUKUMA_RIVER_CENTERLINE,
+  NEAR_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
+);
 
 /** 越水拡大時の最大氾濫原（中心線 ± 320 m）。 */
-export const ABUKUMA_FULL_OVERFLOW_FLOODPLAIN: ReadonlyArray<LonLat> =
-  buildCenterlineCorridorRing(ABUKUMA_RIVER_CENTERLINE, FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M);
+export const ABUKUMA_FULL_OVERFLOW_FLOODPLAIN: ReadonlyArray<LonLat> = buildCenterlineCorridorRing(
+  ABUKUMA_RIVER_CENTERLINE,
+  FULL_OVERFLOW_FLOODPLAIN_HALF_WIDTH_M,
+);
 
 function bearingRadians(from: LonLat, to: LonLat): number {
   const lat1 = (from.lat * Math.PI) / 180;

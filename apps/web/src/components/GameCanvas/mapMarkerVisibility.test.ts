@@ -9,8 +9,7 @@ function shouldShowWeaknessTargets(input: {
   phase: "idle" | "preparation" | "disaster" | "result" | "review";
   influenceCount: number;
 }): boolean {
-  const playable =
-    input.mapActive && (input.phase === "preparation" || input.phase === "disaster");
+  const playable = input.mapActive && (input.phase === "preparation" || input.phase === "disaster");
   return playable && input.influenceCount > 0;
 }
 
@@ -31,16 +30,16 @@ function shouldShowOverflowMarks(input: {
 
 describe("map marker visibility gates", () => {
   it("ロビー・未開始では弱点も配置帯も決壊も出さない", () => {
-    expect(
-      shouldShowWeaknessTargets({ mapActive: false, phase: "idle", influenceCount: 3 }),
-    ).toBe(false);
+    expect(shouldShowWeaknessTargets({ mapActive: false, phase: "idle", influenceCount: 3 })).toBe(
+      false,
+    );
     expect(shouldShowPlaceableZone({ mapActive: false, phase: "preparation" })).toBe(false);
-    expect(
-      shouldShowOverflowMarks({ mapActive: false, activeFlood: true, overflowCount: 2 }),
-    ).toBe(false);
-    expect(
-      shouldShowWeaknessTargets({ mapActive: true, phase: "idle", influenceCount: 1 }),
-    ).toBe(false);
+    expect(shouldShowOverflowMarks({ mapActive: false, activeFlood: true, overflowCount: 2 })).toBe(
+      false,
+    );
+    expect(shouldShowWeaknessTargets({ mapActive: true, phase: "idle", influenceCount: 1 })).toBe(
+      false,
+    );
   });
 
   it("準備中でも未配置なら弱点マーカーは出さない", () => {
@@ -57,14 +56,14 @@ describe("map marker visibility gates", () => {
   });
 
   it("決壊マークは大雨中かつ越水があるときだけ", () => {
-    expect(
-      shouldShowOverflowMarks({ mapActive: true, activeFlood: false, overflowCount: 2 }),
-    ).toBe(false);
-    expect(
-      shouldShowOverflowMarks({ mapActive: true, activeFlood: true, overflowCount: 0 }),
-    ).toBe(false);
-    expect(
-      shouldShowOverflowMarks({ mapActive: true, activeFlood: true, overflowCount: 1 }),
-    ).toBe(true);
+    expect(shouldShowOverflowMarks({ mapActive: true, activeFlood: false, overflowCount: 2 })).toBe(
+      false,
+    );
+    expect(shouldShowOverflowMarks({ mapActive: true, activeFlood: true, overflowCount: 0 })).toBe(
+      false,
+    );
+    expect(shouldShowOverflowMarks({ mapActive: true, activeFlood: true, overflowCount: 1 })).toBe(
+      true,
+    );
   });
 });

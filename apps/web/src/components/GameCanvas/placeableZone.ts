@@ -6,10 +6,7 @@ import {
   HeightReference,
   Viewer,
 } from "cesium";
-import {
-  ABUKUMA_RIVER_CENTERLINE,
-  PLACEABLE_CORRIDOR_HALF_WIDTH_M,
-} from "./abukumaRiverGeometry";
+import { ABUKUMA_RIVER_CENTERLINE, PLACEABLE_CORRIDOR_HALF_WIDTH_M } from "./abukumaRiverGeometry";
 
 const FILL_ID = "placeable-river-bank-fill";
 const EDGE_ID = "placeable-river-bank-edge";

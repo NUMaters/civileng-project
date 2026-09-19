@@ -127,33 +127,30 @@ export function useConstruction() {
   useEffect(() => () => clearHideTimer(), [clearHideTimer]);
 
   /** 洪水フェーズに合わせて予算経済を同期する。 */
-  const setEconomyPhase = useCallback(
-    (phase: BudgetEconomyPhase) => {
-      const previous = economyPhaseRef.current;
-      economyPhaseRef.current = phase;
-      setEconomyPhaseState(phase);
+  const setEconomyPhase = useCallback((phase: BudgetEconomyPhase) => {
+    const previous = economyPhaseRef.current;
+    economyPhaseRef.current = phase;
+    setEconomyPhaseState(phase);
 
-      if (
-        phase === "preparation" &&
-        (previous === "idle" || previous === "result" || previous === "review")
-      ) {
-        disasterGrantAppliedRef.current = false;
-      }
+    if (
+      phase === "preparation" &&
+      (previous === "idle" || previous === "result" || previous === "review")
+    ) {
+      disasterGrantAppliedRef.current = false;
+    }
 
-      if (phase === "disaster" && previous !== "disaster" && !disasterGrantAppliedRef.current) {
-        disasterGrantAppliedRef.current = true;
-        const granted = applyDisasterStartGrant(budgetRef.current);
-        budgetRef.current = granted;
-        setBudget(granted);
-        // 緊急予算は HUD の数値変化で十分。トーストは出さない。
-      }
+    if (phase === "disaster" && previous !== "disaster" && !disasterGrantAppliedRef.current) {
+      disasterGrantAppliedRef.current = true;
+      const granted = applyDisasterStartGrant(budgetRef.current);
+      budgetRef.current = granted;
+      setBudget(granted);
+      // 緊急予算は HUD の数値変化で十分。トーストは出さない。
+    }
 
-      if (phase !== "preparation" && phase !== "disaster") {
-        setNetIncomePerSecond(0);
-      }
-    },
-    [],
-  );
+    if (phase !== "preparation" && phase !== "disaster") {
+      setNetIncomePerSecond(0);
+    }
+  }, []);
 
   // 準備／災害中は補給 − 維持費で予算を更新する（壁時計ベース。フレーム落ちでも遅れない）。
   useEffect(() => {

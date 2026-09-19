@@ -39,21 +39,21 @@
 
 本設計時点で、NPC機能が依存する既存モジュールの実装状況を次のとおり確認した。いずれも中身が`package`宣言のみ、または0バイトの空スタブであり、実装済みの機能ではない。
 
-| 対象 | 現状 | 区分 |
-|---|---|---|
-| `apps/server/internal/game/state/{game_state,player_state,world_state}.go` | `package state`宣言のみ | `[NPC実装前に別Issueで実装が必要]`（フェーズ管理・ゲーム状態の変化を識別する仕組み・浸水状態の保持元として必須） |
-| `apps/server/internal/game/tick/{loop,scheduler}.go` | `package tick`宣言のみ | `[NPC実装前に別Issueで実装が必要]`（会話中もTickが進むことの検証に必須） |
-| `apps/server/internal/game/realtime/{client,hub,reader,writer}.go` | `package realtime`宣言のみ | `[NPC実装前に別Issueで実装が必要]`（リアルタイム通信基盤そのもの。具体的な通信方式はAPI設計Issueで決定） |
-| `apps/server/internal/game/session/{registry,session}.go` | `package session`宣言のみ | `[NPC実装前に別Issueで実装が必要]`（ゲームセッション・プレイヤー所属判定に必須） |
-| `apps/server/internal/game/snapshot/{repository,snapshot}.go` | `package snapshot`宣言のみ | `[要確認]`（NPC機能から直接使うかは未定） |
-| `apps/server/internal/construction/{domain,application,infrastructure,presentation}/*.go` | 各ファイル`package`宣言のみ | `[既存の空スタブ]`（実装パターンの参考にはなるが中身はない） |
-| `apps/server/cmd/game/main.go` | ヘルスチェックのみの実装（`[既存実装]`） | `[NPC実装と同時に新規実装する候補]`（`npc`モジュールのDI配線。通信ハンドラ登録はAPI設計Issue確定後） |
-| `apps/web/src/stores/{playerStore,gameStore}.ts` | 0バイト | `[NPC実装と同時に新規実装する候補]` |
-| `apps/web/src/services/websocket/`・`services/storage/` | ディレクトリのみ存在、ファイルなし | `[要確認／API設計Issueで決定]`（`services/websocket/`は通信方式確定後、`services/storage/`はNPC実装と同時に新規実装する候補） |
-| `apps/web/src/game/**`（Three.js層） | 0バイト | `[要確認]`（NPC接近判定の予測表示との関連は実装時に確認） |
-| `packages/game-schema/websocket/{client-events,server-events,payloads}.ts` | 実データあり | `[既存実装]`（NPCイベント追加の要否・内容はAPI設計Issueで決定） |
-| `packages/game-data/structures/*.json` | 実データあり | `[既存実装]`（参照パターンとして利用） |
-| `packages/game-data/scenarios/*.json` | 一部空（`beginner.json`等） | `[要確認]`（NPC有効/無効フラグの追加要否を含む） |
+| 対象                                                                                      | 現状                                     | 区分                                                                                                                          |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `apps/server/internal/game/state/{game_state,player_state,world_state}.go`                | `package state`宣言のみ                  | `[NPC実装前に別Issueで実装が必要]`（フェーズ管理・ゲーム状態の変化を識別する仕組み・浸水状態の保持元として必須）              |
+| `apps/server/internal/game/tick/{loop,scheduler}.go`                                      | `package tick`宣言のみ                   | `[NPC実装前に別Issueで実装が必要]`（会話中もTickが進むことの検証に必須）                                                      |
+| `apps/server/internal/game/realtime/{client,hub,reader,writer}.go`                        | `package realtime`宣言のみ               | `[NPC実装前に別Issueで実装が必要]`（リアルタイム通信基盤そのもの。具体的な通信方式はAPI設計Issueで決定）                      |
+| `apps/server/internal/game/session/{registry,session}.go`                                 | `package session`宣言のみ                | `[NPC実装前に別Issueで実装が必要]`（ゲームセッション・プレイヤー所属判定に必須）                                              |
+| `apps/server/internal/game/snapshot/{repository,snapshot}.go`                             | `package snapshot`宣言のみ               | `[要確認]`（NPC機能から直接使うかは未定）                                                                                     |
+| `apps/server/internal/construction/{domain,application,infrastructure,presentation}/*.go` | 各ファイル`package`宣言のみ              | `[既存の空スタブ]`（実装パターンの参考にはなるが中身はない）                                                                  |
+| `apps/server/cmd/game/main.go`                                                            | ヘルスチェックのみの実装（`[既存実装]`） | `[NPC実装と同時に新規実装する候補]`（`npc`モジュールのDI配線。通信ハンドラ登録はAPI設計Issue確定後）                          |
+| `apps/web/src/stores/{playerStore,gameStore}.ts`                                          | 0バイト                                  | `[NPC実装と同時に新規実装する候補]`                                                                                           |
+| `apps/web/src/services/websocket/`・`services/storage/`                                   | ディレクトリのみ存在、ファイルなし       | `[要確認／API設計Issueで決定]`（`services/websocket/`は通信方式確定後、`services/storage/`はNPC実装と同時に新規実装する候補） |
+| `apps/web/src/game/**`（Three.js層）                                                      | 0バイト                                  | `[要確認]`（NPC接近判定の予測表示との関連は実装時に確認）                                                                     |
+| `packages/game-schema/websocket/{client-events,server-events,payloads}.ts`                | 実データあり                             | `[既存実装]`（NPCイベント追加の要否・内容はAPI設計Issueで決定）                                                               |
+| `packages/game-data/structures/*.json`                                                    | 実データあり                             | `[既存実装]`（参照パターンとして利用）                                                                                        |
+| `packages/game-data/scenarios/*.json`                                                     | 一部空（`beginner.json`等）              | `[要確認]`（NPC有効/無効フラグの追加要否を含む）                                                                              |
 
 **前提条件**：NPC機能は `game/state`（フェーズ管理・ゲーム状態の変化を識別する仕組み・浸水状態）および `game/session`（ゲームセッション・プレイヤー所属）が実装されていることに依存する。これらは現状空スタブであり、NPC実装前または並行して別Issueでの実装が前提条件となる。本書はこれらの実装を提案するものではなく、NPC機能側から必要とするインターフェースを明示するにとどめる。
 
@@ -63,11 +63,11 @@
 
 `apps/web/src/features/npc/`（`construction`と同型：`components/` `hooks/` `services/` `types/` `index.ts`）を新設する。NPC文言は次の3カテゴリに分離する（詳細は13章）。配信経路（通信手段）はAPI設計Issueで決定する。
 
-| カテゴリ | データソース | 配信経路 |
-|---|---|---|
-| LLM生成回答（準備・自由入力） | Ollama→サーバーで一度だけ表示用構造へ変換 | API経由（通信方式はAPI設計Issueで決定） |
+| カテゴリ                                                                   | データソース                                    | 配信経路                                            |
+| -------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------- |
+| LLM生成回答（準備・自由入力）                                              | Ollama→サーバーで一度だけ表示用構造へ変換       | API経由（通信方式はAPI設計Issueで決定）             |
 | 承認済みマスターデータ（質問候補・自己紹介・災害中定型文・フォールバック） | `packages/game-data/npc/*.json`（人間承認済み） | API経由（会話開始時、通信方式はAPI設計Issueで決定） |
-| フロントエンド静的UIラベル（話す／閉じる／もっと詳しく聞く 等） | フロントエンドコード内の定数 | 配信なし（ビルドに同梱） |
+| フロントエンド静的UIラベル（話す／閉じる／もっと詳しく聞く 等）            | フロントエンドコード内の定数                    | 配信なし（ビルドに同梱）                            |
 
 いずれも同じ`ReadingAwareText`コンポーネントで描画するが、静的UIラベルは通信経由にしない。
 
@@ -109,11 +109,11 @@ API設計Issueで通信データの型・パッケージ配置が決定した後
 
 `readingLevel`は通信へ送信しないため（NPC-NFR-007）、通信型を集約する`packages/game-schema`へ置く必然性はない。配置候補を比較する。
 
-| 案 | 長所 | 短所 |
-|---|---|---|
-| `packages/ui`の公開型として配置 | `ReadingAwareText`コンポーネント自身がこの型を必要とし、型の所有者をコンポーネント提供パッケージに一致させられる。`apps/web`が`packages/ui`をimportする既存の依存方向と整合する | `packages/ui`は現状パッケージとして未整備（新規作成が必要） |
-| `apps/web`の設定型として配置 | 影響範囲が最も狭い | `packages/ui`の`ReadingAwareText`自体がこの型を必要とするため、`apps/web`内に置くと`packages/ui`が`apps/web`に依存する逆転が生じ、依存ルール上望ましくない |
-| `packages/game-schema`の共通型として配置 | 「共通型はgame-schemaに集約」という既存の分かりやすいルールに従える | `game-schema`は「REST API・WebSocketイベントの型定義」パッケージであり、通信されない値を置くと責務が曖昧になる |
+| 案                                       | 長所                                                                                                                                                                            | 短所                                                                                                                                                       |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/ui`の公開型として配置          | `ReadingAwareText`コンポーネント自身がこの型を必要とし、型の所有者をコンポーネント提供パッケージに一致させられる。`apps/web`が`packages/ui`をimportする既存の依存方向と整合する | `packages/ui`は現状パッケージとして未整備（新規作成が必要）                                                                                                |
+| `apps/web`の設定型として配置             | 影響範囲が最も狭い                                                                                                                                                              | `packages/ui`の`ReadingAwareText`自体がこの型を必要とするため、`apps/web`内に置くと`packages/ui`が`apps/web`に依存する逆転が生じ、依存ルール上望ましくない |
+| `packages/game-schema`の共通型として配置 | 「共通型はgame-schemaに集約」という既存の分かりやすいルールに従える                                                                                                             | `game-schema`は「REST API・WebSocketイベントの型定義」パッケージであり、通信されない値を置くと責務が曖昧になる                                             |
 
 **結論**：`ReadingLevel`は`packages/ui`の公開型として配置する。`apps/web`側は`packages/ui`をimportして型を参照する。この決定は通信方式の選定と独立しており、API設計Issueの結果に関わらず変わらない。
 
@@ -134,9 +134,9 @@ export type ReadingLevel = "kana" | "furigana" | "standard";
 // packages/ui/src/ReadingAwareText/types.ts（新規作成候補）
 export type ReadingAwareSegment = {
   text: string;
-  reading?: string;             // 辞書照合で確定した読み。確定しない場合は省略
+  reading?: string; // 辞書照合で確定した読み。確定しない場合は省略
   showRubyInStandard?: boolean; // 標準モードでもルビを表示する対象か
-  glossaryTermId?: string;      // 承認済みグロッサリーとの対応がある場合のみ設定
+  glossaryTermId?: string; // 承認済みグロッサリーとの対応がある場合のみ設定
 };
 ```
 
@@ -148,16 +148,16 @@ export type ReadingAwareSegment = {
 
 `[確定仕様]`
 
-| 項目 | 内容 |
-|---|---|
-| localStorageキー | `civilcraft.npc.readingLevel`（新規作成候補、正式名は命名規則確認後に確定） |
-| 保存値のバージョン | `{ version: 1, value: ReadingLevel }`のようにバージョン付きで保存し、将来のスキーマ変更に備える |
-| 未設定時のデフォルト | `standard` |
-| 不正な保存値 | パース失敗・不明な値・バージョン不一致の場合は`standard`へフォールバックする |
-| localStorage利用不可 | `try/catch`で握りつぶし、メモリ内デフォルト`standard`で動作を継続する（ゲームを停止させない） |
-| 反映範囲 | 変更は同一ブラウザ内のUIへ即時反映。会話画面を開いたまま変更した場合も、再通信・LLM再実行なしで即時再描画する |
-| 同期範囲 | 他プレイヤー・他端末・他ブラウザへは同期しない |
-| サーバー送信 | サーバー側`player`ドメイン、会話セッション、NPC関連の通信データのいずれにも`readingLevel`を追加しない |
+| 項目                 | 内容                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- |
+| localStorageキー     | `civilcraft.npc.readingLevel`（新規作成候補、正式名は命名規則確認後に確定）                                   |
+| 保存値のバージョン   | `{ version: 1, value: ReadingLevel }`のようにバージョン付きで保存し、将来のスキーマ変更に備える               |
+| 未設定時のデフォルト | `standard`                                                                                                    |
+| 不正な保存値         | パース失敗・不明な値・バージョン不一致の場合は`standard`へフォールバックする                                  |
+| localStorage利用不可 | `try/catch`で握りつぶし、メモリ内デフォルト`standard`で動作を継続する（ゲームを停止させない）                 |
+| 反映範囲             | 変更は同一ブラウザ内のUIへ即時反映。会話画面を開いたまま変更した場合も、再通信・LLM再実行なしで即時再描画する |
+| 同期範囲             | 他プレイヤー・他端末・他ブラウザへは同期しない                                                                |
+| サーバー送信         | サーバー側`player`ドメイン、会話セッション、NPC関連の通信データのいずれにも`readingLevel`を追加しない         |
 
 `apps/web/src/services/storage/readingLevelStorage.ts`（新規作成候補）に実装する。
 
@@ -205,12 +205,12 @@ NPC・自宅・会話範囲への施設配置禁止（NPC-FR-036・NPC-FR-037）
 
 `[確定仕様]`
 
-| カテゴリ | 正本 | 生成タイミング | 配信経路 |
-|---|---|---|---|
-| LLM回答 | `canonicalFact`を根拠にLLMが生成した本文を、サーバーが一度だけ表示用構造（8章）へ変換したもの | 質問のたびに生成、レベル別には生成しない | API経由（通信方式はAPI設計Issueで決定） |
-| NPCの表示名・職業表示・質問候補・自己紹介・災害中定型文・フォールバック | `packages/game-data/npc/`の承認済み単一表示用構造 | 事前登録、人間承認後に確定 | API経由（会話開始時、通信方式はAPI設計Issueで決定） |
-| 「話す」「閉じる」等のUIラベル | フロントエンドの静的セグメント定数 | ビルド時に確定、配信なし | 配信なし（ビルドに同梱） |
-| 土木用語・地名・重要語の読み | 承認済みグロッサリー（`npc-glossary.json`） | 事前登録、人間承認後に確定 | データ登録時に他文言へ反映（配信対象ではない） |
+| カテゴリ                                                                | 正本                                                                                          | 生成タイミング                           | 配信経路                                            |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------- |
+| LLM回答                                                                 | `canonicalFact`を根拠にLLMが生成した本文を、サーバーが一度だけ表示用構造（8章）へ変換したもの | 質問のたびに生成、レベル別には生成しない | API経由（通信方式はAPI設計Issueで決定）             |
+| NPCの表示名・職業表示・質問候補・自己紹介・災害中定型文・フォールバック | `packages/game-data/npc/`の承認済み単一表示用構造                                             | 事前登録、人間承認後に確定               | API経由（会話開始時、通信方式はAPI設計Issueで決定） |
+| 「話す」「閉じる」等のUIラベル                                          | フロントエンドの静的セグメント定数                                                            | ビルド時に確定、配信なし                 | 配信なし（ビルドに同梱）                            |
+| 土木用語・地名・重要語の読み                                            | 承認済みグロッサリー（`npc-glossary.json`）                                                   | 事前登録、人間承認後に確定               | データ登録時に他文言へ反映（配信対象ではない）      |
 
 readingLevelごとの文章バリアントはいずれのカテゴリにおいても作成しない。
 
@@ -532,17 +532,17 @@ packages/game-schema/common/furigana-segment.ts（通信データとしての型
 
 ### 変更が必要な既存ファイルの候補（統合時の変更候補、正確な要否は実装着手時に確認）
 
-| ファイル | 現状の区分 | 変更候補の理由 |
-|---|---|---|
-| `apps/web/src/App.tsx` | `[既存実装]`（最小限） | NPC会話UI・よみやすさ設定メニューのルーティング/マウント統合 |
-| `apps/web/src/main.tsx` | `[既存実装]`（最小限） | 新規Provider（設定状態など）の追加 |
-| `apps/web/src/stores/gameStore.ts` | `[既存の空スタブ]` | フェーズ等、NPC機能が参照する状態の実装 |
-| `apps/web/src/stores/playerStore.ts` | `[既存の空スタブ]` | プレイヤー状態の実装 |
-| `apps/server/internal/game/state/world_state.go` | `[既存の空スタブ]` | 災害中応答に必要な浸水状態フィールドの実装（3章の前提Issueに該当する可能性） |
-| `apps/server/cmd/game/main.go` | `[既存実装]`（ヘルスチェックのみ） | `npc`モジュールのDI配線。通信ハンドラ登録はAPI設計Issue確定後 |
-| `packages/game-data/scenarios/*.json` | 一部空 | シナリオ単位のNPC有効/無効フラグ追加 |
-| `packages/game-schema/package.json`またはエクスポート定義 | `[既存実装]`（内容未確認） | API設計Issueで決定する新規型の公開設定変更 |
-| `pnpm-workspace.yaml` | `[既存実装]`（内容未確認） | `packages/ui`の新規`package.json`がワークスペース定義に含まれるか要確認 |
+| ファイル                                                  | 現状の区分                         | 変更候補の理由                                                               |
+| --------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| `apps/web/src/App.tsx`                                    | `[既存実装]`（最小限）             | NPC会話UI・よみやすさ設定メニューのルーティング/マウント統合                 |
+| `apps/web/src/main.tsx`                                   | `[既存実装]`（最小限）             | 新規Provider（設定状態など）の追加                                           |
+| `apps/web/src/stores/gameStore.ts`                        | `[既存の空スタブ]`                 | フェーズ等、NPC機能が参照する状態の実装                                      |
+| `apps/web/src/stores/playerStore.ts`                      | `[既存の空スタブ]`                 | プレイヤー状態の実装                                                         |
+| `apps/server/internal/game/state/world_state.go`          | `[既存の空スタブ]`                 | 災害中応答に必要な浸水状態フィールドの実装（3章の前提Issueに該当する可能性） |
+| `apps/server/cmd/game/main.go`                            | `[既存実装]`（ヘルスチェックのみ） | `npc`モジュールのDI配線。通信ハンドラ登録はAPI設計Issue確定後                |
+| `packages/game-data/scenarios/*.json`                     | 一部空                             | シナリオ単位のNPC有効/無効フラグ追加                                         |
+| `packages/game-schema/package.json`またはエクスポート定義 | `[既存実装]`（内容未確認）         | API設計Issueで決定する新規型の公開設定変更                                   |
+| `pnpm-workspace.yaml`                                     | `[既存実装]`（内容未確認）         | `packages/ui`の新規`package.json`がワークスペース定義に含まれるか要確認      |
 
 **制約の整理**：「既存docsを変更しない」制約は`docs/npc/`以外の既存docsに限定され、既存コードの変更を禁止するものではない。今回の制約は、(1) `docs/npc/`以外の既存docsを変更しない、(2) 既存コードはNPC統合に必要な最小限の変更を許容する、(3) ユーザーの既存変更を上書き・破棄しない、の3点である。
 

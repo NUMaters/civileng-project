@@ -6,10 +6,8 @@ type HudMinimapProps = {
 /** 阿武隈川周辺の簡易ミニマップ＋洪水リスクゲージ。 */
 export function HudMinimap({ damagePercent, overflowSiteCount }: HudMinimapProps) {
   const risk = Math.min(1, damagePercent / 12 + overflowSiteCount * 0.12);
-  const riskLabel =
-    risk < 0.25 ? "low" : risk < 0.5 ? "watch" : risk < 0.75 ? "warn" : "danger";
-  const riskText =
-    risk < 0.25 ? "低" : risk < 0.5 ? "注意" : risk < 0.75 ? "警戒" : "危険";
+  const riskLabel = risk < 0.25 ? "low" : risk < 0.5 ? "watch" : risk < 0.75 ? "warn" : "danger";
+  const riskText = risk < 0.25 ? "低" : risk < 0.5 ? "注意" : risk < 0.75 ? "警戒" : "危険";
 
   return (
     <aside className="cmd-minimap" aria-label="ミニマップと洪水リスク">
