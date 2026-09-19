@@ -1170,12 +1170,12 @@
     left: 8px;
     right: 8px;
     bottom: calc(6px + env(safe-area-inset-bottom));
-    gap: 6px;
+    gap: 4px;
   }
 
   .cmd-dock__tooltip {
-    padding: 8px 10px;
-    border-radius: 12px;
+    padding: 6px 8px;
+    border-radius: 10px;
   }
 
   .cmd-dock__tooltip-head {
@@ -1183,11 +1183,11 @@
   }
 
   .cmd-dock__tooltip-head strong {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .cmd-dock__tooltip-head span {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .cmd-dock__tooltip-toggle {
@@ -1220,8 +1220,18 @@
   }
 
   .cmd-dock__bar {
-    padding: 6px 8px 8px;
-    border-radius: 14px;
+    padding: 4px 6px 6px;
+    border-radius: 12px;
+  }
+
+  .cmd-dock__label {
+    margin-bottom: 4px;
+  }
+
+  .cmd-dock__keyboard-place {
+    min-height: 28px;
+    margin-top: 4px;
+    padding: 4px 8px;
   }
 
   .cmd-dock__hint {
