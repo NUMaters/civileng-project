@@ -3,9 +3,7 @@ name: Deploy Cloudflare Pages
 on:
   push:
     branches:
-      - main
       - develop
-      - feat/web-water-flood-ux
     paths:
       - "apps/web/**"
       - "packages/game-data/**"
