@@ -2141,7 +2141,15 @@ function applyLivePlacementHeading(
     placement.id === placementId ? next : placement,
   );
   const selected = placementId === selectedPlacementId || next.preview === true;
-  applyPlacementHeading(viewer, next, selected, next.preview === true);
+  // 回転中は同じモデル構成のEntityを再利用し、位置・姿勢だけを更新する。
+  // 構成がまだ描画されていない場合だけ、通常の再生成へフォールバックする。
+  if (
+    !updateCivilEngineeringModelPose(viewer, next, {
+      showHeadingCue: next.preview === true,
+    })
+  ) {
+    applyPlacementHeading(viewer, next, selected, next.preview === true);
+  }
   visualKeyRef.current.set(placementId, placementVisualKey(next, selected));
 
   const influences = calculateStructureInfluences(placementsRef.current);
