@@ -22,6 +22,7 @@ import {
   ReviewModeBar,
   useFloodSimulation,
 } from "./features/disaster";
+import "./features/disaster/components/review-mode.css";
 import type { PlayMode } from "./features/lobby/types";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
@@ -488,12 +489,20 @@ export function GameplayApp({
           ) : null}
 
           {inGame && isReviewing ? (
-            <ReviewModeBar
-              isClear={flood.isClear}
-              score={flood.score}
-              onShowResult={flood.reopenResultPanel}
-              onStartNewGame={handleReturnToMenu}
-            />
+            <>
+              <div className="review-mode-legend" role="region" aria-label="マップ凡例">
+                <strong>マップ凡例</strong>
+                <span><i className="review-mode-legend__swatch review-mode-legend__swatch--flood" aria-hidden="true" />浸水・被災範囲</span>
+                <span><i className="review-mode-legend__swatch review-mode-legend__swatch--influence" aria-hidden="true" />施設の影響圏</span>
+                <span><i className="review-mode-legend__swatch review-mode-legend__swatch--risk" aria-hidden="true" />決壊・注意地点</span>
+              </div>
+              <ReviewModeBar
+                isClear={flood.isClear}
+                score={flood.score}
+                onShowResult={flood.reopenResultPanel}
+                onStartNewGame={handleReturnToMenu}
+              />
+            </>
           ) : null}
         </main>
   );
