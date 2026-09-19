@@ -1225,7 +1225,11 @@
   }
 
   .cmd-dock__hint {
-    display: none;
+    display: inline;
+    max-width: 18em;
+    color: #9bb4c2;
+    font-size: 9px;
+    line-height: 1.25;
   }
 
   .cmd-dock__label {

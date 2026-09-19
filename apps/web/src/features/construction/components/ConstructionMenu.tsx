@@ -84,7 +84,7 @@ export function ConstructionMenu({
             type="button"
             onClick={() => onKeyboardPlace(selected.id)}
           >
-            キーボードで配置
+            地図中央に仮配置
           </button>
         </div>
       ) : null}
@@ -92,7 +92,7 @@ export function ConstructionMenu({
       <div className="cmd-dock__bar">
         <div className="cmd-dock__label">
           <span>施設</span>
-          <small className="cmd-dock__hint">上へドラッグ → 黄色い帯</small>
+          <small className="cmd-dock__hint">カードを選択 → 地図へドラッグ / タップで中央配置</small>
         </div>
         <div className="cmd-dock__list">
           {structures.map((structure) => (
