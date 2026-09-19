@@ -21,7 +21,13 @@ import {
 } from "./features/disaster";
 import "./features/disaster/components/review-mode.css";
 import type { PlayMode } from "./features/lobby/types";
+import { NpcDialoguePanel } from "./features/npc/NpcDialoguePanel";
+import { npcEnabled, npcs } from "./features/npc/catalog";
+import { disasterResponse } from "./features/npc/disasterResponse";
+import { NpcSources } from "./features/npc/NpcSources";
+import { useNpcDialogue } from "./features/npc/useNpcDialogue";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
+import "./features/npc/npc.css";
 
 /** タイトル／メニューでは Cesium（約 10MB+）を読まず、真っ白待ちを防ぐ。 */
 const CesiumGameMap = lazy(async () => {
@@ -93,6 +99,17 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
   const [showTutorial, setShowTutorial] = useState(() => !hasSeenTutorial());
+  const npc = useNpcDialogue(npcEnabled && inGame && playMode === "solo", phase, getLatestState);
+  const talking = npc.activeNpc !== null;
+  const recommendedNpc = npcs.find((person) => person.id === npc.state.highlightedNpcId);
+  const openDialogue = npc.open;
+  const openNpc = useCallback(
+    (npcId: string) => {
+      if (dragRef.current !== null) return;
+      openDialogue(npcId);
+    },
+    [openDialogue],
+  );
 
   useEffect(() => {
     if (!inGame) {
@@ -213,7 +230,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   }, [confirmPendingPlacement, socket]);
 
   useEffect(() => {
-    if (!inGame || pendingPlacement === null) {
+    if (!inGame || talking || pendingPlacement === null) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -229,7 +246,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [inGame, cancelPendingPlacement, pendingPlacement, handleConfirmPlacement]);
+  }, [inGame, talking, cancelPendingPlacement, pendingPlacement, handleConfirmPlacement]);
 
   const handleCameraFocusChange = useCallback(
     (position: GeoPosition) => {
@@ -342,6 +359,10 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         <CesiumGameMap
           ref={mapRef}
           mapActive={inGame}
+          npcMarkers={npc.available ? npcs : undefined}
+          highlightedNpcId={npc.state.highlightedNpcId}
+          onSelectNpc={openNpc}
+          interactionLocked={talking}
           placements={construction.visiblePlacements}
           structures={construction.structures}
           selectedPlacementId={construction.selectedPlacementId}
@@ -379,6 +400,35 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
           getLatestFloodState={flood.getLatestState}
         />
       </Suspense>
+
+      {npc.available && !talking ? (
+        <div className="npc-prototype-note">住民アイコンで地域や技術の話を聞けます</div>
+      ) : null}
+      {npc.available && recommendedNpc && !talking ? (
+        <div className="npc-guide" role="status">
+          <span>
+            {recommendedNpc.locationLabel}の{recommendedNpc.name}に聞いてみよう
+          </span>
+          <button type="button" onClick={() => mapRef.current?.focusNpc(recommendedNpc.position)}>
+            場所を見る
+          </button>
+        </div>
+      ) : null}
+      {npc.activeNpc ? (
+        <NpcDialoguePanel
+          key={npc.activeNpc.id}
+          npc={npc.activeNpc}
+          phase={phase}
+          history={npc.state.history}
+          coolingDown={npc.coolingDown}
+          pending={npc.pending}
+          error={npc.error}
+          disaster={disasterResponse(npc.activeNpc, flood)}
+          onClose={npc.close}
+          onAsk={npc.ask}
+          onRefer={npc.refer}
+        />
+      ) : null}
 
       {inGame && !hideConstructionUi ? (
         <div className="hud-frame" aria-hidden={false}>
@@ -473,7 +523,9 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
           placementCount={construction.placements.length}
           onEnterReview={flood.enterReviewMode}
           onStartNewGame={handleReturnToMenu}
-        />
+        >
+          <NpcSources factIds={npc.state.usedFactIds} />
+        </FloodResultPanel>
       ) : null}
 
       {inGame && isReviewing ? (

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/NUMaters/civileng-project/apps/server/internal/game/realtime"
+	"github.com/NUMaters/civileng-project/apps/server/internal/npc"
 )
 
 func main() {
@@ -14,6 +15,9 @@ func main() {
 	go hub.Run()
 
 	mux := http.NewServeMux()
+	if err := npc.Register(mux); err != nil {
+		log.Fatalf("NPC initialization failed: %v", err)
+	}
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))

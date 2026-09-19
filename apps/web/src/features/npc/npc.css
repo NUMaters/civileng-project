@@ -1,0 +1,289 @@
+.npc-map-markers {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  overflow: hidden;
+}
+.npc-map-marker {
+  position: absolute;
+  visibility: hidden;
+  transform: translate(-50%, -100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 72px;
+  min-height: 64px;
+  padding: 6px 8px;
+  border: 1px solid #dae7db66;
+  border-radius: 16px;
+  background: #132a32ed;
+  color: #f7f3e6;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 3px 12px #0006;
+  font: inherit;
+  touch-action: manipulation;
+}
+.npc-map-marker > span {
+  font-size: 11px;
+}
+.npc-icon {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+.npc-map-marker.is-recommended {
+  border: 3px solid #f6c866;
+  box-shadow: 0 0 0 5px #f6c86640;
+}
+.npc-map-marker__recommended {
+  color: #ffe2a1;
+}
+.npc-map-marker:focus-visible,
+.npc-dialog button:focus-visible,
+.npc-guide button:focus-visible {
+  outline: 3px solid #ffe2a1;
+  outline-offset: 3px;
+}
+.npc-prototype-note {
+  position: absolute;
+  bottom: 180px;
+  left: 16px;
+  z-index: 25;
+  max-width: 200px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: #e2e8df;
+  background: #132a32de;
+  font-size: 11px;
+  pointer-events: none;
+}
+.npc-guide {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 45;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  border: 1px solid #f6c866;
+  border-radius: 12px;
+  padding: 12px;
+  color: #f7f3e6;
+  background: #132a32f5;
+}
+.npc-guide button {
+  min-height: 44px;
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #e4ad50;
+  color: #172c32;
+  cursor: pointer;
+  font: inherit;
+}
+.npc-dialog {
+  width: min(440px, calc(100vw - 24px));
+  max-height: min(720px, calc(100dvh - 24px));
+  padding: 0;
+  border: 1px solid #71938b;
+  border-radius: 20px;
+  background: #152e35;
+  color: #f7f3e6;
+  box-shadow: 0 20px 80px #0009;
+  overflow: hidden;
+}
+.npc-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.npc-dialog::backdrop {
+  background: #08191cab;
+}
+.npc-dialog__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px 12px;
+}
+.npc-dialog__header p {
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: #a9c7bc;
+}
+.npc-dialog__header h2 {
+  margin: 0;
+  font-size: 23px;
+}
+.npc-dialog__close {
+  margin-left: auto;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #7a969b;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 28px;
+  cursor: pointer;
+}
+.npc-dialog__notice {
+  margin: 0;
+  padding: 8px 20px;
+  background: #e4ad5012;
+  color: #d9c69c;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.npc-dialog__audience {
+  display: flex;
+  gap: 8px;
+  padding: 8px 20px;
+}
+.npc-dialog__audience button {
+  min-height: 32px;
+  border: 1px solid #71938b;
+  border-radius: 16px;
+  padding: 4px 10px;
+  background: transparent;
+  color: #dce8e2;
+  font: inherit;
+  cursor: pointer;
+}
+.npc-dialog__audience button[aria-pressed="true"] {
+  border-color: #f6c866;
+  background: #e4ad50;
+  color: #172c32;
+}
+.npc-dialog__history {
+  flex: 1 1 auto;
+  min-height: 80px;
+  overflow-y: auto;
+  padding: 8px 20px;
+  overscroll-behavior: contain;
+}
+.npc-dialog__answer,
+.npc-dialog__question {
+  padding: 12px 14px;
+  border-radius: 12px;
+  line-height: 1.8;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.npc-dialog__answer {
+  margin: 10px 16px 14px 0;
+  background: #25434a;
+}
+.npc-dialog__question {
+  margin: 10px 0 10px 32px;
+  background: #395e58;
+}
+.npc-dialog__level {
+  display: block;
+  color: #a9c7bc;
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+.npc-dialog__actions {
+  display: grid;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(360px, 46dvh);
+  overflow-y: auto;
+  padding: 12px 20px 18px;
+  border-top: 1px solid #ffffff15;
+}
+.npc-dialog__actions p {
+  margin: 2px 0;
+  color: #a9c7bc;
+  font-size: 12px;
+}
+.npc-dialog__actions button {
+  min-height: 44px;
+  padding: 10px 14px;
+  border: 1px solid #678983;
+  border-radius: 10px;
+  background: #203c42;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.npc-dialog__actions .npc-dialog__deeper {
+  background: #e4ad50;
+  color: #172c32;
+  border-color: #e4ad50;
+  font-weight: 700;
+}
+.npc-dialog button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.npc-result-note {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #ffffff30;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.npc-result-note p {
+  margin: 4px 0;
+}
+.npc-sources {
+  max-height: 240px;
+  overflow-y: auto;
+  text-align: left;
+}
+.npc-sources summary {
+  cursor: pointer;
+  min-height: 32px;
+}
+.npc-sources ul {
+  padding-left: 20px;
+}
+.npc-sources li {
+  margin: 12px 0;
+}
+.npc-sources a {
+  color: #ffe2a1;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.npc-sources small {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.8;
+}
+@media (max-height: 560px) {
+  .npc-dialog {
+    overflow-y: auto;
+  }
+  .npc-dialog__header,
+  .npc-dialog__notice,
+  .npc-dialog__history {
+    flex-shrink: 0;
+  }
+  .npc-dialog__history {
+    overflow: visible;
+  }
+  .npc-dialog__actions {
+    max-height: 52dvh;
+  }
+}
+@media (max-width: 600px) {
+  .npc-prototype-note {
+    bottom: 150px;
+    max-width: 190px;
+  }
+  .npc-map-marker > span {
+    max-width: 94px;
+  }
+}

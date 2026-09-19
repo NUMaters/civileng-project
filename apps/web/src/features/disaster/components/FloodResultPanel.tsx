@@ -1,5 +1,6 @@
 import { loadRules } from "@civilcraft/game-data/load";
 import type { FloodSimulationState } from "../services/floodSimulation";
+import type { ReactNode } from "react";
 
 const CLEAR_THRESHOLD = loadRules().victory.clearThresholdPercent;
 
@@ -10,6 +11,7 @@ type FloodResultPanelProps = Pick<
   placementCount: number;
   onEnterReview: () => void;
   onStartNewGame: () => void;
+  children?: ReactNode;
 };
 
 export function FloodResultPanel({
@@ -20,6 +22,7 @@ export function FloodResultPanel({
   placementCount,
   onEnterReview,
   onStartNewGame,
+  children,
 }: FloodResultPanelProps) {
   if (phase !== "result") {
     return null;
@@ -74,6 +77,7 @@ export function FloodResultPanel({
           </div>
         </dl>
 
+        {children}
         <div className="result-panel__actions">
           <button type="button" className="result-panel__primary" onClick={onStartNewGame}>
             メニューへ戻る
