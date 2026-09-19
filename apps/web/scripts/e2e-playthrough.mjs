@@ -6,15 +6,10 @@
  */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
-import { createRequire } from "node:module";
-
-const require = createRequire(import.meta.url);
-const WebSocket = require("/tmp/node_modules/ws");
 
 const BASE = process.env.CIVILCRAFT_URL ?? "http://127.0.0.1:5173/";
 const CHROME =
-  process.env.CHROME_PATH ??
-  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+  process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PORT = 9455 + Math.floor(Math.random() * 40);
 
 function sleep(ms) {
@@ -42,6 +37,42 @@ function cdp(ws) {
       });
     },
   };
+}
+
+/** Node 22 の標準 WebSocket を ws 互換の最小APIへ変換する。 */
+function connectWebSocket(url) {
+  const socket = new WebSocket(url);
+  const api = {
+    on(event, handler) {
+      socket.addEventListener(event, (messageEvent) => {
+        if (event === "message") {
+          handler(messageEvent.data);
+        } else {
+          handler(messageEvent);
+        }
+      });
+      return api;
+    },
+    once(event, handler) {
+      const listener = (messageEvent) => {
+        socket.removeEventListener(event, listener);
+        if (event === "message") {
+          handler(messageEvent.data);
+        } else {
+          handler(messageEvent);
+        }
+      };
+      socket.addEventListener(event, listener);
+      return api;
+    },
+    send(data) {
+      socket.send(data);
+    },
+    close() {
+      socket.close();
+    },
+  };
+  return api;
 }
 
 async function waitPort(port) {
@@ -113,7 +144,7 @@ async function main() {
     await waitPort(PORT);
     const pages = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
     const page = pages.find((p) => p.type === "page") || pages[0];
-    const ws = new WebSocket(page.webSocketDebuggerUrl);
+    const ws = connectWebSocket(page.webSocketDebuggerUrl);
     await new Promise((resolve, reject) => {
       ws.once("open", resolve);
       ws.once("error", reject);
@@ -132,7 +163,7 @@ async function main() {
     await evaluate(client, `document.querySelector('.title-screen__cta')?.click()`);
     await waitFor(
       client,
-      `document.querySelector('.game-menu__title')?.textContent === 'モード選択'`,
+      `document.querySelector('.game-menu__title')?.textContent === 'プレイモードを選択'`,
     );
     const howtoOpen = await evaluate(client, `!!document.querySelector('.howto-modal')`);
     if (howtoOpen) throw new Error("遊び方が自動表示されている");
@@ -147,10 +178,10 @@ async function main() {
     step("シングル読込完了");
 
     await evaluate(client, `document.querySelector('.game-menu__start')?.click()`);
-    await waitFor(client, `!!document.querySelector('.flood-hud')`, 60_000);
+    await waitFor(client, `!!document.querySelector('.cmd-mission')`, 60_000);
     await waitFor(
       client,
-      `document.querySelector('.flood-hud__phase')?.textContent === '準備中'`,
+      `document.querySelector('.cmd-mission__phase')?.textContent === '準備'`,
       30_000,
     );
     step("ゲーム開始（準備中）");
@@ -181,18 +212,11 @@ async function main() {
 
     // React の配置反映を待つ
     await sleep(500);
-    await waitFor(
-      client,
-      `window.__civilcraftE2E.placementCount() >= 6`,
-      10_000,
-    );
+    await waitFor(client, `window.__civilcraftE2E.placementCount() >= 6`, 10_000);
 
-    await evaluate(client, `window.__civilcraftE2E.startRain()`);
-    await waitFor(
-      client,
-      `window.__civilcraftE2E.getFlood().phase === 'disaster'`,
-      10_000,
-    );
+    // 天候は本番ではランダム。E2Eでは固定して、結果判定を再現可能にする。
+    await evaluate(client, `window.__civilcraftE2E.startRain(42601)`);
+    await waitFor(client, `window.__civilcraftE2E.getFlood().phase === 'disaster'`, 10_000);
     step("大雨スタート");
 
     // headless では rAF が止まることがあるため、シミュレーションを直接進める。
@@ -229,7 +253,7 @@ async function main() {
     }
     await waitFor(
       client,
-      `document.querySelector('.result-panel__badge')?.textContent === 'CLEAR'`,
+      `document.querySelector('.result-panel__badge')?.textContent === '成功'`,
       5_000,
     );
     step("ミッションクリア", result.title ?? result.badge);
@@ -237,7 +261,7 @@ async function main() {
     await evaluate(client, `document.querySelector('.result-panel__primary')?.click()`);
     await waitFor(
       client,
-      `document.querySelector('.game-menu__title')?.textContent === 'モード選択'`,
+      `document.querySelector('.game-menu__title')?.textContent === 'プレイモードを選択'`,
       10_000,
     );
     step("メニューへ復帰");
