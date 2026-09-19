@@ -1,8 +1,16 @@
 import { lazy, Suspense, useCallback, useState } from "react";
 import "./App.css";
-import { hasSeenHowTo } from "./features/lobby/howtoStorage";
+import { LoadingIndicator } from "./components/LoadingIndicator";
 import { TitleScreen } from "./features/lobby/TitleScreen";
 import type { LobbyScreen, PlayMode } from "./features/lobby/types";
+
+function LobbyLoadingFallback({ label }: { label: string }) {
+  return (
+    <div className="lobby-loading-panel" role="status" aria-live="polite">
+      <LoadingIndicator label={label} compact />
+    </div>
+  );
+}
 
 const GameMenuScreen = lazy(async () => {
   const mod = await import("./features/lobby/GameMenuScreen");
@@ -23,7 +31,9 @@ export function App() {
   const [sessionId, setSessionId] = useState(0);
 
   const enterMenu = useCallback(() => {
-    setMenuHowtoOnMount(!hasSeenHowTo());
+    // The guide is available from the menu. Do not interrupt first-time users
+    // with a modal before they have chosen whether they want help.
+    setMenuHowtoOnMount(false);
     setLobbyScreen("menu");
   }, []);
 
@@ -34,10 +44,19 @@ export function App() {
     setLobbyScreen("game");
   }, []);
 
+  const handleRetrySession = useCallback(() => {
+    setSessionId((current) => current + 1);
+  }, []);
+
   const handleReturnToMenu = useCallback(() => {
-    setPlayMode(null);
     setMenuHowtoOnMount(false);
     setLobbyScreen("menu");
+  }, []);
+
+  const handleBackToTitle = useCallback(() => {
+    setPlayMode(null);
+    setGameLayerMounted(false);
+    setLobbyScreen("title");
   }, []);
 
   return (
@@ -50,9 +69,9 @@ export function App() {
 
       {lobbyScreen === "menu" ? (
         <main className="game-shell game-shell--lobby">
-          <Suspense fallback={<p className="lobby-loading">メニューを開いています…</p>}>
+          <Suspense fallback={<LobbyLoadingFallback label="メニューを開いています…" />}>
             <GameMenuScreen
-              onBackToTitle={() => setLobbyScreen("title")}
+              onBackToTitle={handleBackToTitle}
               onStartGame={handleMenuStart}
               openHowtoOnMount={menuHowtoOnMount}
             />
@@ -61,12 +80,13 @@ export function App() {
       ) : null}
 
       {gameLayerMounted && playMode !== null ? (
-        <Suspense fallback={lobbyScreen === "game" ? <p className="lobby-loading">ゲームを準備しています…</p> : null}>
+        <Suspense fallback={lobbyScreen === "game" ? <LobbyLoadingFallback label="ゲームを準備しています…" /> : null}>
           <GameplayApp
             playMode={playMode}
             inGame={lobbyScreen === "game"}
             sessionId={sessionId}
             onReturnToMenu={handleReturnToMenu}
+            onRetrySession={handleRetrySession}
           />
         </Suspense>
       ) : null}

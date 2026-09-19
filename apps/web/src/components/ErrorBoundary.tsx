@@ -5,14 +5,14 @@ type Props = {
 };
 
 type State = {
-  message: string | null;
+  hasError: boolean;
 };
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { message: null };
+  state: State = { hasError: false };
 
-  static getDerivedStateFromError(error: Error): State {
-    return { message: error.message || "不明なエラー" };
+  static getDerivedStateFromError(): State {
+    return { hasError: true };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
@@ -20,12 +20,12 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   render() {
-    if (this.state.message !== null) {
+    if (this.state.hasError) {
       return (
         <main className="fatal-error" role="alert">
           <h1>画面の表示に失敗しました</h1>
-          <p>{this.state.message}</p>
-          <p>ページを再読み込みするか、開発サーバーを再起動してください。</p>
+          <p>ゲーム画面を読み込めませんでした。</p>
+          <p>ページを再読み込みして、もう一度お試しください。</p>
           <button type="button" onClick={() => window.location.reload()}>
             再読み込み
           </button>
