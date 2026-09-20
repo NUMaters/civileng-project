@@ -587,8 +587,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       let frameSampleTotal = 0;
       let frameSampleCount = 0;
       const renderProfile = getCesiumRenderProfile();
-      // カメラ自身の描画は滑らかに保ちつつ、境界補正の地形ピックだけ端末負荷に合わせて間引く。
-      const cameraConstraintIntervalMs = Math.max(1000 / 20, renderProfile.dynamicFrameIntervalMs);
 
       try {
         setMapLoadStage("loading");
@@ -915,7 +913,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             return;
           }
           const now = performance.now();
-          if (now - lastCameraCorrectionAt < cameraConstraintIntervalMs) {
+          if (now - lastCameraCorrectionAt < 1000 / 60) {
             return;
           }
           lastCameraCorrectionAt = now;

@@ -209,6 +209,9 @@ async function main() {
       `document.querySelector('.cesium-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
       60_000,
     );
+    // 建物タイルのready直後は初期カメラと地形ピックの最初の描画がまだ収束していないため、
+    // 実ユーザーの操作開始に近い状態まで1フレーム以上待ってからドラッグを検証する。
+    await sleep(750);
     step("スマホ幅で街の3Dモデル表示");
 
     const dragOnlyDock = await evaluate(
