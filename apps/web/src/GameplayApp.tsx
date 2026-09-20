@@ -381,7 +381,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
 
       <RainOverlay
         active={
-          inGame &&
+          inGame && !paused &&
           (flood.phase === "disaster" || flood.phase === "result" || flood.phase === "review")
         }
         getLatestState={flood.getLatestState}
@@ -391,7 +391,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         <DioramaGameMap
           ref={mapRef}
           onReadyChange={setMapReady}
-          mapActive={inGame}
+          mapActive={inGame && !paused}
           npcMarkers={npc.available ? npcs : undefined}
           highlightedNpcId={npc.state.highlightedNpcId}
           onSelectNpc={openNpc}
