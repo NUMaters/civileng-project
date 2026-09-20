@@ -1238,7 +1238,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return;
       }
 
-      // ロビー裏表示・未開始時は決壊／弱点／影響圏／配置帯をすべて消す。
+      // ロビー裏表示・未開始時は決壊／影響圏／配置帯をすべて消す。
       if (!mapActive || floodState?.phase === "idle" || floodState === undefined) {
         clearProtectionVisualization(viewer);
         dragGhostInfluenceRef.current = null;
@@ -2271,11 +2271,8 @@ function refreshProtectionWithDragGhost(
   const influences = dragInfluence
     ? [...base.filter((item) => item.placementId !== dragInfluence.placementId), dragInfluence]
     : base;
-  // 弱点マーカーは配置中（確定／仮／ドラッグ）だけ。未配置の常時表示は決壊と紛らわしい。
-  const showWeaknessTargets = influences.length > 0;
   syncProtectionVisualization(viewer, influences, floodState?.protectedBankSites ?? [], {
     showBankSites: floodState?.active === true,
-    showWeaknessTargets,
   });
 }
 
