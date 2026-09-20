@@ -610,7 +610,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
           <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
           <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル（国土地理院）標高タイルを加工</a>
-          <p>建物はLOD1形状。未収録の高さ・橋面・樹木の大きさは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。</p>
+          <p>建物はLOD1等の位置・高さを使用。屋根の形・勾配・色は一部推定したゲーム用表現です。未収録の高さ・橋面・樹木の大きさは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。</p>
         </details>
       </div>
     );
