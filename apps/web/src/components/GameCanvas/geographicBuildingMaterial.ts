@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 export const BUILDING_DECORATION_PROVENANCE = {
   source: "illustrative-not-surveyed",
-  details: "Roof colors, seams and window rows are decorative; not observed materials, openings or floor counts.",
+  details: "Roof colors, seams, window rows and facade-base shading are decorative; not observed materials, openings, floor counts or computed ambient occlusion.",
   geometry: "Unchanged footprint, holes and LOD1 model height; no displacement or added geometry.",
 } as const;
 
@@ -11,7 +11,7 @@ export function createGeographicBuildingMaterial(): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide });
   material.name = "geographic-building-decoration";
   material.userData.decoration = BUILDING_DECORATION_PROVENANCE;
-  material.customProgramCacheKey = () => "geographic-building-decoration-v1";
+  material.customProgramCacheKey = () => "geographic-building-decoration-v2";
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
 attribute vec2 facadeUv;
@@ -42,7 +42,12 @@ diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.12, 0.28, 0.36), decorativeWindo
 float roofCell = vFacadeUv.x / 1.6;
 float roofAA = max(fwidth(roofCell), 0.0001);
 float roofSeam = 1.0 - smoothstep(0.025 - roofAA, 0.025 + roofAA, abs(fract(roofCell) - 0.5));
-diffuseColor.rgb *= 1.0 - 0.13 * roofSeam * vRoofMask * detailFade;`)
+diffuseColor.rgb *= 1.0 - 0.13 * roofSeam * vRoofMask * detailFade;
+// Height is metres above this building's own base, not world elevation.
+// A broad derivative-filtered gradient avoids a thin shimmering outline.
+float baseAA = max(fwidth(vFacadeUv.y), 0.05);
+float baseShade = 1.0 - smoothstep(-baseAA, 3.0 + baseAA, vFacadeUv.y);
+diffuseColor.rgb *= 1.0 - 0.24 * baseShade * (1.0 - vRoofMask);`)
       .replace("#include <roughnessmap_fragment>", `#include <roughnessmap_fragment>
 roughnessFactor = mix(roughnessFactor, 0.38, decorativeWindow);`);
   };

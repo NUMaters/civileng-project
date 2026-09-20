@@ -14,7 +14,7 @@ describe("geographic building decoration", () => {
       expect(material.displacementMap).toBeNull();
       expect(material.userData.decoration).toEqual(BUILDING_DECORATION_PROVENANCE);
       expect(material.userData.decoration.source).toBe("illustrative-not-surveyed");
-      expect(material.customProgramCacheKey()).toBe("geographic-building-decoration-v1");
+      expect(material.customProgramCacheKey()).toBe("geographic-building-decoration-v2");
     } finally { material.dispose(); }
   });
 
@@ -36,6 +36,8 @@ describe("geographic building decoration", () => {
       expect(shader.fragmentShader).toContain("#include <colorspace_fragment>");
       expect(shader.fragmentShader.indexOf("float decorativeWindow =")).toBeLessThan(shader.fragmentShader.indexOf("roughnessFactor = mix"));
       expect(shader.fragmentShader).not.toContain("discard");
+      expect(shader.fragmentShader).toContain("fwidth(vFacadeUv.y)");
+      expect(shader.fragmentShader).toContain("baseShade * (1.0 - vRoofMask)");
     } finally { material.dispose(); }
   });
 });
