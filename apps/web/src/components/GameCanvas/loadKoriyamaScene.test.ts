@@ -15,7 +15,12 @@ describe("bundled scene loading", () => {
     vi.stubGlobal("fetch", fetcher);
     const scene = await loadKoriyamaScene(signal);
     expect(fetcher).toHaveBeenCalledTimes(7);
-    expect(scene.canopyPatches).toHaveLength(4);
+    expect(scene.canopyPatches.map(patch => patch.id)).toEqual([
+      "campus-north-grove-core", "campus-west-grove-core",
+      "campus-central-grove-core", "campus-south-building-grove",
+      "riverbank-south-canopy-core", "riverbank-middle-canopy-core", "riverbank-north-canopy-core",
+    ]);
+    expect(scene.canopyPatches.slice(4).every(patch => patch.observationView?.layer === "seamlessphoto")).toBe(true);
     expect(scene.imageryTrees).toHaveLength(34);
     expect(scene.imageryTrees[0]!.positionSource).toBe("imagery-inferred");
     expect(scene.landcover.features.filter(feature => feature.properties.kind === "tree")).toHaveLength(234);

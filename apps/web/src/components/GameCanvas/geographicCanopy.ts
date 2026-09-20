@@ -5,22 +5,32 @@ import { distanceToVegetationSegment, insideVegetationRing, intersectsVegetation
 import { createVegetationStyleResources, vegetationColor, vegetationHashUnit, VEGETATION_STYLE_PROVENANCE } from "./geographicVegetationStyle";
 
 export const IMAGERY_CANOPY_URL = "/geodata/koriyama/imagery-canopy-observations.json";
+export type ImageryCanopyObservationView = {
+  mapUrl: string;
+  layer: string;
+  referenceTileTopLeftScreenPx: readonly [number, number];
+  displayedCapturePeriod: string;
+  captureDateUncertainty: string;
+  boundaryStatus: string;
+  screenVerticesPx: readonly (readonly [number, number])[];
+};
 export type ImageryCanopyObservations = {
   schemaVersion: 1;
   source: ImageryTreeObservations["source"];
-  patches: { id: string; rings: [number, number][][] }[];
+  patches: { id: string; rings: [number, number][][]; observationView?: ImageryCanopyObservationView }[];
 };
 export type CanopyPatch = {
   id: string;
   rings: VegetationPoint[][];
   source: ImageryCanopyObservations["source"];
+  observationView?: ImageryCanopyObservationView;
 };
 export function convertImageryCanopyObservations(data: ImageryCanopyObservations): CanopyPatch[] {
   const ref = data.source?.referenceTile;
   if (data.schemaVersion !== 1 || !ref || ref.sizePixels !== 256 || !data.source.attribution || !data.source.mapUrl ||
       !Array.isArray(data.patches) || !/^\d{4}-\d{2}\/\d{4}-\d{2}$/.test(data.source.displayedCapturePeriod)) throw new RangeError("Invalid canopy source metadata");
   imageryPixelToGeo(ref, { x: 0, y: 0 });
-  return data.patches.map(patch => ({ id: patch.id, source: data.source, rings: patch.rings.map(ring => ring.map(([east, south]) => {
+  return data.patches.map(patch => ({ id: patch.id, source: data.source, observationView: patch.observationView, rings: patch.rings.map(ring => ring.map(([east, south]) => {
     if (![east, south].every(Number.isFinite)) throw new RangeError("Invalid canopy pixel");
     const dx = Math.floor(east / 256), dy = Math.floor(south / 256);
     return koriyamaGeoToLocal(imageryPixelToGeo({ z: ref.z, x: ref.x + dx, y: ref.y + dy }, { x: east - dx * 256, y: south - dy * 256 }));
