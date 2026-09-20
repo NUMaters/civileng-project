@@ -57,7 +57,7 @@ func (g *Generator) Generate(ctx context.Context, request domain.GenerationReque
 	started := time.Now()
 	text, err := g.selectAnswer(ctx, npc, question, hint, facts)
 	response.Result = generationResult(err)
-	if err == nil && allowed(text, hint) {
+	if err == nil && domain.ValidGeneratedAnswer(text) {
 		response.Result = domain.GenerationSuccess
 		response.AnswerText = text
 		response.SourceIDs = sourceIDs

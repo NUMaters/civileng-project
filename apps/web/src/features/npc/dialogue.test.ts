@@ -94,6 +94,20 @@ describe("NPC dialogue", () => {
       ["land", 1],
     ]);
   });
+  it("accepts a safe generated answer that is not a registered fallback", () => {
+    const state = step(opened(), {
+      type: "ask",
+      questionId: "past",
+      deeper: false,
+      now: 10_000,
+      answerText: "昔の水害の記録を手がかりに、この地域の川の様子を一緒に見てみよう。",
+      mode: "ai",
+    });
+    expect(state.history.at(-1)).toMatchObject({
+      mode: "ai",
+      answer: "昔の水害の記録を手がかりに、この地域の川の様子を一緒に見てみよう。",
+    });
+  });
   it("only refers after level 3 and highlights the experienced resident until opened", () => {
     let state = ask(opened());
     expect(step(state, { type: "refer" })).toEqual(state);

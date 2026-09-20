@@ -220,7 +220,7 @@ func (s *Service) Answer(ctx context.Context, id, token string, request Question
 		})
 		stop()
 		if generateErr == nil && generated.InteractionID == request.RequestID && generated.Result == domain.GenerationSuccess &&
-			allowed(generated.AnswerText, hint) && sameStrings(generated.SourceIDs, sourceIDs) {
+			domain.ValidGeneratedAnswer(generated.AnswerText) && sameStrings(generated.SourceIDs, sourceIDs) {
 			result.AnswerText, result.Mode = generated.AnswerText, s.generateMode
 		} else {
 			result.FallbackReason = failureReason(generateErr, generated)
@@ -239,17 +239,6 @@ func (s *Service) Answer(ctx context.Context, id, token string, request Question
 	slog.Info("npc_answer", "npc", c.npc.ID, "mode", result.Mode, "reason", result.FallbackReason,
 		"fact_ids", result.FactIDs, "duration_ms", time.Since(start).Milliseconds())
 	return result, nil
-}
-func allowed(text string, hint domain.Hint) bool {
-	if !domain.ValidAnswer(text) {
-		return false
-	}
-	for _, candidate := range hint.Answers {
-		if candidate == text {
-			return true
-		}
-	}
-	return false
 }
 func sameStrings(actual, expected []string) bool {
 	if len(actual) != len(expected) {

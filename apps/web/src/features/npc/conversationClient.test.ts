@@ -22,6 +22,7 @@ afterEach(() => {
 describe("NPC API client", () => {
   it("accepts a grounded answer with matching correlation and sources", async () => {
     const hint = resident.questions[0]?.hints[0];
+    const generatedAnswer = "昔の水害の記録を手がかりに、この地域の川の様子を一緒に見てみよう。";
     expect(hint).toBeDefined();
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -33,7 +34,7 @@ describe("NPC API client", () => {
           npcId: resident.id,
           questionId: "past",
           hintLevel: 1,
-          answerText: hint?.answers[0],
+          answerText: generatedAnswer,
           factIds: hint?.factIds,
           sourceIds: sourceIdsForFacts(hint?.factIds ?? []),
           mode: "ai",
@@ -44,9 +45,50 @@ describe("NPC API client", () => {
     const client = new NpcConversationClient(resident, 60);
     const answer = await client.answer("past", false, 1);
     expect(answer.mode).toBe("ai");
-    expect(answer.answerText).toBe(hint?.answers[0]);
+    expect(answer.answerText).toBe(generatedAnswer);
     client.close();
     expect(fetchMock.mock.calls.at(-1)?.[1]?.method).toBe("DELETE");
+  });
+
+  it("keeps the server conversation after a generated answer differs from the fallback", async () => {
+    const firstHint = resident.questions[0]?.hints[0];
+    const secondHint = resident.questions[1]?.hints[0];
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(session, 201))
+      .mockImplementationOnce(async (_url, options) => {
+        const body = JSON.parse(String(options?.body));
+        return response({
+          requestId: body.requestId,
+          npcId: resident.id,
+          questionId: "past",
+          hintLevel: 1,
+          answerText: "昔の水害の記録を手がかりに、この地域の川の様子を一緒に見てみよう。",
+          factIds: firstHint?.factIds,
+          sourceIds: sourceIdsForFacts(firstHint?.factIds ?? []),
+          mode: "ai",
+        });
+      })
+      .mockImplementationOnce(async (_url, options) => {
+        const body = JSON.parse(String(options?.body));
+        return response({
+          requestId: body.requestId,
+          npcId: resident.id,
+          questionId: "land",
+          hintLevel: 1,
+          answerText: "低い土地の特徴を地図で確かめると、水が集まりやすい場所を考えやすいよ。",
+          factIds: secondHint?.factIds,
+          sourceIds: sourceIdsForFacts(secondHint?.factIds ?? []),
+          mode: "ai",
+        });
+      })
+      .mockResolvedValue(response({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new NpcConversationClient(resident, 60);
+    await expect(client.answer("past", false, 1)).resolves.toMatchObject({ mode: "ai" });
+    await expect(client.answer("land", false, 1)).resolves.toMatchObject({ mode: "ai" });
+    expect(fetchMock.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(3);
+    client.close();
   });
 
   it("works without a server and preserves the correct sources at deeper levels", async () => {

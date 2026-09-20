@@ -139,6 +139,27 @@ func TestTimeoutAndUnfoundedOutputUseKnownAnswer(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceAcceptsFactGroundedGeneratedExpression(t *testing.T) {
+	service, session := fixture(t, nil)
+	service.generate = func(_ context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {
+		npc, _ := service.catalog.NPC(request.NPCID)
+		question, _ := npc.Question(request.QuestionID)
+		hint := question.Hints[request.HintLevel-1]
+		_, sourceIDs := service.catalog.Facts(hint.FactIDs)
+		return domain.GenerationResponse{
+			InteractionID: request.InteractionID,
+			Result:        domain.GenerationSuccess,
+			AnswerText:    "昔の水害の記録を手がかりに、川の近くの様子を見てみよう。",
+			SourceIDs:     sourceIDs,
+		}, nil
+	}
+
+	answer, err := service.Answer(context.Background(), session.ConversationID, session.Token, question("past", false))
+	if err != nil || answer.Mode != "ai" || answer.AnswerText == "" || len(answer.SourceIDs) == 0 {
+		t.Fatalf("generated expression was not accepted: %+v %v", answer, err)
+	}
+}
 func TestIndependentConversations(t *testing.T) {
 	service, first := fixture(t, nil)
 	service.generate = func(_ context.Context, request domain.GenerationRequest) (domain.GenerationResponse, error) {

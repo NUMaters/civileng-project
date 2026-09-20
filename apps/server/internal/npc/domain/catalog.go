@@ -89,6 +89,21 @@ func ValidAnswer(text string) bool {
 	return true
 }
 
+// ValidGeneratedAnswer applies the display and safety constraints for text that
+// has not been approved word for word. The generator receives only approved
+// Facts, and the NPC Backend resolves sources from those Facts itself.
+func ValidGeneratedAnswer(text string) bool {
+	if !ValidAnswer(text) {
+		return false
+	}
+	for _, prohibited := range []string{"絶対", "必ず", "100%", "確実"} {
+		if strings.Contains(text, prohibited) {
+			return false
+		}
+	}
+	return true
+}
+
 func (c *Catalog) NPC(id string) (NPC, bool) {
 	for _, npc := range c.NPCs {
 		if npc.ID == id {

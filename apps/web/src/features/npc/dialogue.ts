@@ -1,4 +1,5 @@
 import type { DialogueEntry, HintLevel, NpcDefinition, NpcPhase } from "./types";
+import { isDisplayableNpcAnswer } from "./answerValidation";
 
 /** 要件定義書9章の回答後1秒制限。 */
 export const ANSWER_COOLDOWN_MS = 1_000;
@@ -104,7 +105,9 @@ export function reduceDialogue(
   if (!hint) return state;
   const answers = action.childMode ? hint.childAnswers : hint.answers;
   const answer = action.answerText ?? answers[0] ?? "";
-  if (!answers.includes(answer)) return state;
+  const mode = action.mode ?? "fixed";
+  if (mode === "fixed" && !answers.includes(answer)) return state;
+  if (mode === "ai" && !isDisplayableNpcAnswer(answer)) return state;
   return {
     ...state,
     history: [
@@ -115,7 +118,7 @@ export function reduceDialogue(
         question: action.deeper ? "もっと詳しく聞く" : question.text,
         answer,
         factIds: hint.factIds,
-        mode: action.mode ?? "fixed",
+        mode,
       },
     ],
     nextQuestionAt: action.now + ANSWER_COOLDOWN_MS,

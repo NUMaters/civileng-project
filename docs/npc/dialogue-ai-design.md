@@ -6,6 +6,12 @@
 - 対象：地域情報提供型・住民 NPC の会話、RAG、LLM、知識データ、グロッサリー、フォールバック、安全性、匿名分析の専門設計
 - 位置づけ：RAG・LLM 固有の設計の正本。機能要件・受け入れ条件は [`requirements.md`](./requirements.md)、統合構成・型・API設計Issueへの引き継ぎ条件は [`detailed-design.md`](./detailed-design.md) を正本とし、本書では重複記載しない
 - **API・通信方式（WebSocketイベント名、ペイロード、TypeScript型、`status`・`reasonCode`の列挙値等）は、本書では確定しない。別のAPI設計Issueで決定する（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）**
+
+## 現在のMVP決定
+
+現在の実装は、登録済みの選択式質問だけを受け付ける。自由入力、実行時のURL取得、ベクトル検索、LLMOpsは今回の範囲外である。選択質問から該当Factを直接取得し、NPCペルソナとFactだけをOpenAIへ渡して回答文を生成する。
+
+モデルの回答は事前登録文との完全一致を求めない。ただし、出典IDはモデルに選ばせず、NPC BackendがFactから確定する。文字数・文数・URL/HTML・安全性を断定する表現を検証し、失敗時は承認済み固定回答へフォールバックする。具体的な接続契約は[`main-npc-backend-api.md`](./main-npc-backend-api.md)を正本とする。
 - 初期 LLM：OpenAI API
 - 初期利用規模：1〜4 人
 - 将来利用規模の検討：5〜50 人（MVPの同時利用対象は1〜4人）

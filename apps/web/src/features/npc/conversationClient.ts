@@ -5,6 +5,7 @@ import type {
   NpcConversation,
 } from "@civilcraft/game-schema/rest/npc";
 import { npcCatalog, sourceIdsForFacts } from "./catalog";
+import { isDisplayableNpcAnswer } from "./answerValidation";
 
 const API_BASE = "/api/npc/conversations";
 const OPEN_TIMEOUT_MS = 1_500;
@@ -85,6 +86,10 @@ function sameIds(value: unknown, expected: string[]): boolean {
     expected.every((id) => value.includes(id))
   );
 }
+function validResponseAnswer(value: unknown, mode: unknown, fixedAnswers: string[]): value is string {
+  if (typeof value !== "string") return false;
+  return mode === "ai" ? isDisplayableNpcAnswer(value) : mode === "fixed" && fixedAnswers.includes(value);
+}
 
 /** One panel lifetime. Failed transport falls back locally for this conversation only. */
 export class NpcConversationClient {
@@ -141,8 +146,7 @@ export class NpcConversationClient {
         result.npcId !== this.npc.id ||
         result.questionId !== questionId ||
         result.hintLevel !== level ||
-        typeof result.answerText !== "string" ||
-        !allowedAnswers.includes(result.answerText) ||
+        !validResponseAnswer(result.answerText, result.mode, allowedAnswers) ||
         !sameIds(result.factIds, fixed.factIds) ||
         !sameIds(result.sourceIds, fixed.sourceIds) ||
         (result.mode !== "ai" && result.mode !== "fixed")
