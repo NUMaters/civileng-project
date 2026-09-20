@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { Buffer } from "node:buffer";
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -78,7 +77,25 @@ function connectedSetup(sample: SurfaceSampler = () => 0, water: SurfaceSampler 
 }
 
 describe("rendered flood patch snapshots", () => {
-  it("has continuous shared-node colors in the actual 80/90s flood without changing its geometry", () => {
+  it("has continuous colors and a conservative contour inside the actual 80/90s wet-cell footprint", () => {
+    // c60aacb pre-contour occupied 4m cells: row*56 + column + 28. These are
+    // hydraulic support, not a golden hash that would prohibit contour edits.
+    const support: Record<number, Record<string, string>> = {
+      80: {
+        "campus-core": "8-37,73-102,133,135-144", "campus-south": "19-42,70-91,132-144",
+        "bank-5": "27-45,77-98,100,127-155,157,184-214,239-267,296-320,351,353-372,406-424,463-476,524",
+        "campus-north": "12-45,77-87,91,93-95", "bank-12": "19-42,70-91,131-144", "mid-east": "21-30,82-89,140-148", "bank-19": "11-40,78-86",
+        "bank-26": "4-55,66,68-104,125-157,182-210,239,241-265,296-319,353-374,410-428,430,465-483,522-540,579-597,638-650",
+        "north-bend": "8-34,73-94,131-154,188-214,243-260,299-316,354-369,371,408-424,464-479,524-534,583,585,587,589,640-646",
+      },
+      90: {
+        "campus-core": "7-37,72-102,132-148", "campus-south": "19-43,70-93,130-145,195",
+        "bank-5": "27-49,77-102,104,127-157,159,176-216,231-233,235,237-267,269,294-321,349-374,406-427,463-479,518-525",
+        "campus-north": "10-46,73-74,76-97,135-138,141-142,146-148", "bank-12": "19-43,70-94,129-144,195", "mid-east": "7-30,81-89,139-148,198-200", "bank-19": "11-41,78-88,90",
+        "bank-26": "1-55,64-111,121-162,179-214,235,237-268,294-320,322,351-375,406-430,461,463-487,516-542,574-597,599,633-656,693-708",
+        "north-bend": "7-34,71-94,127,129-154,186-214,239,241-274,294-319,347-373,375,404-428,462-483,522-538,581-593,638-650,696-707,756",
+      },
+    };
     const read = (file: string) => readFileSync(new URL(`../../../public/geodata/koriyama/${file}`, import.meta.url));
     const osm = JSON.parse(read("features.geojson").toString()) as KoriyamaGeodata;
     const metadata = JSON.parse(read("terrain-metadata.json").toString()) as KoriyamaTerrainMetadata;
@@ -92,7 +109,7 @@ describe("rendered flood patch snapshots", () => {
     const adapter = createDioramaInundation(terrain.sampleGround, resolve);
     adapters.push(adapter);
     const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
-    const reports: { elapsed: number; vertices: number; hash: string; shared: number; discontinuous: number; maxColorJump: number; constantTriangles: number; duplicateTriangles: number; neighborPairs: number; maxShadeJump: number; oppositeTriplets: number; alternatingTriplets: number }[] = [];
+    const reports: { elapsed: number; vertices: number; shared: number; discontinuous: number; maxColorJump: number; constantTriangles: number; duplicateTriangles: number; neighborPairs: number; maxShadeJump: number; oppositeTriplets: number; alternatingTriplets: number; areaM2: number; oldAreaM2: number }[] = [];
     try {
       let state = beginDisaster(createInitialFloodState(), { weatherSeed: DEFAULT_WEATHER_SEED });
       stage.update(state.riverLevelMeters); adapter.update(state, 0, 0);
@@ -103,6 +120,7 @@ describe("rendered flood patch snapshots", () => {
         const p = geometry.getAttribute("position"), c = geometry.getAttribute("color");
         let shared = 0, discontinuous = 0, maxColorJump = 0, constantTriangles = 0, duplicateTriangles = 0, start = 0;
         let neighborPairs = 0, maxShadeJump = 0, oppositeTriplets = 0, alternatingTriplets = 0;
+        let areaM2 = 0, oldAreaM2 = 0;
         for (const patch of adapter.getRenderedPatches()) {
           const nodes = new Map<string, number[]>(), triangles = new Set<string>();
           const cells = new Map<string, number>();
@@ -119,6 +137,31 @@ describe("rendered flood patch snapshots", () => {
             if (Math.abs(col - Math.round(col)) > 1e-4 || Math.abs(row - Math.round(row)) > 1e-4 || row < 1) continue;
             cells.set(`${Math.round(col)},${Math.round(row)}`, 1 - [0, 1, 2, 5].reduce((sum, k) => sum + c.getX(i + k), 0) / (4 * shallowRed));
           }
+          const expected = new Set<number>(), occupied = new Set<number>();
+          for (const range of support[step / 10]![patch.id]!.split(",")) {
+            const [first, last = first] = range.split("-").map(Number) as [number, number?];
+            for (let id = first; id <= last; id++) expected.add(id);
+          }
+          oldAreaM2 += expected.size * 16;
+          for (let i = start; i < start + patch.vertexCount; i += 3) {
+            const points = [0, 1, 2].map(k => {
+              const x = p.getX(i + k) - boundary.anchor.x, z = p.getZ(i + k) - boundary.anchor.z;
+              return { u: (x * tx + z * tz) / 4, v: (x * boundary.inland.x + z * boundary.inland.z) / 4 };
+            });
+            const col = Math.floor(points.reduce((s, q) => s + q.u, 0) / 3), row = Math.max(0, Math.floor(points.reduce((s, q) => s + q.v, 0) / 3));
+            const id = row * 56 + col + 28;
+            expect(expected.has(id), `${patch.id}: triangle outside prior wet support ${id}`).toBe(true);
+            occupied.add(id);
+            for (const q of points) {
+              expect(q.u).toBeGreaterThanOrEqual(col - 1e-4); expect(q.u).toBeLessThanOrEqual(col + 1 + 1e-4);
+              expect(q.v).toBeGreaterThanOrEqual(row - 1e-4); expect(q.v).toBeLessThanOrEqual(row + 1 + 1e-4);
+            }
+            const [a, b, d] = points as [typeof points[number], typeof points[number], typeof points[number]];
+            const area = Math.abs((b.u - a.u) * (d.v - a.v) - (b.v - a.v) * (d.u - a.u)) * 8;
+            expect(area).toBeGreaterThan(1e-8);
+            areaM2 += area;
+          }
+          expect([...occupied].sort((a, b) => a - b)).toEqual([...expected].sort((a, b) => a - b));
           for (const [key, value] of cells) {
             const [col, row] = key.split(",").map(Number) as [number, number];
             for (const [dx, dz] of [[1, 0], [0, 1]] as const) {
@@ -149,16 +192,13 @@ describe("rendered flood patch snapshots", () => {
           }
           start += patch.vertexCount;
         }
-        const array = p.array;
         reports.push({ elapsed: step / 10, vertices: geometry.drawRange.count,
-          hash: createHash("sha256").update(Buffer.from(array.buffer, array.byteOffset, geometry.drawRange.count * 12)).digest("hex"),
-          shared, discontinuous, maxColorJump, constantTriangles, duplicateTriangles, neighborPairs, maxShadeJump, oppositeTriplets, alternatingTriplets });
+          shared, discontinuous, maxColorJump, constantTriangles, duplicateTriangles, neighborPairs, maxShadeJump, oppositeTriplets, alternatingTriplets, areaM2, oldAreaM2 });
       }
       console.info("ACTUAL_FLOOD_COLOR", JSON.stringify(reports));
       for (const report of reports) {
-        // Captured on 523d827 before nodal color changes: byte-exact positions
-        // prove that wet extent, surface head and triangulation are unchanged.
-        expect(report.hash).toBe(report.elapsed === 80 ? "1ed86c79391838c6d2612cc541a684acba297890e15d431576366aee1376e380" : "07d7180c17a1e0e94183144c57802d63d7defd8ae966821caf2599796db66dae");
+        expect(report.areaM2).toBeLessThan(report.oldAreaM2);
+        expect(report.areaM2).toBeGreaterThan(report.oldAreaM2 * 0.85);
         expect(report.shared).toBeGreaterThan(100);
         expect(report.duplicateTriangles).toBe(0);
         expect(report.discontinuous).toBe(0);
@@ -386,6 +426,46 @@ describe("rendered flood patch snapshots", () => {
 });
 
 describe("source-connected inundation", () => {
+  it("rounds exposed corners with one closed boundary, no cracks, and no additional triangles", () => {
+    const { adapter, geometry, state } = connectedSetup();
+    run(adapter, state, 1);
+    const p = geometry.getAttribute("position"), edges = new Map<string, { a: string; b: string; count: number }>();
+    let area = 0;
+    expect(geometry.drawRange.count).toBe(60); // same ten pre-contour wet cells
+    for (let i = 0; i < geometry.drawRange.count; i += 3) {
+      const points = [0, 1, 2].map(k => new THREE.Vector3().fromBufferAttribute(p, i + k));
+      const signed = (points[1]!.x - points[0]!.x) * (points[2]!.z - points[0]!.z) - (points[1]!.z - points[0]!.z) * (points[2]!.x - points[0]!.x);
+      expect(signed).toBeLessThan(0); // original winding has a +Y normal
+      area -= signed / 2;
+      for (let k = 0; k < 3; k++) {
+        const a = points[k]!.toArray().join(","), b = points[(k + 1) % 3]!.toArray().join(",");
+        const key = [a, b].sort().join(";");
+        const existing = edges.get(key);
+        if (existing) existing.count++; else edges.set(key, { a, b, count: 1 });
+      }
+    }
+    expect(area).toBeLessThan(160); // trims rather than inflating the full-cell footprint
+    expect(area).toBeGreaterThan(120);
+    const boundary = new Map<string, string[]>();
+    let oblique = 0;
+    for (const { a, b, count } of edges.values()) {
+      expect(count).toBeLessThanOrEqual(2);
+      if (count !== 1) continue;
+      boundary.set(a, [...(boundary.get(a) ?? []), b]); boundary.set(b, [...(boundary.get(b) ?? []), a]);
+      const pa = a.split(",").map(Number), pb = b.split(",").map(Number);
+      if (Math.abs(pa[0]! - pb[0]!) > 0.01 && Math.abs(pa[2]! - pb[2]!) > 0.01) oblique++;
+    }
+    expect(oblique).toBeGreaterThan(0);
+    for (const neighbors of boundary.values()) expect(neighbors).toHaveLength(2);
+    const visited = new Set<string>(), pending = [boundary.keys().next().value!];
+    while (pending.length) {
+      const key = pending.pop()!;
+      if (visited.has(key)) continue;
+      visited.add(key); pending.push(...boundary.get(key)!);
+    }
+    expect(visited.size).toBe(boundary.size); // exactly one loop, no new hole/crack
+  });
+
   it("shows connected flood with actual scene water/DEM and a late unprotected simulation state", () => {
     const read = (file: string) => readFileSync(new URL(`../../../public/geodata/koriyama/${file}`, import.meta.url));
     const osm = JSON.parse(read("features.geojson").toString()) as KoriyamaGeodata;

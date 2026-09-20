@@ -76,6 +76,7 @@ type BankGrid = {
   flux: Float64Array;
   edgeFirst: Uint8Array;
   edgeEnd: Uint8Array;
+  contour: Float64Array;
 };
 
 type Grid = {
@@ -160,7 +161,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
         const b = grid.bank;
         simulationBufferBytes += b.lateral.byteLength + b.x.byteLength + b.z.byteLength + b.bed.byteLength +
           b.depth.byteLength + b.next.byteLength + b.neighbors.byteLength + b.connected.byteLength + b.queue.byteLength +
-          b.source.byteLength + b.surface.byteLength + b.shade.byteLength + b.weights.byteLength + b.flux.byteLength + b.edgeFirst.byteLength + b.edgeEnd.byteLength;
+          b.source.byteLength + b.surface.byteLength + b.shade.byteLength + b.weights.byteLength + b.flux.byteLength + b.edgeFirst.byteLength + b.edgeEnd.byteLength + b.contour.byteLength;
         vertex = emitBankGrid(grid, positions, colors, vertex);
         const patch = renderedPatch(positions, vertexStart, vertex - vertexStart, grid.seed.id);
         if (patch) patches.push(patch);
@@ -590,7 +591,7 @@ function createBankGrid(b: RiverBoundary, sample: SurfaceSampler): BankGrid | un
     bed: new Float32Array(cells), depth: new Float32Array(cells), next: new Float32Array(cells),
     neighbors: new Int32Array(cells * 4), connected: new Uint8Array(cells), queue: new Int32Array(cells),
     source: new Uint8Array(cells), surface: new Float32Array(nodes), shade: new Float32Array(nodes), weights: new Uint8Array(nodes), flux: new Float64Array(4),
-    edgeFirst: new Uint8Array(columns), edgeEnd: new Uint8Array(columns) };
+    edgeFirst: new Uint8Array(columns), edgeEnd: new Uint8Array(columns), contour: new Float64Array(16) };
   for (let row = 0; row <= SUB_ROWS; row++) for (let col = 0; col <= columns; col++) {
     const i = row * (columns + 1) + col;
     bank.x[i] = b.anchor.x + tx * edges[col]! + b.inland.x * row * SUBCELL;
@@ -714,6 +715,15 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
       BANK_SHALLOW.g + (BANK_DEEP.g - BANK_SHALLOW.g) * t, BANK_SHALLOW.b + (BANK_DEEP.b - BANK_SHALLOW.b) * t);
   };
   const emitNode = (n: number) => emit(b.x[n]!, b.surface[n]!, b.z[n]!, b.shade[n]!);
+  const emitContourTriangle = (a: number, c: number, d: number) => {
+    const v = b.contour;
+    // A just-wet tip can collapse one triangle onto the retained cell center.
+    if (Math.abs((v[c]! - v[a]!) * (v[d + 2]! - v[a + 2]!) -
+        (v[c + 2]! - v[a + 2]!) * (v[d]! - v[a]!)) < 1e-10) return;
+    emit(v[a]!, v[a + 1]!, v[a + 2]!, v[a + 3]!);
+    emit(v[c]!, v[c + 1]!, v[c + 2]!, v[c + 3]!);
+    emit(v[d]!, v[d + 1]!, v[d + 2]!, v[d + 3]!);
+  };
   for (let cursor = 0; cursor < tail; cursor++) {
     const i = b.queue[cursor]!, row = Math.floor(i / columns), col = i % columns;
     const a = row * stride + col, c = a + 1, d = a + stride + 1, e = a + stride;
@@ -741,6 +751,27 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
         emit(x, y, z, frontStart); emit(rx, ry, rz, backEnd); emit(lx, ly, lz, backStart);
         x = nx; z = nz; y = ny;
       }
+    } else if (b.weights[a] === 1 || b.weights[c] === 1 || b.weights[d] === 1 || b.weights[e] === 1) {
+      // Conservative free-front reconstruction, not another hydraulic step.
+      // Only a convex corner owned by ONE connected wet cell is exposed/dry.
+      // Interpolate from zero there to the cell's bounded wet-depth scalar at
+      // its center. Capping at 2*WET prevents deep cells reverting to square
+      // tips. Shared corners and the exact source bank above never move.
+      const t = WET / Math.min(2 * WET, b.depth[i]!);
+      const cx = (b.x[a]! + b.x[d]!) / 2, cz = (b.z[a]! + b.z[d]!) / 2;
+      const cy = (b.surface[a]! + b.surface[d]!) / 2, shade = (b.shade[a]! + b.shade[d]!) / 2;
+      for (let k = 0; k < 4; k++) {
+        const n = k === 0 ? a : k === 1 ? c : k === 2 ? d : e;
+        const amount = b.weights[n] === 1 ? t : 0, offset = k * 4;
+        b.contour[offset] = b.x[n]! + (cx - b.x[n]!) * amount;
+        b.contour[offset + 1] = b.surface[n]! + (cy - b.surface[n]!) * amount;
+        b.contour[offset + 2] = b.z[n]! + (cz - b.z[n]!) * amount;
+        b.contour[offset + 3] = b.shade[n]! + (shade - b.shade[n]!) * amount;
+      }
+      // The center lies on the original a-d diagonal. Each new triangle is a
+      // subset of its original triangle, with barycentric height/color: no
+      // expansion into dry cells, new diagonal, cracks, or extra buffer space.
+      emitContourTriangle(0, 4, 8); emitContourTriangle(0, 8, 12);
     } else {
       emitNode(a); emitNode(c); emitNode(d);
       emitNode(a); emitNode(d); emitNode(e);
