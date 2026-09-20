@@ -19,7 +19,7 @@ import {
 } from "../../features/disaster/services/overflowBankSites";
 import { createDioramaInundation, type DioramaInundation } from "./dioramaInundation";
 import { geoToWorld, groundY, riverX, worldToGeo } from "./dioramaSpace";
-import { createRiverBoundaryResolver, type SurfaceSampler } from "./riverBoundary";
+import { createRiverBoundaryResolver, MAX_RIVER_EDGE_POINTS, type RiverBoundary, type SurfaceSampler } from "./riverBoundary";
 import type { GeoPoint, KoriyamaGeodata } from "./koriyamaGeodata";
 import { createGeographicWorld } from "./geographicWorld";
 import { createGeographicTerrain } from "./geographicTerrain";
@@ -77,6 +77,91 @@ function connectedSetup(sample: SurfaceSampler = () => 0, water: SurfaceSampler 
 }
 
 describe("rendered flood patch snapshots", () => {
+  it("removes an invalid replacement bank immediately even during upload throttling", () => {
+    const fixture = connectedSetup();
+    let boundary = fixture.resolveBoundary(fixture.state.overflowSites[0]!)!;
+    const adapter = createDioramaInundation(() => 0, () => boundary);
+    adapters.push(adapter);
+    run(adapter, fixture.state, 1);
+    expect(adapter.getRenderedPatches()).toHaveLength(1);
+    boundary = { ...boundary, anchor: { x: boundary.anchor.x + 100, z: boundary.anchor.z } };
+    adapter.update({ ...fixture.state, disasterElapsedSeconds: 0.2 }, 0.1, 0.11);
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    expect(adapter.group.userData.floodGrid.cachedSites).toBe(0);
+    run(adapter, fixture.state, 10);
+    expect(adapter.getRenderedPatches()).toEqual([]);
+  });
+
+  it.each(["distributed", "clustered", "cell-boundary"])("partitions maximum %s edge breakpoints without duplicate area or buffer overflow at 24 sites", distribution => {
+    const interior = Array.from({ length: MAX_RIVER_EDGE_POINTS - 2 }, (_, i) =>
+      distribution === "clustered" ? 0.01 + i * 0.001 : -7.9 + 15.8 * (i + 1) / (MAX_RIVER_EDGE_POINTS - 1));
+    if (distribution === "cell-boundary") interior.splice(0, 3, -4, 0, 4);
+    interior.sort((a, b) => a - b);
+    const boundary: RiverBoundary = { sourceId: "test", polygonIndex: 0, segmentIndex: 0,
+      anchor: { x: 0, z: 0 }, left: { x: 0, y: 2, z: -7.9 }, right: { x: 0, y: 2, z: 7.9 },
+      inland: { x: 1, z: 0 }, isLand: x => x >= 0,
+      edge: [-7.9, ...interior, 7.9].map(z => ({ x: 0, y: 2, z })) };
+    const adapter = createDioramaInundation(() => 0, () => boundary);
+    adapters.push(adapter);
+    const state = { ...wetState(), overflowSites: Array.from({ length: 24 }, (_, i) => ({ ...wetState().overflowSites[0]!, id: `edge-${i}` })) };
+    const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
+    const positions = geometry.getAttribute("position") as THREE.BufferAttribute;
+    const write = positions.setXYZ.bind(positions);
+    vi.spyOn(positions, "setXYZ").mockImplementation((index, x, y, z) => {
+      expect(index).toBeLessThan(positions.count);
+      expect([x, y, z].every(Number.isFinite)).toBe(true);
+      return write(index, x, y, z);
+    });
+    run(adapter, state, 1);
+    expect(adapter.getRenderedPatches()).toHaveLength(24);
+    // The first step also propagates into neighboring cells. Measure ONLY the
+    // inlet band's projected area; sloped Y surfaces have a larger 3D area.
+    let area = 0, sourceVertices = 0;
+    for (let i = 0; i < adapter.getRenderedPatches()[0]!.vertexCount; i += 3) {
+      const x = [0, 1, 2].map(k => positions.getX(i + k));
+      const z = [0, 1, 2].map(k => positions.getZ(i + k));
+      if (x.every(v => v >= 0 && v <= 4) && z.every(v => v >= -7.900001 && v <= 7.900001)) {
+        area += Math.abs((x[1]! - x[0]!) * (z[2]! - z[0]!) - (x[2]! - x[0]!) * (z[1]! - z[0]!)) / 2;
+        sourceVertices += 3;
+      }
+    }
+    expect(area).toBeCloseTo(15.8 * 4, 4);
+    expect(sourceVertices).toBe((4 + (distribution === "cell-boundary" ? 27 : 30)) * 6);
+    expect(positions.count).toBe(24 * (58 * 48 + MAX_RIVER_EDGE_POINTS) * 6);
+  });
+
+  it("keeps an unrelated valid patch when an invalid bank replaces another during throttle", () => {
+    const fixture = connectedSetup();
+    const valid = fixture.resolveBoundary(fixture.state.overflowSites[0]!)!;
+    let rejected = false;
+    const adapter = createDioramaInundation(() => 0, site =>
+      rejected && site.id === "bad" ? { ...valid, inland: { x: 0, z: 0 } } : valid);
+    adapters.push(adapter);
+    const state = { ...fixture.state, overflowSites: [fixture.state.overflowSites[0]!, { ...fixture.state.overflowSites[0]!, id: "bad" }] };
+    run(adapter, state, 1);
+    expect(adapter.getRenderedPatches()).toHaveLength(2);
+    rejected = true;
+    adapter.update({ ...state, disasterElapsedSeconds: 0.2 }, 0.1, 0.11);
+    expect(adapter.getRenderedPatches().map(p => p.id)).toEqual([state.overflowSites[0]!.id]);
+    expect(adapter.group.visible).toBe(true);
+    expect(adapter.group.userData.floodGrid.cachedSites).toBe(1);
+  });
+
+  it.each(["backtracking", "duplicate", "off-segment", "too-many"])("rejects %s source edge breaks without a synthetic fallback", kind => {
+    const fixture = connectedSetup();
+    const boundary = fixture.resolveBoundary(fixture.state.overflowSites[0]!)!;
+    const point = (t: number) => ({ x: boundary.left.x + (boundary.right.x - boundary.left.x) * t,
+      y: 2, z: boundary.left.z + (boundary.right.z - boundary.left.z) * t });
+    const edge = kind === "backtracking" ? [point(0), point(0.7), point(0.3), point(1)] :
+      kind === "duplicate" ? [point(0), point(0.5), point(0.5), point(1)] :
+      kind === "off-segment" ? [point(0), { ...point(0.5), x: point(0.5).x + 1 }, point(1)] :
+      Array.from({ length: MAX_RIVER_EDGE_POINTS + 1 }, (_, i) => point(i / MAX_RIVER_EDGE_POINTS));
+    const adapter = createDioramaInundation(() => 0, () => ({ ...boundary, edge }));
+    adapters.push(adapter);
+    run(adapter, fixture.state, 10);
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    expect(adapter.group.userData.floodGrid.cachedSites).toBe(0);
+  });
   it("describes only emitted Float32 triangles with a wet anchor and deep immutability", () => {
     const { adapter, geometry, state } = connectedSetup();
     expect(adapter.getRenderedPatches()).toEqual([]);

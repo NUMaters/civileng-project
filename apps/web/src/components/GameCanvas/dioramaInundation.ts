@@ -52,6 +52,8 @@ const SURFACE_LIFT = 0.18;
 const SUBCELL = 4;
 const SUB_ROWS = 48;
 const SUB_COLS_MAX = 58; // 56 regular columns plus the two exact source-inlet edges.
+// Two triangles per cell, plus two per interior source-edge breakpoint. Each
+// ordered breakpoint belongs to at most ONE column, independently of wet cells.
 const SUB_VERTICES_MAX = SUB_COLS_MAX * SUB_ROWS * 6 + MAX_RIVER_EDGE_POINTS * 6;
 const BANK_SHALLOW = new THREE.Color("#65edfa");
 const BANK_DEEP = new THREE.Color("#009fc9");
@@ -71,6 +73,8 @@ type BankGrid = {
   surface: Float32Array;
   weights: Uint8Array;
   flux: Float64Array;
+  edgeFirst: Uint8Array;
+  edgeEnd: Uint8Array;
 };
 
 type Grid = {
@@ -155,7 +159,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
         const b = grid.bank;
         simulationBufferBytes += b.lateral.byteLength + b.x.byteLength + b.z.byteLength + b.bed.byteLength +
           b.depth.byteLength + b.next.byteLength + b.neighbors.byteLength + b.connected.byteLength + b.queue.byteLength +
-          b.source.byteLength + b.surface.byteLength + b.weights.byteLength + b.flux.byteLength;
+          b.source.byteLength + b.surface.byteLength + b.weights.byteLength + b.flux.byteLength + b.edgeFirst.byteLength + b.edgeEnd.byteLength;
         vertex = emitBankGrid(grid, positions, colors, vertex);
         const patch = renderedPatch(positions, vertexStart, vertex - vertexStart, grid.seed.id);
         if (patch) patches.push(patch);
@@ -277,7 +281,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
           let grid = grids.get(seed.id);
           const boundary = resolveBoundary?.(site);
           // An explicitly supplied resolver failing is NOT permission for a remote seed.
-          if (resolveBoundary && !boundary) { removed = grids.delete(seed.id) || removed; continue; }
+          if (resolveBoundary && (!boundary || !validBank(boundary))) { removed = grids.delete(seed.id) || removed; continue; }
           if (
             !grid ||
             grid.seed.longitude !== seed.longitude ||
@@ -296,6 +300,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
               // Terrain/source footprint are immutable for this grid frame;
               // cache bed/masks once, while checking the live throat each update.
               grid.bank = createBankGrid(boundary, sampleGround);
+              if (!grid.bank) { removed = grids.delete(seed.id) || removed; continue; }
             }
             grids.set(seed.id, grid);
           }
@@ -312,7 +317,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
           }
           for (let step = 0; step < steps; step++) {
             if (grid.bank) advanceBankGrid(grid);
-            else advanceGrid(grid, Math.max(0, state.floodDepthMeters));
+            else if (!resolveBoundary) advanceGrid(grid, Math.max(0, state.floodDepthMeters));
           }
         }
         geometryDirty = true;
@@ -530,6 +535,21 @@ function validBank(b: RiverBoundary): boolean {
     Math.hypot(b.left.x - b.anchor.x, b.left.z - b.anchor.z) > CELL ||
     Math.hypot(b.right.x - b.anchor.x, b.right.z - b.anchor.z) > CELL ||
     Math.abs(Math.hypot(b.inland.x, b.inland.z) - 1) > 1e-6) return false;
+  if (b.edge) {
+    const dx = b.right.x - b.left.x, dz = b.right.z - b.left.z, length = Math.hypot(dx, dz);
+    let previous = -Infinity;
+    for (let i = 0; i < b.edge.length; i++) {
+      const p = b.edge[i]!, x = p.x - b.left.x, z = p.z - b.left.z;
+      const along = (x * dx + z * dz) / length;
+      // Mesh breaks must follow the same source segment, in strictly increasing
+      // order. Backtracking/duplicates must not paint overlapping strips.
+      if (Math.abs(x * dz - z * dx) / length > 1e-6 || along <= previous ||
+          along < -1e-6 || along > length + 1e-6 ||
+          (i === 0 && Math.abs(along) > 1e-6) ||
+          (i === b.edge.length - 1 && Math.abs(along - length) > 1e-6)) return false;
+      previous = along;
+    }
+  }
   return true;
 }
 
@@ -568,7 +588,8 @@ function createBankGrid(b: RiverBoundary, sample: SurfaceSampler): BankGrid | un
   const bank: BankGrid = { columns, lateral: Float64Array.from(edges), x: new Float64Array(nodes), z: new Float64Array(nodes),
     bed: new Float32Array(cells), depth: new Float32Array(cells), next: new Float32Array(cells),
     neighbors: new Int32Array(cells * 4), connected: new Uint8Array(cells), queue: new Int32Array(cells),
-    source: new Uint8Array(cells), surface: new Float32Array(nodes), weights: new Uint8Array(nodes), flux: new Float64Array(4) };
+    source: new Uint8Array(cells), surface: new Float32Array(nodes), weights: new Uint8Array(nodes), flux: new Float64Array(4),
+    edgeFirst: new Uint8Array(columns), edgeEnd: new Uint8Array(columns) };
   for (let row = 0; row <= SUB_ROWS; row++) for (let col = 0; col <= columns; col++) {
     const i = row * (columns + 1) + col;
     bank.x[i] = b.anchor.x + tx * edges[col]! + b.inland.x * row * SUBCELL;
@@ -644,6 +665,19 @@ function edgeHeight(b: RiverBoundary, x: number, z: number): number {
 
 function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THREE.BufferAttribute, vertex: number): number {
   const b = grid.bank!, boundary = grid.boundary!, columns = b.columns, stride = columns + 1;
+  // Partition the ordered edge once. Emission below only visits this column's
+  // half-open index range; no breakpoint can subdivide several source cells.
+  const edge = boundary.edge;
+  let edgeIndex = 0;
+  const length = Math.hypot(boundary.right.x - boundary.left.x, boundary.right.z - boundary.left.z);
+  const tx = (boundary.right.x - boundary.left.x) / length, tz = (boundary.right.z - boundary.left.z) / length;
+  const along = (index: number) => (edge![index]!.x - boundary.anchor.x) * tx + (edge![index]!.z - boundary.anchor.z) * tz;
+  for (let col = 0; col < columns; col++) {
+    while (edgeIndex < (edge?.length ?? 0) && along(edgeIndex) <= b.lateral[col]! + 1e-6) edgeIndex++;
+    b.edgeFirst[col] = edgeIndex;
+    while (edgeIndex < (edge?.length ?? 0) && along(edgeIndex) < b.lateral[col + 1]! - 1e-6) edgeIndex++;
+    b.edgeEnd[col] = edgeIndex;
+  }
   b.connected.fill(0); b.surface.fill(0); b.weights.fill(0);
   let tail = 0;
   for (let i = 0; i < columns; i++) if (b.source[i] && b.depth[i]! >= WET) { b.connected[i] = 1; b.queue[tail++] = i; }
@@ -666,6 +700,7 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
     b.surface[col + 1] = edgeHeight(boundary, b.x[col + 1]!, b.z[col + 1]!);
   }
   const emit = (x: number, y: number, z: number, depth: number) => {
+    if (vertex >= positions.count || vertex >= colors.count) throw new RangeError("Flood vertex capacity exceeded");
     positions.setXYZ(vertex, x, y, z);
     const t = Math.min(1, depth / 1.5);
     colors.setXYZ(vertex++, BANK_SHALLOW.r + (BANK_DEEP.r - BANK_SHALLOW.r) * t,
@@ -681,11 +716,9 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
       // There is no separate widened connector and no unsimulated 8m shore band.
       let x = b.x[a]!, z = b.z[a]!, y = edgeHeight(boundary, x, z);
       const dx = b.x[c]! - x, dz = b.z[c]! - z, length2 = dx * dx + dz * dz;
-      const edge = boundary.edge;
-      for (let k = 0; k <= (edge?.length ?? 0); k++) {
-        const p = edge?.[k];
+      for (let k = b.edgeFirst[col]!; k <= b.edgeEnd[col]!; k++) {
+        const p = k < b.edgeEnd[col]! ? edge![k] : undefined;
         const t = p ? ((p.x - b.x[a]!) * dx + (p.z - b.z[a]!) * dz) / length2 : 1;
-        if (p && (t <= 1e-6 || t >= 1 - 1e-6)) continue;
         const nx = p?.x ?? b.x[c]!, nz = p?.z ?? b.z[c]!, ny = p?.y ?? edgeHeight(boundary, nx, nz);
         const startT = ((x - b.x[a]!) * dx + (z - b.z[a]!) * dz) / length2;
         const lx = b.x[e]! + (b.x[d]! - b.x[e]!) * startT, lz = b.z[e]! + (b.z[d]! - b.z[e]!) * startT;
