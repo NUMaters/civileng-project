@@ -247,20 +247,9 @@ async function main() {
     }
     let draggedToMap = false;
     const dragAttempts = [];
-    const dropCandidates = [
-      [0.35, 0.3],
-      [0.5, 0.3],
-      [0.65, 0.3],
-      [0.35, 0.45],
-      [0.5, 0.45],
-      [0.65, 0.45],
-      [0.35, 0.6],
-      [0.5, 0.6],
-      [0.65, 0.6],
-      [0.35, 0.75],
-      [0.5, 0.75],
-      [0.65, 0.75],
-    ];
+    const dropCandidates = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].flatMap((xRatio) =>
+      [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8].map((yRatio) => [xRatio, yRatio]),
+    );
     for (const [xRatio, yRatio] of dropCandidates) {
       const targetX = dragPoints.canvasLeft + dragPoints.canvasWidth * xRatio;
       const targetY = dragPoints.canvasTop + dragPoints.canvasHeight * yRatio;
