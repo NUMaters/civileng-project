@@ -164,6 +164,12 @@ async function main() {
     const client = cdp(ws);
     await client.call("Runtime.enable");
     await client.call("Page.enable");
+    await client.call("Emulation.setDeviceMetricsOverride", {
+      width: 390,
+      height: 844,
+      deviceScaleFactor: 1,
+      mobile: true,
+    });
 
     await client.call("Page.navigate", { url: BASE });
     await waitFor(
@@ -197,6 +203,12 @@ async function main() {
       30_000,
     );
     step("ゲーム開始（準備中）");
+    await waitFor(
+      client,
+      `document.querySelector('.cesium-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
+      60_000,
+    );
+    step("スマホ幅で街の3Dモデル表示");
 
     const dragOnlyDock = await evaluate(
       client,

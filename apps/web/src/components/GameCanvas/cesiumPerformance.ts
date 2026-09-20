@@ -80,6 +80,9 @@ function isLowEndDevice(): boolean {
 
 export function resolveCesiumRenderProfile(): CesiumRenderProfile {
   if (isMobileViewport()) {
+    if (isLowEndDevice()) {
+      return { ...MOBILE_PROFILE, loadBuildings: false };
+    }
     return MOBILE_PROFILE;
   }
   if (isLowEndDevice()) {

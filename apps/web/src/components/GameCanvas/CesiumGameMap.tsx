@@ -1420,9 +1420,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       }
       labelElementRefs.current.set(id, element);
     };
+    const buildingsLoadState = getCesiumRenderProfile().loadBuildings
+      ? mapLoadStage === "ready"
+        ? "ready"
+        : "loading"
+      : "disabled";
 
     return (
-      <div className="cesium-game-map">
+      <div className="cesium-game-map" data-3d-buildings={buildingsLoadState}>
         <div className="cesium-game-map__canvas" ref={containerRef} />
         <div className="cesium-game-map__labels" aria-hidden="true">
           {mapLabels.map((label) => (
