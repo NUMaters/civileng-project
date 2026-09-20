@@ -31,6 +31,20 @@ describe("cesiumPerformance", () => {
     expect(profile.overlayFrameIntervalMs).toBeLessThanOrEqual(1000 / 24);
   });
 
+  it("uses a safe middle profile when mobile memory is not exposed", () => {
+    vi.stubGlobal("window", {
+      matchMedia: vi.fn().mockReturnValue({ matches: true }),
+    });
+    vi.stubGlobal("navigator", { hardwareConcurrency: 8 });
+
+    const profile = resolveCesiumRenderProfile();
+
+    expect(profile.id).toBe("mobile");
+    expect(profile.loadBuildings).toBe(true);
+    expect(profile.targetRenderPixels).toBeLessThan(860_000);
+    expect(profile.buildingMaximumScreenSpaceError).toBeGreaterThan(20);
+  });
+
   it("disables 3D buildings as a fallback on low-end mobile devices", () => {
     vi.stubGlobal("window", {
       matchMedia: vi.fn().mockReturnValue({ matches: true }),

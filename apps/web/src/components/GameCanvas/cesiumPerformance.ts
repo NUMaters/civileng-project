@@ -66,6 +66,18 @@ const MOBILE_PROFILE: CesiumRenderProfile = {
   rainCanvasDprCap: 1,
 };
 
+// Safari など deviceMemory を公開しない端末では、性能を推測して高品質設定へ
+// 振り切らない。建物は残しつつ、発熱とフレーム落ちを抑える中間プロファイルにする。
+const MOBILE_SAFE_PROFILE: CesiumRenderProfile = {
+  ...MOBILE_PROFILE,
+  targetRenderPixels: 760_000,
+  resolutionScaleFloor: 0.45,
+  globeMaximumScreenSpaceError: 12,
+  buildingMaximumScreenSpaceError: 26,
+  imageryMaximumLevel: 15,
+  overlayFrameIntervalMs: 1000 / 20,
+};
+
 let cachedProfile: CesiumRenderProfile | null = null;
 
 function isMobileViewport(): boolean {
@@ -81,10 +93,20 @@ function isLowEndDevice(): boolean {
   return cores <= 4 || memory <= 4;
 }
 
+function hasDeviceMemorySignal(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return typeof (navigator as Navigator & { deviceMemory?: number }).deviceMemory === "number";
+}
+
 export function resolveCesiumRenderProfile(): CesiumRenderProfile {
   if (isMobileViewport()) {
     if (isLowEndDevice()) {
       return { ...MOBILE_PROFILE, loadBuildings: false };
+    }
+    if (!hasDeviceMemorySignal()) {
+      return MOBILE_SAFE_PROFILE;
     }
     return MOBILE_PROFILE;
   }
