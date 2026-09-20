@@ -357,12 +357,14 @@
   background: #096fa9ed;
   box-shadow: 0 5px 18px #123c6420;
 }
-.river-recenter--flood {
+.river-recenter.river-recenter--flood {
   width: auto;
+  min-width: 104px;
   padding: 0 14px;
   border-radius: 22px;
   font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
 .is-reviewing .river-recenter {
   bottom: calc(108px + env(safe-area-inset-bottom));
