@@ -69,10 +69,13 @@ export function createGeographicTrain(data: KoriyamaGeodata, ground: Ground) {
       const belt = new THREE.Mesh(stripe, materials.stripe); belt.position.y = 1.2;
       const top = new THREE.Mesh(roof, materials.roof); top.position.y = 3.12;
       car.add(shell, belt, top);
-      for (let j = 0; j < 7; j++) {
-        const window = new THREE.Mesh(windows, materials.windows);
-        window.position.set(0, 2.1, -7 + j * 2.3); car.add(window);
-      }
+      const glazing = new THREE.InstancedMesh(windows, materials.windows, 7);
+      const matrix = new THREE.Matrix4();
+      for (let j = 0; j < 7; j++)
+        glazing.setMatrixAt(j, matrix.makeTranslation(0, 2.1, -7 + j * 2.3));
+      glazing.instanceMatrix.needsUpdate = true;
+      glazing.computeBoundingSphere();
+      car.add(glazing);
       // Dynamic cars do not invalidate the expensive static-city shadow map.
       car.traverse(object => { object.castShadow = false; object.receiveShadow = true; });
       group.add(car); cars.push(car);

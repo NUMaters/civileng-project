@@ -13,6 +13,7 @@ import { createGeographicWaterMaterial, riverFlowCoordinates } from "./geographi
 import { createCameraFocusNotifier } from "./cameraFocusNotification";
 import { createGeographicBridges } from "./geographicBridges";
 import { createGeographicTrain } from "./geographicTrain";
+import { followGeographicShadows } from "./geographicShadows";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
@@ -185,7 +186,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       const scene = new T.Scene();
       scene.background = new T.Color("#87d6f5");
       scene.fog = new T.Fog("#b6e6ef", 1700, 3700);
-      scene.add(new T.HemisphereLight("#d5f5ff", "#7e9d60", 1.2));
+      scene.add(new T.HemisphereLight("#d5f5ff", "#7e9d60", 0.85));
       const sun = new T.DirectionalLight("#fff5da", 2.4);
       sun.position.set(-360, 650, 300);
       sun.castShadow = true;
@@ -199,7 +200,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         far: 1600,
       });
       sun.shadow.bias = -0.0008;
-      scene.add(sun);
+      scene.add(sun, sun.target);
       const camera = new T.PerspectiveCamera(43, 1, 1, 6000);
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
@@ -216,6 +217,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
         controls.target.set(riverX(focus.z), terrain.sampleGround(riverX(focus.z), focus.z) ?? 0, focus.z);
+        followGeographicShadows(sun, controls.target, true);
+        renderer.shadowMap.needsUpdate = true;
         const downstream = new T.Vector3(
           riverX(focus.z + 80) - riverX(focus.z - 80),
           0,
@@ -371,6 +374,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         controls.target.add(correction);
         camera.position.add(correction);
         notifyCameraFocus(controls.target.x, controls.target.z, now);
+        if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
         for (const model of r.models.values()) {
           const delta =
             T.MathUtils.euclideanModulo(
