@@ -179,6 +179,8 @@ function buildStaticVisualKey(influences: readonly StructureInfluence[]): string
         influence.headingDegrees.toFixed(1),
         influence.effectiveness.toFixed(2),
         influence.coverageTone,
+        [...influence.coveredSiteIds].sort().join(","),
+        [...(influence.adverseSiteIds ?? [])].sort().join(","),
         influence.preview === true ? "1" : "0",
       ].join(":"),
     ),
