@@ -5,7 +5,9 @@ import {
   getCandidateBankElevationMeters,
   listOverflowCandidates,
 } from "../../features/disaster/services/overflowBankSites";
-import { geoToWorld, groundY } from "./dioramaSpace";
+import { geoToWorld, groundY, worldToGeo } from "./dioramaSpace";
+import type { BankSurfacePoint, RiverBoundary, RiverBoundaryResolver, SurfaceSampler } from "./riverBoundary";
+import { MAX_RIVER_EDGE_POINTS } from "./riverBoundary";
 
 export type DioramaInundation = {
   group: THREE.Group;
@@ -32,6 +34,8 @@ const STEP = 0.1;
 const MAX_CATCHUP_STEPS = 10;
 const MAX_SITES = 24;
 const LAT_METERS = 110_540;
+const INLET_COL = Math.floor(COLS / 2);
+const SURFACE_LIFT = 0.18;
 
 type Grid = {
   seed: InundationSeed;
@@ -40,6 +44,7 @@ type Grid = {
   ground: Float32Array;
   depth: Float32Array;
   next: Float32Array;
+  boundary?: RiverBoundary;
 };
 
 /**
@@ -47,16 +52,18 @@ type Grid = {
  * That module exposes only angle-sorted rings (which can bridge dry cells) and sparse
  * flow samples, and owns a global grid. Keeping the same 16 m grid/injection/flux
  * here avoids both invented wet polygons and resets affecting a Cesium viewer.
- * Neither the synthetic valley below nor dioramaSpace.groundY is a measured DEM;
- * these depths illustrate propagation, not building damage or real flood forecasts.
+ * With a boundary resolver, the grid instead starts at a source-bank inlet and
+ * uses sampled ground plus a fixed-head river reservoir. Failed resolution never
+ * falls back to an inland seed. Both modes illustrate propagation, not measured
+ * discharge, building damage, surveyed levee failure or real flood forecasts.
  */
-export function createDioramaInundation(sampleGround: (x: number, z: number) => number | null = groundY): DioramaInundation {
+export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, resolveBoundary?: RiverBoundaryResolver): DioramaInundation {
   const group = new THREE.Group();
   group.name = "diorama-inundation";
   group.visible = false;
   const grids = new Map<string, Grid>();
   // One reusable buffer/draw call, bounded independently of frame rate and site count.
-  const capacity = MAX_SITES * COLS * ROWS * 12 * 3;
+  const capacity = MAX_SITES * (COLS * ROWS * 12 + (MAX_RIVER_EDGE_POINTS - 1) * 6) * 3;
   const positions = new THREE.BufferAttribute(new Float32Array(capacity), 3);
   const colors = new THREE.BufferAttribute(new Float32Array(capacity), 3);
   positions.setUsage(THREE.DynamicDrawUsage);
@@ -98,13 +105,15 @@ export function createDioramaInundation(sampleGround: (x: number, z: number) => 
   function rebuild(): void {
     let vertex = 0;
     for (const grid of grids.values()) {
+      if (grid.boundary && (!validConnection(grid, sampleGround) || grid.depth[INLET_COL]! < WET)) continue;
+      const connected = grid.boundary ? connectedWetCells(grid) : undefined;
       for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
           const depth = grid.depth[row * COLS + col]!;
-          if (depth < WET) continue;
+          if (depth < WET || (connected && !connected[row * COLS + col])) continue;
           // Render cell footprints, never a hull enclosing unwetted neighbors.
           const samples = [
-            { col, row, depth },
+            { col, row, depth, surfaceY: grid.boundary ? grid.ground[row * COLS + col]! + depth : undefined },
             ...[
               [-0.5, -0.5],
               [0.5, -0.5],
@@ -113,10 +122,10 @@ export function createDioramaInundation(sampleGround: (x: number, z: number) => 
             ].map(([dc, dr]) => shoreCorner(grid, col + dc!, row + dr!)),
           ].map((sample) => {
             const p = point(grid, sample.col, sample.row);
-            return { ...geoToWorld(p.longitude, p.latitude), depth: sample.depth };
+            return { ...geoToWorld(p.longitude, p.latitude), depth: sample.depth, surfaceY: sample.surfaceY };
           });
           const ground = samples.map(p => sampleGround(p.x, p.z));
-          if (ground.some(y => y === null)) continue;
+          if (ground.some(y => y === null || !Number.isFinite(y))) continue;
           // Shared shoreline corners soften the staircase without extending
           // into dry cells. The center retains the field's actual cell depth.
           for (const index of [0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1]) {
@@ -124,10 +133,18 @@ export function createDioramaInundation(sampleGround: (x: number, z: number) => 
             color.copy(shallow).lerp(deep, Math.min(1, p.depth / 1.5));
             // Ground-conforming educational surface: depth is meters, no circular
             // effects or artificially expanded footprint. Lift clears road decals.
-            positions.setXYZ(vertex, p.x, ground[index]! + 0.18 + p.depth, p.z);
+            positions.setXYZ(vertex, p.x, p.surfaceY ?? ground[index]! + SURFACE_LIFT + p.depth, p.z);
             colors.setXYZ(vertex, color.r, color.g, color.b);
             vertex++;
           }
+        }
+      }
+      if (grid.boundary) {
+        // Same inlet edge vertices/heights as row zero, not a separate visual gap patch.
+        for (const p of connectorTriangles(grid)) {
+          color.copy(shallow).lerp(deep, Math.min(1, grid.depth[INLET_COL]! / 1.5));
+          positions.setXYZ(vertex, p.x, p.y, p.z);
+          colors.setXYZ(vertex++, color.r, color.g, color.b);
         }
       }
     }
@@ -165,6 +182,7 @@ export function createDioramaInundation(sampleGround: (x: number, z: number) => 
       const sites = state.overflowSites
         .filter(
           (site) =>
+            (site.primaryHazard === "overtopping" || site.primaryHazard === "erosion") &&
             Number.isFinite(site.intensity) &&
             site.intensity > 0 &&
             Number.isFinite(site.longitude) &&
@@ -205,16 +223,35 @@ export function createDioramaInundation(sampleGround: (x: number, z: number) => 
             bankElevationMeters: candidate ? getCandidateBankElevationMeters(candidate) : 19,
           };
           let grid = grids.get(seed.id);
+          const boundary = resolveBoundary?.(site);
+          // An explicitly supplied resolver failing is NOT permission for a remote seed.
+          if (resolveBoundary && !boundary) { grids.delete(seed.id); group.visible = false; continue; }
           if (
             !grid ||
             grid.seed.longitude !== seed.longitude ||
             grid.seed.latitude !== seed.latitude ||
-            grid.seed.outflowHeadingDegrees !== seed.outflowHeadingDegrees
+            grid.seed.outflowHeadingDegrees !== seed.outflowHeadingDegrees ||
+            (boundary && (!grid.boundary || boundary.sourceId !== grid.boundary.sourceId ||
+              boundary.segmentIndex !== grid.boundary.segmentIndex || boundary.polygonIndex !== grid.boundary.polygonIndex ||
+              boundary.anchor.x !== grid.boundary.anchor.x || boundary.anchor.z !== grid.boundary.anchor.z ||
+              boundary.inland.x !== grid.boundary.inland.x || boundary.inland.z !== grid.boundary.inland.z ||
+              boundary.left.x !== grid.boundary.left.x || boundary.left.z !== grid.boundary.left.z ||
+              boundary.right.x !== grid.boundary.right.x || boundary.right.z !== grid.boundary.right.z))
           ) {
             grid = createGrid(seed);
+            if (boundary) {
+              grid.boundary = boundary;
+              // Terrain/source footprint are immutable for this grid frame;
+              // cache bed/masks once, while checking the live throat each update.
+              sampleConnectedGround(grid, sampleGround);
+            }
             grids.set(seed.id, grid);
           }
           grid.seed = seed;
+          if (boundary) {
+            grid.boundary = boundary;
+            if (!validConnection(grid, sampleGround)) { grids.delete(seed.id); group.visible = false; continue; }
+          }
           for (let step = 0; step < steps; step++) {
             advanceGrid(grid, Math.max(0, state.floodDepthMeters));
           }
@@ -245,6 +282,7 @@ function shoreCorner(grid: Grid, col: number, row: number) {
   let count = 0;
   let columnSum = 0;
   let rowSum = 0;
+  let surfaceSum = 0;
   for (const r of [Math.floor(row), Math.ceil(row)]) {
     for (const c of [Math.floor(col), Math.ceil(col)]) {
       if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
@@ -254,13 +292,16 @@ function shoreCorner(grid: Grid, col: number, row: number) {
       count++;
       columnSum += c;
       rowSum += r;
+      surfaceSum += grid.ground[r * COLS + c]! + depth;
     }
   }
-  const inset = count === 1 ? 0.65 : count === 2 ? 0.25 : count === 3 ? 0.12 : 0;
+  const inset = grid.boundary ? 0 : count === 1 ? 0.65 : count === 2 ? 0.25 : count === 3 ? 0.12 : 0;
   return {
     col: count ? col + (columnSum / count - col) * inset : col,
     row: count ? row + (rowSum / count - row) * inset : row,
     depth: count > 0 ? sum / count : 0,
+    surfaceY: grid.boundary ? (row === -0.5 && Math.abs(col - INLET_COL) === 0.5
+      ? riverHead(grid) : surfaceSum / Math.max(1, count)) : undefined,
   };
 }
 
@@ -298,6 +339,10 @@ function createGrid(seed: InundationSeed): Grid {
 }
 
 function point(grid: Grid, col: number, row: number) {
+  if (grid.boundary) {
+    const p = connectedPoint(grid, col, row);
+    return worldToGeo(p.x, p.z);
+  }
   const inland = (row - (ROWS - 1) * 0.2) * CELL;
   const lateral = (col - (COLS - 1) * 0.5) * CELL;
   const heading = (grid.seed.outflowHeadingDegrees * Math.PI) / 180;
@@ -313,6 +358,7 @@ function point(grid: Grid, col: number, row: number) {
 
 function advanceGrid(grid: Grid, floodDepth: number): void {
   const { seed, ground, depth, next } = grid;
+  const head = grid.boundary ? riverHead(grid) : 0;
   const heading = (seed.outflowHeadingDegrees * Math.PI) / 180;
   const east =
     (seed.longitude - grid.longitude) * 111_320 * Math.cos((grid.latitude * Math.PI) / 180);
@@ -324,7 +370,12 @@ function advanceGrid(grid: Grid, floodDepth: number): void {
     (east * Math.sin(heading) + north * Math.cos(heading)) / CELL + (ROWS - 1) * 0.2,
   );
   const inject = (0.48 * seed.intensity * (0.35 + floodDepth) + floodDepth * 0.08) * STEP;
-  for (let dr = -1; dr <= 1; dr++) {
+  if (grid.boundary) {
+    // Educational fixed-head river reservoir. No synthetic inland injection and
+    // no discharge/volume claim: intensity controls propagation, not source height.
+    for (let i = 0; i < depth.length; i++) depth[i] = Math.min(depth[i]!, Math.max(0, head - ground[i]!));
+    depth[INLET_COL] = Math.max(0, head - ground[INLET_COL]!);
+  } else for (let dr = -1; dr <= 1; dr++) {
     for (let dc = -1; dc <= 1; dc++) {
       const row = seedRow + dr,
         col = seedCol + dc;
@@ -338,13 +389,14 @@ function advanceGrid(grid: Grid, floodDepth: number): void {
     for (let col = 0; col < COLS; col++) {
       const index = row * COLS + col;
       const h = depth[index]!;
+      if (!Number.isFinite(ground[index])) continue;
       if (h < WET * 0.5) continue;
       const neighbors = [
         [col - 1, row],
         [col + 1, row],
         [col, row - 1],
         [col, row + 1],
-      ].filter(([c, r]) => c! >= 0 && c! < COLS && r! >= 0 && r! < ROWS);
+      ].filter(([c, r]) => c! >= 0 && c! < COLS && r! >= 0 && r! < ROWS && Number.isFinite(ground[r! * COLS + c!]));
       const fluxes = neighbors.map(([c, r]) => {
         const ni = r! * COLS + c!;
         const inland = (r! - (ROWS - 1) * 0.2) * CELL;
@@ -354,7 +406,7 @@ function advanceGrid(grid: Grid, floodDepth: number): void {
           (0.55 + 0.45 / (1 + (Math.abs(lateral) / (CELL * 6)) ** 2));
         return Math.max(
           0,
-          Math.min(h * 0.22, (ground[index]! + h - ground[ni]! - depth[ni]!) * 1.55 * bias * STEP),
+          Math.min(h * 0.22, (ground[index]! + h - ground[ni]! - depth[ni]!) * 1.55 * bias * STEP * (grid.boundary ? seed.intensity : 1)),
         );
       });
       const outflow = fluxes.reduce((sum, flux) => sum + flux, 0);
@@ -368,4 +420,98 @@ function advanceGrid(grid: Grid, floodDepth: number): void {
   }
   const drain = 0.012 * STEP * (1.15 - seed.intensity);
   for (let i = 0; i < depth.length; i++) depth[i] = Math.max(0, next[i]! - drain);
+  if (grid.boundary) {
+    for (let i = 0; i < depth.length; i++) depth[i] = Math.min(depth[i]!, Math.max(0, head - ground[i]!));
+    depth[INLET_COL] = Math.max(0, head - ground[INLET_COL]!);
+  }
+}
+
+function riverHead(grid: Grid): number {
+  const b = grid.boundary!;
+  return Math.min(b.left.y, b.right.y, ...(b.edge ?? []).map(p => p.y));
+}
+
+function connectedWetCells(grid: Grid): Uint8Array {
+  const connected = new Uint8Array(COLS * ROWS), queue = [INLET_COL];
+  if (grid.depth[INLET_COL]! < WET) return connected;
+  connected[INLET_COL] = 1;
+  for (let k = 0; k < queue.length; k++) {
+    const i = queue[k]!, col = i % COLS, row = Math.floor(i / COLS);
+    for (const [c, r] of [[col - 1, row], [col + 1, row], [col, row - 1], [col, row + 1]]) {
+      if (c! < 0 || c! >= COLS || r! < 0 || r! >= ROWS) continue;
+      const next = r! * COLS + c!;
+      if (!connected[next] && Number.isFinite(grid.ground[next]) && grid.depth[next]! >= WET) {
+        connected[next] = 1; queue.push(next);
+      }
+    }
+  }
+  return connected;
+}
+
+function connectedPoint(grid: Grid, col: number, row: number) {
+  const b = grid.boundary!;
+  const dx = b.right.x - b.left.x, dz = b.right.z - b.left.z, length = Math.hypot(dx, dz);
+  // The half-cell throat and receiving cell share the grid discretization; no
+  // centerline/shoreline offset is used to locate the source bank.
+  return { x: b.anchor.x + dx / length * (col - INLET_COL) * CELL + b.inland.x * (row + 1) * CELL,
+    z: b.anchor.z + dz / length * (col - INLET_COL) * CELL + b.inland.z * (row + 1) * CELL };
+}
+
+function sampleConnectedGround(grid: Grid, sample: SurfaceSampler): void {
+  for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
+    let bed = -Infinity;
+    for (const dr of [-0.5, 0, 0.5]) for (const dc of [-0.5, 0, 0.5]) {
+      const p = connectedPoint(grid, col + dc, row + dr), y = sample(p.x, p.z);
+      if (y === null || !Number.isFinite(y) || !grid.boundary!.isLand(p.x, p.z)) bed = Infinity;
+      else bed = Math.max(bed, y + SURFACE_LIFT);
+    }
+    grid.ground[row * COLS + col] = bed;
+  }
+}
+
+function connectorTriangles(grid: Grid): BankSurfacePoint[] {
+  const b = grid.boundary!, y = riverHead(grid);
+  const left = { ...connectedPoint(grid, INLET_COL - 0.5, -0.5), y };
+  const right = { ...connectedPoint(grid, INLET_COL + 0.5, -0.5), y };
+  const edge = b.edge ?? [b.left, b.right], triangles: BankSurfacePoint[] = [];
+  const dx = b.right.x - b.left.x, dz = b.right.z - b.left.z, length2 = dx * dx + dz * dz;
+  const target = (p: BankSurfacePoint) => {
+    const t = ((p.x - b.left.x) * dx + (p.z - b.left.z) * dz) / length2;
+    return { x: left.x + (right.x - left.x) * t, z: left.z + (right.z - left.z) * t, y };
+  };
+  for (let i = 1; i < edge.length; i++) {
+    const a = edge[i - 1]!, c = edge[i]!, d = target(c), e = target(a);
+    triangles.push(a, c, d, a, d, e);
+  }
+  return triangles;
+}
+
+/** Discrete 4m-or-finer triangle checks; not proof of unsampled terrain or a
+ * surveyed levee crest. A missing/blocked throat rejects injection, not just paint.
+ */
+function validConnection(grid: Grid, sample: SurfaceSampler): boolean {
+  const b = grid.boundary!;
+  if (b.edge && (b.edge.length < 2 || b.edge.length > MAX_RIVER_EDGE_POINTS ||
+    b.edge.some(p => ![p.x, p.y, p.z].every(Number.isFinite) || Math.hypot(p.x - b.anchor.x, p.z - b.anchor.z) > CELL))) return false;
+  if (![b.anchor.x, b.anchor.z, b.inland.x, b.inland.z, b.left.x, b.left.y, b.left.z,
+    b.right.x, b.right.y, b.right.z].every(Number.isFinite) ||
+    Math.hypot(b.right.x - b.left.x, b.right.z - b.left.z) < 1e-4 ||
+    Math.hypot(b.left.x - b.anchor.x, b.left.z - b.anchor.z) > CELL ||
+    Math.hypot(b.right.x - b.anchor.x, b.right.z - b.anchor.z) > CELL ||
+    Math.abs(Math.hypot(b.inland.x, b.inland.z) - 1) > 1e-6 ||
+    !Number.isFinite(grid.ground[INLET_COL]) || riverHead(grid) - grid.ground[INLET_COL]! < WET) return false;
+  const triangles = connectorTriangles(grid);
+  for (let i = 0; i < triangles.length; i += 3) {
+    const [a, c, d] = triangles.slice(i, i + 3) as [BankSurfacePoint, BankSurfacePoint, BankSurfacePoint];
+    const count = Math.ceil(Math.max(Math.hypot(a.x - c.x, a.z - c.z), Math.hypot(a.x - d.x, a.z - d.z),
+      Math.hypot(c.x - d.x, c.z - d.z)) / 4);
+    for (let u = 0; u <= count; u++) for (let v = 0; v <= count - u; v++) {
+      const s = u / count, t = v / count;
+      const x = a.x + (c.x - a.x) * s + (d.x - a.x) * t, z = a.z + (c.z - a.z) * s + (d.z - a.z) * t;
+      const y = a.y + (c.y - a.y) * s + (d.y - a.y) * t, ground = sample(x, z);
+      if (ground === null || !Number.isFinite(ground) || ground + SURFACE_LIFT + WET > y ||
+        ((x - b.anchor.x) * b.inland.x + (z - b.anchor.z) * b.inland.z > 1e-5 && !b.isLand(x, z))) return false;
+    }
+  }
+  return true;
 }

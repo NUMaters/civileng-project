@@ -1,7 +1,12 @@
 import * as THREE from "three";
+import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createInitialFloodState,
+  beginDisaster,
+  advanceFloodSimulation,
+  DEFAULT_WEATHER_SEED,
   type FloodSimulationState,
 } from "../../features/disaster/services/floodSimulation";
 import {
@@ -13,9 +18,21 @@ import {
   listOverflowCandidates,
 } from "../../features/disaster/services/overflowBankSites";
 import { createDioramaInundation, type DioramaInundation } from "./dioramaInundation";
-import { geoToWorld, groundY, riverX } from "./dioramaSpace";
+import { geoToWorld, groundY, riverX, worldToGeo } from "./dioramaSpace";
+import { createRiverBoundaryResolver, type SurfaceSampler } from "./riverBoundary";
+import type { GeoPoint, KoriyamaGeodata } from "./koriyamaGeodata";
+import { createGeographicWorld } from "./geographicWorld";
+import { createGeographicTerrain } from "./geographicTerrain";
+import { decodeKoriyamaTerrain, type KoriyamaTerrainMetadata } from "./koriyamaTerrain";
+import { createRiverStageController } from "./riverStage";
+import { createRiverSurfaceSampler } from "./riverSurface";
 
 const adapters: DioramaInundation[] = [];
+// Compare full reusable buffers without Vitest recursively diffing 145k scalars.
+function expectSameBuffer(a: ArrayBufferView, b: ArrayBufferView) {
+  expect(a.byteLength).toBe(b.byteLength);
+  expect(Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(Buffer.from(b.buffer, b.byteOffset, b.byteLength))).toBe(true);
+}
 const candidate = listOverflowCandidates().find((site) => site.id === "campus-core")!;
 function wetState(): FloodSimulationState {
   return {
@@ -43,6 +60,179 @@ function run(adapter: DioramaInundation, state = wetState(), count = 100) {
 afterEach(() => {
   adapters.splice(0).forEach((adapter) => adapter.dispose());
   resetInundationField();
+});
+
+function connectedSetup(sample: SurfaceSampler = () => 0, water: SurfaceSampler = () => 2) {
+  const geo = (x: number, z: number): GeoPoint => { const p = worldToGeo(x, z); return [p.longitude, p.latitude]; };
+  const data: KoriyamaGeodata = { type: "FeatureCollection", bbox: [140, 37, 141, 38], features: [{
+    type: "Feature", id: "relation/18504988", properties: { kind: "water", water: "river", version: 1, timestamp: "test" },
+    geometry: { type: "MultiPolygon", coordinates: [[[geo(-100, -300), geo(0, -300), geo(0, 300), geo(-100, 300), geo(-100, -300)]]] },
+  }] };
+  const adapter = createDioramaInundation(sample, createRiverBoundaryResolver(data, water));
+  adapters.push(adapter);
+  const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
+  const state = { ...wetState(), overflowSites: [{ ...wetState().overflowSites[0]!, ...worldToGeo(60, 0), outflowHeadingDegrees: 90 }] };
+  return { adapter, geometry, state };
+}
+
+describe("source-connected inundation", () => {
+  it("shows connected flood with actual scene water/DEM and a late unprotected simulation state", () => {
+    const read = (file: string) => readFileSync(new URL(`../../../public/geodata/koriyama/${file}`, import.meta.url));
+    const osm = JSON.parse(read("features.geojson").toString()) as KoriyamaGeodata;
+    const metadata = JSON.parse(read("terrain-metadata.json").toString()) as KoriyamaTerrainMetadata;
+    const terrain = createGeographicTerrain(decodeKoriyamaTerrain(Uint8Array.from(read("terrain.bin")).buffer, metadata));
+    // Same production water construction and complete DEM; omit unrelated buildings
+    // to keep this acceptance test bounded. No candidate or datum substitutions.
+    const world = createGeographicWorld({ ...osm, features: osm.features.filter(f => ["water", "waterway"].includes(f.properties.kind)) }, {
+      localBounds: terrain.bounds, groundSampler: terrain.sampleGround, surfaceGridSpacing: 12,
+      surfaceSampler: (x, z) => { const y = terrain.sampleGround(x, z); return y === null ? null : y + 0.35; },
+    });
+    try {
+      const stage = createRiverStageController(world.waterMeshes);
+      const resolve = createRiverBoundaryResolver(osm, createRiverSurfaceSampler(world.waterMeshes));
+      const adapter = createDioramaInundation(terrain.sampleGround, resolve);
+      adapters.push(adapter);
+      let state = beginDisaster(createInitialFloodState(), { weatherSeed: DEFAULT_WEATHER_SEED });
+      for (let i = 0; i < 80; i++) state = advanceFloodSimulation(state, [], 1);
+      expect(state.phase).toBe("disaster");
+      stage.update(state.riverLevelMeters);
+      adapter.update(state, 0, 0);
+      state = advanceFloodSimulation(state, [], 0.1);
+      stage.update(state.riverLevelMeters);
+      adapter.update(state, 0.1, 0.1);
+      const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
+      const p = geometry.getAttribute("position"), count = geometry.drawRange.count;
+      const eligible = state.overflowSites.filter(s => s.primaryHazard === "overtopping" || s.primaryHazard === "erosion").slice(0, 24);
+      const visibleSites: string[] = [], unresolved: string[] = [], blocked: string[] = [];
+      for (const site of eligible) {
+        const bank = resolve(site);
+        if (!bank) { unresolved.push(site.id); continue; }
+        let attached = false;
+        for (let i = 0; i < count; i++) {
+          if (Math.hypot(p.getX(i) - bank.left.x, p.getY(i) - bank.left.y, p.getZ(i) - bank.left.z) < 0.001) { attached = true; break; }
+        }
+        (attached ? visibleSites : blocked).push(site.id);
+      }
+      console.info("actual connected flood acceptance", { elapsed: state.disasterElapsedSeconds, riverLevel: state.riverLevelMeters,
+        overflow: state.overflowMeters, eligibleSites: eligible.length, vertices: count, visibleSites, unresolved, blocked });
+      expect(adapter.group.visible).toBe(true);
+      expect(count).toBeGreaterThan(12);
+      expect(visibleSites.length, "Actual stage must create a source-attached visible flood, not merely fail closed").toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) expect([p.getX(i), p.getY(i), p.getZ(i)].every(Number.isFinite)).toBe(true);
+    } finally {
+      const materials = new Set<THREE.Material>();
+      for (const root of [world, terrain.group]) for (const child of root.children) {
+        const mesh = child as THREE.Mesh; mesh.geometry.dispose();
+        for (const m of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) materials.add(m);
+      }
+      materials.forEach(m => m.dispose());
+    }
+  }, 60_000);
+
+  it("seeds at the bank, shares its first wet edge with the connector and propagates from that inlet", () => {
+    const { adapter, geometry, state } = connectedSetup();
+    adapter.update(state, 0, 0);
+    adapter.update({ ...state, disasterElapsedSeconds: 0.1 }, 0.1, 0.1);
+    const firstCount = geometry.drawRange.count;
+    expect(firstCount).toBeGreaterThanOrEqual(18);
+    const p = geometry.getAttribute("position");
+    const n = Array.from({ length: firstCount }, (_, i) => i).find(i => Math.abs(p.getX(i)) < 1e-5)!;
+    expect(p.getX(n)).toBeCloseTo(0, 5);
+    expect(p.getX(n + 1)).toBeCloseTo(0, 5);
+    expect(p.getX(n + 2)).toBeCloseTo(8, 5); // half-cell inlet throat, anchored at x=0
+    expect(p.getY(n + 2)).toBeCloseTo(2, 5);
+    for (const k of [firstCount - 4, n + 5]) {
+      const shared = Array.from({ length: n }, (_, i) => i).some(i =>
+        Math.abs(p.getX(i) - p.getX(k)) < 1e-5 && Math.abs(p.getZ(i) - p.getZ(k)) < 1e-5 && p.getY(i) === p.getY(k));
+      expect(shared).toBe(true);
+    }
+    // Moving the old site farther inland does not move injection to that remote point.
+    const other = connectedSetup();
+    other.state.overflowSites[0] = { ...other.state.overflowSites[0]!, ...worldToGeo(90, 0) };
+    other.adapter.update(other.state, 0, 0);
+    other.adapter.update({ ...other.state, disasterElapsedSeconds: 0.1 }, 0.1, 0.1);
+    expect(other.geometry.drawRange.count).toBe(firstCount);
+    const otherPositions = other.geometry.getAttribute("position");
+    for (let i = 0; i < firstCount; i++) {
+      expect(otherPositions.getX(i)).toBeCloseTo(p.getX(i), 4);
+      expect(otherPositions.getY(i)).toBeCloseTo(p.getY(i), 4);
+      expect(otherPositions.getZ(i)).toBeCloseTo(p.getZ(i), 4);
+    }
+    for (let i = 2; i <= 100; i++) adapter.update({ ...state, disasterElapsedSeconds: i / 10 }, 0.1, i / 10);
+    expect(geometry.drawRange.count).toBeGreaterThan(firstCount);
+    for (let i = 0; i < geometry.drawRange.count; i++) {
+      expect(p.getX(i)).toBeGreaterThanOrEqual(-1e-5);
+      expect(p.getY(i)).toBeLessThanOrEqual(2.00001);
+    }
+  });
+
+  it("rejects missing or uphill throats before injecting, including obstructions between endpoints", () => {
+    for (const sample of [(() => null), (() => NaN), ((x: number) => x > 2 && x < 6 ? null : 0),
+      ((x: number) => x > 2 && x < 6 ? 5 : 0), ((x: number) => x >= 8 ? 5 : 0)]) {
+      const { adapter, geometry, state } = connectedSetup(sample);
+      run(adapter, state, 10);
+      expect(geometry.drawRange.count).toBe(0);
+      expect(adapter.group.visible).toBe(false);
+    }
+    const missingWater = connectedSetup(() => 0, () => null);
+    run(missingWater.adapter, missingWater.state, 10);
+    expect(missingWater.geometry.drawRange.count).toBe(0);
+  });
+
+  it("does not propagate through a no-data barrier or higher-than-river cells", () => {
+    for (const value of [null, 5]) {
+      const { adapter, geometry, state } = connectedSetup(x => x >= 28 && x <= 44 ? value : 0);
+      run(adapter, state, 100);
+      expect(geometry.drawRange.count).toBeGreaterThan(0);
+      const p = geometry.getAttribute("position");
+      for (let i = 0; i < geometry.drawRange.count; i++) expect(p.getX(i)).toBeLessThanOrEqual(24.00001);
+    }
+  });
+
+  it("excludes inland ponding in both paths and permits erosion at the bank", () => {
+    const { adapter, geometry, state } = connectedSetup();
+    state.overflowSites[0]!.primaryHazard = "inlandPonding";
+    run(adapter, state, 10);
+    expect(geometry.drawRange.count).toBe(0);
+    const legacy = setup();
+    run(legacy.adapter, state, 10);
+    expect(legacy.geometry.drawRange.count).toBe(0);
+    state.overflowSites[0]!.primaryHazard = "erosion";
+    run(adapter, state, 10);
+    expect(geometry.drawRange.count).toBeGreaterThan(0);
+  });
+
+  it("freezes elapsed pause/review, bounds catchup/storage and clears a lost source", () => {
+    let water: number | null = 2;
+    const { adapter, geometry, state } = connectedSetup(() => 0, () => water);
+    run(adapter, state, 10);
+    const p = geometry.getAttribute("position") as THREE.BufferAttribute;
+    const before = p.array.slice(), version = p.version, capacity = p.count;
+    for (let i = 0; i < 100; i++) adapter.update({ ...state, disasterElapsedSeconds: 1 }, 1, 2 + i);
+    expectSameBuffer(p.array, before);
+    expect(p.version).toBe(version);
+    adapter.update({ ...state, phase: "review", disasterElapsedSeconds: 1 }, 1, 103);
+    expectSameBuffer(p.array, before);
+    const control = connectedSetup();
+    run(control.adapter, control.state, 20);
+    adapter.update({ ...state, disasterElapsedSeconds: 1000 }, 1000, 104);
+    expectSameBuffer(p.array, control.geometry.getAttribute("position").array);
+    expect(p.count).toBe(capacity);
+    expect(geometry.drawRange.count).toBeLessThanOrEqual(capacity);
+    water = null;
+    adapter.update({ ...state, disasterElapsedSeconds: 1000.1 }, 0.1, 105);
+    expect(geometry.drawRange.count).toBe(0);
+    water = 2;
+    adapter.update(state, 0, 106);
+    expect(geometry.drawRange.count).toBe(0);
+    adapter.update({ ...state, disasterElapsedSeconds: 0.1 }, 0, 106.1);
+    const fresh = connectedSetup();
+    run(fresh.adapter, fresh.state, 1);
+    expectSameBuffer(p.array.slice(0, geometry.drawRange.count * 3),
+      fresh.geometry.getAttribute("position").array.slice(0, fresh.geometry.drawRange.count * 3));
+    adapter.dispose();
+    expect(adapter.group.children).toHaveLength(0);
+  });
 });
 
 describe("Three inundation adapter", () => {
@@ -146,7 +336,7 @@ describe("Three inundation adapter", () => {
     fresh.adapter.update({ ...wetState(), disasterElapsedSeconds: 0.1 }, 0.1, 12.1);
     expect(geometry.drawRange.count).toBeGreaterThan(0);
     expect(geometry.drawRange.count).toBe(fresh.geometry.drawRange.count);
-    expect(geometry.getAttribute("position").array.slice(0, geometry.drawRange.count * 3)).toEqual(
+    expectSameBuffer(geometry.getAttribute("position").array.slice(0, geometry.drawRange.count * 3),
       fresh.geometry.getAttribute("position").array.slice(0, geometry.drawRange.count * 3),
     );
   });
@@ -186,11 +376,11 @@ describe("Three inundation adapter", () => {
       paused.adapter.update({ ...wetState(), disasterElapsedSeconds: 10 }, 1 / 60, 10 + frame / 60);
     }
     expect(position.version).toBe(version);
-    expect(position.array).toEqual(before);
+    expectSameBuffer(position.array, before);
     const resumed = { ...wetState(), disasterElapsedSeconds: 10.1 };
     paused.adapter.update(resumed, 0.016, 20.1);
     control.adapter.update(resumed, 0, 20.1);
-    expect(position.array).toEqual(control.geometry.getAttribute("position").array);
+    expectSameBuffer(position.array, control.geometry.getAttribute("position").array);
   });
 
   it("catches up skipped snapshots and bounds huge gaps without a paused backlog", () => {
@@ -206,15 +396,15 @@ describe("Three inundation adapter", () => {
     }
     capped.adapter.update({ ...wetState(), disasterElapsedSeconds: 60 }, 60, 60);
     const expected = regular.geometry.getAttribute("position").array;
-    expect(skipped.geometry.getAttribute("position").array).toEqual(expected);
-    expect(capped.geometry.getAttribute("position").array).toEqual(expected);
+    expectSameBuffer(skipped.geometry.getAttribute("position").array, expected);
+    expectSameBuffer(capped.geometry.getAttribute("position").array, expected);
     const version = (capped.geometry.getAttribute("position") as THREE.BufferAttribute).version;
     for (let i = 1; i <= 100; i++)
       capped.adapter.update({ ...wetState(), disasterElapsedSeconds: 60 }, 1, 60 + i);
     expect((capped.geometry.getAttribute("position") as THREE.BufferAttribute).version).toBe(
       version,
     );
-    expect(capped.geometry.getAttribute("position").array).toEqual(expected);
+    expectSameBuffer(capped.geometry.getAttribute("position").array, expected);
   });
 
   it("anchors late mounts and rejects invalid elapsed without injecting guessed history", () => {

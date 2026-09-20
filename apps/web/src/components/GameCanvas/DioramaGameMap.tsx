@@ -27,6 +27,8 @@ import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
 import { createRiverStageController } from "./riverStage";
+import { createRiverSurfaceSampler } from "./riverSurface";
+import { createRiverBoundaryResolver } from "./riverBoundary";
 
 type Runtime = {
   renderer: T.WebGLRenderer;
@@ -245,7 +247,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       }
       oldWaterMaterials.forEach(material => material.dispose());
       const riverStage = createRiverStageController(world.waterMeshes);
-      const inundation = createDioramaInundation(terrain.sampleGround);
+      const sampleRiverSurface = createRiverSurfaceSampler(world.waterMeshes);
+      const riverBoundary = createRiverBoundaryResolver(geography.osm, sampleRiverSurface);
+      const inundation = createDioramaInundation(terrain.sampleGround, riverBoundary);
       scene.add(inundation.group);
       const raycaster = new T.Raycaster(),
         cursor = new T.Vector2();
