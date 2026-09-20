@@ -42,17 +42,20 @@ const DESKTOP_PROFILE: CesiumRenderProfile = {
 
 const MOBILE_PROFILE: CesiumRenderProfile = {
   id: "mobile",
-  targetRenderPixels: 680_000,
-  resolutionScaleFloor: 0.4,
-  globeMaximumScreenSpaceError: 14,
-  buildingMaximumScreenSpaceError: 32,
+  // 低解像度化しすぎると、建物の輪郭とHTMLラベルの移動が一緒にぼやける。
+  // 60fps固定ではなく、まずスマホでも輪郭が読める描画密度を確保する。
+  targetRenderPixels: 860_000,
+  resolutionScaleFloor: 0.5,
+  globeMaximumScreenSpaceError: 10,
+  buildingMaximumScreenSpaceError: 20,
   // 建物の立体感はゲーム体験の中心なので、スマホでもLOD1を表示する。
   // 描画負荷は解像度・SSE・簡略化したエフェクト側で抑える。
   loadBuildings: true,
   usePlateauTerrain: false,
-  imageryMaximumLevel: 15,
+  imageryMaximumLevel: 16,
   dynamicFrameIntervalMs: 1000 / 18,
-  overlayFrameIntervalMs: 1000 / 12,
+  // 施設ラベルはHTMLオーバーレイなので、低コストでカメラ移動への追従を改善できる。
+  overlayFrameIntervalMs: 1000 / 24,
   skyAtmosphere: false,
   stormEffects: false,
   waterFlowStreakCount: 4,
@@ -90,7 +93,7 @@ export function resolveCesiumRenderProfile(): CesiumRenderProfile {
       ...MOBILE_PROFILE,
       id: "low",
       loadBuildings: true,
-      buildingMaximumScreenSpaceError: 28,
+      buildingMaximumScreenSpaceError: 24,
     };
   }
   return DESKTOP_PROFILE;

@@ -147,7 +147,7 @@ const NUDGE_METERS = 2.5;
 /** 地形高が取れないとき・NaN のときのフォールバック標高（楕円体高 m）。 */
 const FALLBACK_GROUND_HEIGHT_M = 18;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
-const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 20;
+const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 30;
 
 function applyInitialCamera(viewer: Viewer): void {
   // ゲーム画面への切り替え直後はコンテナのサイズが確定していないことがある。
@@ -1690,7 +1690,7 @@ function applyScreenLabelPosition(
     return;
   }
   element.style.visibility = "visible";
-  element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) translate(-50%, -100%)`;
+  element.style.transform = `translate3d(${screen.x + offsetX}px, ${screen.y + offsetY}px, 0) translate3d(-50%, -100%, 0)`;
 }
 
 async function loadAlignedTerrain(

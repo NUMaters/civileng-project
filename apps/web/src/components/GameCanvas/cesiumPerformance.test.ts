@@ -26,6 +26,9 @@ describe("cesiumPerformance", () => {
 
     expect(profile.id).toBe("mobile");
     expect(profile.loadBuildings).toBe(true);
+    expect(profile.buildingMaximumScreenSpaceError).toBeLessThanOrEqual(20);
+    expect(profile.resolutionScaleFloor).toBeGreaterThanOrEqual(0.5);
+    expect(profile.overlayFrameIntervalMs).toBeLessThanOrEqual(1000 / 24);
   });
 
   it("disables 3D buildings as a fallback on low-end mobile devices", () => {
