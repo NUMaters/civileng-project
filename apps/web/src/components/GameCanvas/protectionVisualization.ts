@@ -255,7 +255,8 @@ function addWeaknessTargetMarker(
       verticalOrigin: VerticalOrigin.BOTTOM,
       horizontalOrigin: HorizontalOrigin.CENTER,
       pixelOffset: new Cartesian2(0, -4),
-      disableDepthTestDistance: Number.POSITIVE_INFINITY,
+      // 建物や地形を貫通させず、対象地点との前後関係を保つ。
+      disableDepthTestDistance: 0,
     },
   });
 }
