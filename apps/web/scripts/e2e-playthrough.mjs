@@ -197,13 +197,24 @@ async function main() {
     step("シングル読込完了");
 
     await evaluate(client, `document.querySelector('.game-menu__start')?.click()`);
-    await waitFor(client, `!!document.querySelector('.cmd-mission')`, 60_000);
-    await waitFor(
-      client,
-      `document.querySelector('.cmd-mission__phase')?.textContent === '準備'`,
-      30_000,
-    );
+    await waitFor(client, `!!document.querySelector('.river-hud')`, 60_000);
+    await waitFor(client, `window.__civilcraftE2E?.getFlood().phase === 'preparation'`, 30_000);
     step("ゲーム開始（準備中）");
+    await evaluate(client, `document.querySelector('[aria-label="ゲームを一時停止"]')?.click()`);
+    await waitFor(client, `document.querySelector('.river-pause')?.open === true`);
+    const pausedBefore = await evaluate(
+      client,
+      `JSON.stringify([window.__civilcraftE2E.getFlood().phaseRemainingSeconds, document.querySelector('.river-hud__budget strong')?.textContent])`,
+    );
+    await sleep(600);
+    const pausedAfter = await evaluate(
+      client,
+      `JSON.stringify([window.__civilcraftE2E.getFlood().phaseRemainingSeconds, document.querySelector('.river-hud__budget strong')?.textContent])`,
+    );
+    if (pausedBefore !== pausedAfter) throw new Error("一時停止中に時間または予算が進行しました");
+    await evaluate(client, `document.querySelector('.river-pause__resume')?.click()`);
+    await waitFor(client, `document.querySelector('.river-pause')?.open === false`);
+    step("一時停止で時間・予算を保持し、再開");
     await waitFor(
       client,
       `document.querySelector('.cesium-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
@@ -247,8 +258,8 @@ async function main() {
     }
     let draggedToMap = false;
     const dragAttempts = [];
-    const dropCandidates = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].flatMap((xRatio) =>
-      [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8].map((yRatio) => [xRatio, yRatio]),
+    const dropCandidates = [0.5, 0.4, 0.6, 0.3, 0.7].flatMap((xRatio) =>
+      [0.5, 0.6, 0.4].map((yRatio) => [xRatio, yRatio]),
     );
     for (const [xRatio, yRatio] of dropCandidates) {
       const targetX = dragPoints.canvasLeft + dragPoints.canvasWidth * xRatio;
@@ -296,7 +307,7 @@ async function main() {
         const text = panel?.textContent ?? '';
         return Boolean(
           panel &&
-          text.includes('仮配置') &&
+          text.includes('建設プレビュー') &&
           text.includes('戻す') &&
           text.includes('配置する') &&
           panel.querySelector('[aria-label="向きスライダー"]'),
@@ -390,7 +401,18 @@ async function main() {
     );
     step("ミッションクリア", result.title ?? result.badge);
 
-    await evaluate(client, `document.querySelector('.result-panel__primary')?.click()`);
+    await evaluate(client, `document.querySelector('.result-panel__retry')?.click()`);
+    await waitFor(
+      client,
+      `window.__civilcraftE2E?.getFlood().phase === 'preparation' && window.__civilcraftE2E.placementCount() === 0`,
+    );
+    step("結果から再挑戦、施設と被害をリセット");
+    await evaluate(client, `document.querySelector('[aria-label="ゲームを一時停止"]')?.click()`);
+    await waitFor(client, `document.querySelector('.river-pause')?.open === true`);
+    await evaluate(
+      client,
+      `Array.from(document.querySelectorAll('.river-pause button')).find(el => el.textContent === 'メニューへ戻る')?.click()`,
+    );
     await waitFor(
       client,
       `document.querySelector('.game-menu__title')?.textContent === 'プレイモードを選択'`,

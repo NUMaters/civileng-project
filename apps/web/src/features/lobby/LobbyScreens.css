@@ -1,0 +1,368 @@
+/* Local roots keep the lobby independent of the legacy global screen theme. */
+.cc-lobby.title-screen,
+.cc-lobby.game-menu {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  min-height: 100%;
+  height: auto;
+  overflow: visible;
+  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+  color: #172d3a;
+  background: #f5f1e8;
+  font-family: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
+  text-align: left;
+  animation: none;
+}
+
+.cc-lobby.title-screen [class^="title-screen__"],
+.cc-lobby.game-menu [class^="game-menu__"] {
+  all: revert;
+  box-sizing: border-box;
+}
+
+.cc-lobby.title-screen .title-screen__world,
+.cc-lobby.game-menu .game-menu__world {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 38%;
+  min-height: 240px;
+  overflow: hidden;
+  z-index: -1;
+  background: #173a45;
+}
+
+.cc-lobby.title-screen .title-screen__hero,
+.cc-lobby.game-menu .game-menu__hero {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 48%;
+  opacity: 0.7;
+}
+
+.cc-lobby.title-screen .title-screen__gradient,
+.cc-lobby.game-menu .game-menu__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgb(16 39 52 / 28%) 10%, transparent 55%, #f5f1e8 100%);
+}
+
+.cc-lobby.title-screen .title-screen__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: min(100%, 480px);
+  margin: 0 auto;
+}
+
+.cc-lobby.title-screen .title-screen__locale {
+  align-self: flex-start;
+  margin: 0 0 clamp(120px, 22vh, 220px);
+  padding: 8px 12px;
+  border: 1px solid rgb(245 241 232 / 45%);
+  border-radius: 4px;
+  color: #fffaf0;
+  background: #173340;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.cc-lobby.title-screen .title-screen__brand {
+  margin: 0 0 28px;
+}
+
+.cc-lobby.title-screen .title-screen__eyebrow {
+  margin: 0 0 8px;
+  color: #276b68;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.cc-lobby.title-screen .title-screen__logo {
+  margin: 0;
+  color: #172d3a;
+  font-family: "Sora", sans-serif;
+  font-size: clamp(36px, 10vw, 52px);
+  font-weight: 650;
+  letter-spacing: -0.06em;
+  line-height: 1.2;
+}
+
+.cc-lobby.title-screen .title-screen__tagline {
+  margin: 24px 0 12px;
+  font-size: clamp(20px, 5.5vw, 27px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.6;
+}
+
+.cc-lobby.title-screen .title-screen__description {
+  margin: 0;
+  color: #52646c;
+  font-size: 14px;
+  line-height: 1.9;
+}
+
+.cc-lobby.title-screen .title-screen__steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  margin: auto 0 24px;
+  padding: 20px 0;
+  border-top: 1px solid #d4dcd5;
+  list-style: none;
+}
+
+.cc-lobby.title-screen .title-screen__steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #52646c;
+  font-size: 12px;
+}
+
+.cc-lobby.title-screen .title-screen__steps span {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #98b5af;
+  border-radius: 50%;
+  color: #216c67;
+  background: none;
+  font: inherit;
+}
+
+.cc-lobby.title-screen .title-screen__cta,
+.cc-lobby.game-menu .game-menu__start {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 20px;
+  border: 1px solid #216c67;
+  border-radius: 10px;
+  color: #fffaf0;
+  background: #216c67;
+  box-shadow: 0 6px 16px rgb(23 45 58 / 10%);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cc-lobby.title-screen .title-screen__foot {
+  position: static;
+  margin: 20px auto 0;
+  color: #52646c;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.cc-lobby.game-menu {
+  padding-inline: 20px;
+}
+
+.cc-lobby.game-menu .game-menu__world {
+  height: 240px;
+}
+
+.cc-lobby.game-menu .game-menu__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: min(100%, 480px);
+  margin: 0 auto 32px;
+}
+
+.cc-lobby.game-menu .game-menu__back,
+.cc-lobby.game-menu .game-menu__howto-btn {
+  min-height: 44px;
+  padding: 8px 10px;
+  border: 1px solid #d7ddd7;
+  border-radius: 8px;
+  color: #172d3a;
+  background: #f5f1e8;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cc-lobby.game-menu .game-menu__howto-btn span {
+  display: inline;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.cc-lobby.game-menu .game-menu__brand {
+  margin: 0;
+  color: #fffaf0;
+  font:
+    600 16px "Sora",
+    sans-serif;
+  letter-spacing: -0.04em;
+}
+
+.cc-lobby.game-menu .game-menu__brand span {
+  color: inherit;
+}
+
+.cc-lobby.game-menu .game-menu__brief {
+  width: min(100%, 480px);
+  margin: 0 auto 24px;
+  padding: 24px 20px;
+  border: 1px solid #d4dcd5;
+  border-radius: 12px;
+  background: #f5f1e8;
+}
+
+.cc-lobby.game-menu .game-menu__brief-kicker {
+  margin: 0 0 12px;
+  color: #216c67;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
+.cc-lobby.game-menu .game-menu__title {
+  margin: 0 0 14px;
+  font-size: clamp(21px, 5.6vw, 28px);
+  line-height: 1.5;
+}
+
+.cc-lobby.game-menu .game-menu__brief-copy,
+.cc-lobby.game-menu .game-menu__availability {
+  display: block;
+  margin: 8px 0 0;
+  color: #52646c;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.cc-lobby.game-menu .game-menu__modes {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 480px);
+  margin: 0 auto;
+}
+
+.cc-lobby.game-menu .game-menu__mode {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  width: 100%;
+  padding: 20px 16px;
+  border: 1px solid #a4b9b5;
+  border-radius: 12px;
+  color: #172d3a;
+  background: #fffcf5;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cc-lobby.game-menu .game-menu__mode.is-selected {
+  border-color: #216c67;
+  box-shadow: inset 0 0 0 1px #216c67;
+  background: #e9f0e9;
+}
+
+.cc-lobby.game-menu .game-menu__mode:disabled {
+  color: #5b686b;
+  border-color: #d4dcd5;
+  background: #ebe9e1;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.cc-lobby.game-menu .game-menu__mode-index {
+  flex: 0 0 36px;
+  padding-block: 8px;
+  border-bottom: 2px solid #216c67;
+  color: #216c67;
+  font:
+    600 18px "Sora",
+    sans-serif;
+}
+
+.cc-lobby.game-menu .game-menu__mode-body {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.cc-lobby.game-menu .game-menu__mode-label {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.cc-lobby.game-menu .game-menu__mode strong {
+  color: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cc-lobby.game-menu .game-menu__mode-meta {
+  color: #52646c;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.cc-lobby.game-menu .game-menu__status {
+  width: min(100%, 480px);
+  min-height: 62px;
+  margin: 16px auto 0;
+  color: #52646c;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.cc-lobby.game-menu .game-menu__status p {
+  margin: 0 0 12px;
+}
+
+.cc-lobby.game-menu .game-menu__retry {
+  min-height: 44px;
+  margin-bottom: 16px;
+  padding: 10px 16px;
+  border: 1px solid #216c67;
+  border-radius: 8px;
+  color: #216c67;
+  background: #fffcf5;
+  font: inherit;
+  cursor: pointer;
+}
+
+.cc-lobby.game-menu .game-menu__start {
+  width: min(100%, 480px);
+  margin: auto auto 0;
+}
+
+.cc-lobby.game-menu .game-menu__start:disabled {
+  border-color: #d4dcd5;
+  color: #52646c;
+  background: #e0e5df;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.cc-lobby.title-screen button:focus-visible,
+.cc-lobby.game-menu button:focus-visible {
+  outline: 3px solid #b8742b;
+  outline-offset: 4px;
+}

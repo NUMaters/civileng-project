@@ -63,6 +63,7 @@ import {
   clearProtectionVisualization,
 } from "./protectionVisualization";
 import { nearestPointOnPolyline, resolvePlaceablePosition } from "./riverPlacement";
+import { getRiverPlacementContext } from "../../features/disaster/services/hydraulicPlacement";
 import { createRiverWaterSurface, type RiverWaterSurfaceController } from "./riverWaterSurface";
 import { createStructureMaterial } from "./structureMaterials";
 import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
@@ -102,7 +103,7 @@ const CAMERA_FOCUS_SOFT_CLAMP_DEADBAND_M = 12;
 
 /** ズーム距離（地表〜カメラ）。俯瞰で区間全体が見えるよう上限を緩める。 */
 const CAMERA_MIN_ZOOM_DISTANCE_M = 180;
-const CAMERA_MAX_ZOOM_DISTANCE_M = 9_500;
+const CAMERA_MAX_ZOOM_DISTANCE_M = 2_600;
 
 /** 初期スポーン。日本大学工学部周辺の阿武隈川河道上。河川が画面中央に見える斜め俯瞰。 */
 const INITIAL_VIEW = {
@@ -149,12 +150,29 @@ const FALLBACK_GROUND_HEIGHT_M = 18;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
 const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 30;
 
+/** Align the long crest with the local river tangent instead of the camera heading. */
+function suggestedStructureHeading(structureId: string, position: GeoPosition): number {
+  const { channelHeadingDegrees } = getRiverPlacementContext(
+    position.longitude,
+    position.latitude,
+    0,
+  );
+  const alongChannel =
+    structureId === "levee" || structureId === "revetment" || structureId === "channel-dredging";
+  return (channelHeadingDegrees + (alongChannel ? 270 : 0)) % 360;
+}
+
 function applyInitialCamera(viewer: Viewer): void {
   // ゲーム画面への切り替え直後はコンテナのサイズが確定していないことがある。
   // resize を先に行ってから視点を設定し、広域の既定カメラが残る競合を防ぐ。
   viewer.resize();
+  viewer.camera.cancelFlight();
+  const focusHeight =
+    viewer.scene.globe.getHeight(
+      Cartographic.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
+    ) ?? 0;
   viewer.camera.lookAt(
-    Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
+    Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude, focusHeight),
     new HeadingPitchRange(
       CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
       CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
@@ -175,6 +193,7 @@ export type DragGhostStatus = {
 type MapLoadStage = "loading" | "terrain" | "buildings" | "ready" | "degraded";
 
 export type CesiumGameMapHandle = {
+  resetCamera: () => void;
   tryDropStructure: (structureId: string, clientX: number, clientY: number) => boolean;
   /** ドラッグ中に設置予定モデルをカーソル下の地表へ追従表示する。 */
   updateDragGhost: (structureId: string, clientX: number, clientY: number) => DragGhostStatus;
@@ -183,6 +202,7 @@ export type CesiumGameMapHandle = {
 };
 
 type CesiumGameMapProps = {
+  onReadyChange?: (ready: boolean) => void;
   placements: PlacedStructure[];
   structures: StructureDefinition[];
   selectedPlacementId: string | null;
@@ -248,6 +268,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
   function CesiumGameMap(
     {
       placements,
+      onReadyChange,
       structures,
       selectedPlacementId,
       onDropPlace,
@@ -302,6 +323,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const [mapLoadStage, setMapLoadStage] = useState<MapLoadStage>("loading");
     const [frameTimeMs, setFrameTimeMs] = useState<number | null>(null);
     const [visibilityEpoch, setVisibilityEpoch] = useState(0);
+
+    useEffect(() => {
+      onReadyChange?.(mapLoadStage === "ready" || mapLoadStage === "degraded");
+    }, [mapLoadStage, onReadyChange]);
 
     const labelInfluences = useMemo(() => calculateStructureInfluences(placements), [placements]);
 
@@ -413,6 +438,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     }, [mapActive]);
 
     useImperativeHandle(ref, () => ({
+      resetCamera: () => {
+        const viewer = viewerRef.current;
+        if (viewer !== null && !viewer.isDestroyed()) applyInitialCamera(viewer);
+      },
       tryDropStructure: (structureId: string, clientX: number, clientY: number) => {
         const viewer = viewerRef.current;
         clearDragGhostEntities(viewer);
@@ -442,7 +471,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           return false;
         }
 
-        const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
+        const headingDegrees = suggestedStructureHeading(structureId, placeable);
         onDropPlaceRef.current(structureId, placeable, headingDegrees);
         return true;
       },
@@ -486,7 +515,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const placeable = resolved !== undefined && isInsidePlayArea(resolved);
         // 配置可能域内はスナップせずポインタ直下。域外でもゴーストはカーソル位置に出す。
         const position = resolved ?? picked;
-        const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
+        const headingDegrees = suggestedStructureHeading(structureId, position);
         // 約 0.1 m 単位で追従（粗すぎる量子化だと「決まったマス」に感じる）。
         const key = [
           structureId,
@@ -573,6 +602,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       }
 
       let disposed = false;
+      let initialTerrainSettled = false;
+      let initialTilesFramed = false;
+      let hasMapInput = false;
+      let removeInitialInputListener: (() => void) | undefined;
       let eventHandler: ScreenSpaceEventHandler | null = null;
       let viewer: Viewer | null = null;
       let removeCameraMoveEnd: (() => void) | undefined;
@@ -678,8 +711,18 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.screenSpaceCameraController.inertiaSpin = 0.78;
         mapViewer.scene.screenSpaceCameraController.inertiaTranslate = 0.72;
         mapViewer.scene.screenSpaceCameraController.inertiaZoom = 0.62;
+        const markMapInput = () => {
+          hasMapInput = true;
+        };
+        mapViewer.scene.canvas.addEventListener("pointerdown", markMapInput, { passive: true });
+        removeInitialInputListener = () =>
+          mapViewer.scene.canvas.removeEventListener("pointerdown", markMapInput);
         mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
           if (queuedTileCount === 0) {
+            if (initialTerrainSettled && !initialTilesFramed) {
+              initialTilesFramed = true;
+              if (!hasMapInput) applyInitialCamera(mapViewer);
+            }
             setIsMapReady(true);
             // 建物Tilesetの読み込み完了後に地形タイルが空になると、完了表示を
             // 「建物を読み込み中…」へ戻さない。建物がまだ無い場合だけ待機表示にする。
@@ -706,6 +749,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             if (disposed || mapViewer.isDestroyed()) {
               return;
             }
+            initialTerrainSettled = true;
+            if (!hasMapInput) applyInitialCamera(mapViewer);
             if (!renderProfile.loadBuildings) {
               setMapLoadStage("ready");
             }
@@ -764,7 +809,11 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             frameSampleTotal += frameDelta;
             frameSampleCount += 1;
             if (frameNow - frameSampleStartedAt >= 1_000) {
-              if (import.meta.env.DEV && frameSampleCount > 0) {
+              if (
+                import.meta.env.DEV &&
+                import.meta.env.VITE_SHOW_TELEMETRY === "true" &&
+                frameSampleCount > 0
+              ) {
                 setFrameTimeMs(Math.round((frameSampleTotal / frameSampleCount) * 10) / 10);
               }
               frameSampleStartedAt = frameNow;
@@ -1144,6 +1193,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           window.removeEventListener("resize", handleViewportResize);
         }
         removeContextLost?.();
+        removeInitialInputListener?.();
         riverWaterRef.current?.destroy();
         riverWaterRef.current = null;
         placeableZoneRef.current?.destroy();
@@ -1451,6 +1501,17 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         ? "施設"
         : (structures.find(({ id }) => id === orientationTarget.structureId)?.displayName ??
           "施設");
+    const pendingInfluence =
+      orientationTarget === null
+        ? undefined
+        : labelInfluences.find((item) => item.placementId === orientationTarget.id);
+    const placementGuidance: Record<string, string> = {
+      levee: "河岸に沿って、水が街へあふれるのを防ぐ",
+      revetment: "川が曲がる岸を補強して、侵食を抑える",
+      "retention-basin": "河岸に水をため、増水の勢いを抑える",
+      "drainage-pump": "街側の河岸から、たまった水をくみ出す",
+      "channel-dredging": "川の中を掘り、水が流れる空間を広げる",
+    };
 
     return (
       <div className="cesium-game-map" data-3d-buildings={buildingsLoadState}>
@@ -1492,9 +1553,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           >
             <div className="cesium-pending-panel__topline">
               <div className="cesium-pending-panel__summary">
-                <span className="cesium-pending-panel__eyebrow">仮配置</span>
+                <span className="cesium-pending-panel__eyebrow">建設プレビュー</span>
                 <strong>{pendingStructureName}</strong>
-                <span>場所と向きを確認してください</span>
+                <span>施設を動かして場所を調整</span>
               </div>
               <div
                 ref={confirmHudRef}
@@ -1524,6 +1585,22 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 </button>
               </div>
             </div>
+            <p
+              className={`river-placement-feedback is-${pendingInfluence?.coverageTone ?? "warn"}`}
+              role="status"
+            >
+              <strong>
+                {pendingInfluence?.coverageTone === "good"
+                  ? "この場所で効果が見込めます"
+                  : pendingInfluence?.coverageTone === "bad"
+                    ? "位置を調整すると効果が上がります"
+                    : "川沿いで効果のある場所を探そう"}
+              </strong>
+              <span>
+                {placementGuidance[orientationTarget.structureId] ??
+                  "施設の位置と向きを調整してください"}
+              </span>
+            </p>
             <div
               ref={orientationHudRef}
               className={`cesium-orientation-hud${orientationTarget.preview === true ? " is-preview" : ""}`}
@@ -1559,7 +1636,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             <span>{mapLoadStageDetail(mapLoadStage, getCesiumRenderProfile().loadBuildings)}</span>
           </div>
         ) : null}
-        {mapError === null && import.meta.env.DEV && frameTimeMs !== null ? (
+        {mapError === null &&
+        import.meta.env.DEV &&
+        import.meta.env.VITE_SHOW_TELEMETRY === "true" &&
+        frameTimeMs !== null ? (
           <div className="cesium-game-map__telemetry" role="status" aria-label="描画フレーム時間">
             {frameTimeMs.toFixed(1)} ms / frame
           </div>
@@ -1866,8 +1946,8 @@ function tuneImageryLayer(layer: ImageryLayer): void {
   layer.show = true;
   layer.alpha = 1;
   layer.brightness = 1.12;
-  layer.contrast = 1.04;
-  layer.saturation = 1.06;
+  layer.contrast = 0.94;
+  layer.saturation = 0.78;
   layer.gamma = 1;
 }
 
@@ -2536,6 +2616,7 @@ function addCivilEngineeringModel(
   const markerRadius = selected || preview || invalid ? 36 : 18;
   viewer.entities.add({
     id: `${prefix}-${placement.id}-marker`,
+    show: preview || invalid,
     position: Cartesian3.fromDegrees(
       placement.position.longitude,
       placement.position.latitude,
@@ -2634,7 +2715,7 @@ function addCivilEngineeringModel(
         Color.fromCssColorString(invalid ? "#ef6b4a" : "#9aa3a8").withAlpha(0.7),
       );
     }
-    const showOutline = selected || preview || invalid;
+    const showOutline = false;
     const entityId = isPrimaryPart
       ? `${prefix}-${placement.id}`
       : `${prefix}-${placement.id}-part-${part.id}`;

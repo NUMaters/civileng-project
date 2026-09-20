@@ -34,4 +34,21 @@ describe("getStructureModelParts", () => {
     expect(footprint.width).toBeGreaterThan(20);
     expect(footprint.height).toBeGreaterThan(5);
   });
+
+  it("bounds every rendered part including offset intake and elevated roof", () => {
+    for (const id of STRUCTURE_IDS) {
+      const bounds = getStructureFootprintMeters(id);
+      for (const part of getStructureModelParts(id)) {
+        expect(bounds.length / 2).toBeGreaterThanOrEqual(
+          Math.abs(part.offsetEast ?? 0) + (part.dimensions?.length ?? 0) / 2,
+        );
+        expect(bounds.width / 2).toBeGreaterThanOrEqual(
+          Math.abs(part.offsetNorth ?? 0) + (part.dimensions?.width ?? 0) / 2,
+        );
+        expect(bounds.height).toBeGreaterThanOrEqual(
+          part.centerHeight + (part.dimensions?.height ?? 0) / 2,
+        );
+      }
+    }
+  });
 });

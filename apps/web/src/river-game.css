@@ -1,0 +1,421 @@
+/* Mobile river-defense interface: quiet framing around a playable 3D landscape. */
+.game-shell {
+  --river-ink: #102e37;
+  --river-paper: #f6f4ec;
+  --river-green: #176e60;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  color: var(--river-paper);
+}
+.game-shell .game-shell__veil--top {
+  height: 160px;
+  background: linear-gradient(#0d25295e, transparent);
+}
+.game-shell .game-shell__veil--bottom {
+  height: 150px;
+  background: linear-gradient(transparent, #0d252966);
+}
+.river-hud {
+  position: absolute;
+  z-index: 10;
+  inset: calc(8px + env(safe-area-inset-top)) 12px auto;
+  pointer-events: none;
+}
+.river-hud button {
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+}
+.river-hud__location {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+  text-shadow: 0 1px 4px #102e37;
+  min-height: 36px;
+}
+.river-hud__location > span {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+}
+.river-hud__location small {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  margin-left: 8px;
+  font-weight: 500;
+}
+.river-hud__location i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8ee0bd;
+  margin-right: 7px;
+}
+.river-hud .river-hud__menu {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #ffffff40;
+  border-radius: 50%;
+  color: white;
+  background: #102e37;
+  display: grid;
+  place-items: center;
+}
+.river-hud__dashboard {
+  display: grid;
+  grid-template-columns: 0.85fr 1.25fr 0.85fr;
+  border-radius: 18px 18px 0 0;
+  background: #f6f4ecf5;
+  color: #102e37;
+  box-shadow: 0 5px 20px #102e3720;
+  margin-top: 6px;
+}
+.river-hud__dashboard > * {
+  min-width: 0;
+  padding: 12px 10px 10px;
+  text-align: left;
+}
+.river-hud__dashboard > * + * {
+  border-left: 1px solid #102e3714;
+}
+.river-hud__dashboard span {
+  display: block;
+  font-size: 10px;
+  font-weight: 650;
+  color: #52676d;
+}
+.river-hud__dashboard strong,
+.river-hud__dashboard time {
+  display: block;
+  font-size: 23px;
+  letter-spacing: -0.06em;
+  line-height: 1.4;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.river-hud__dashboard strong small {
+  font-size: 10px;
+  font-weight: 550;
+  letter-spacing: 0;
+}
+.river-hud__budget > span small {
+  margin-left: 4px;
+  color: #176e60;
+  font-size: 8px;
+  white-space: nowrap;
+}
+.river-hud .river-hud__damage {
+  border: 0;
+  border-left: 1px solid #102e3714;
+  background: transparent;
+  color: #176e60;
+  border-radius: 0 18px 0 0;
+}
+.river-hud__damage > span > span {
+  display: inline;
+}
+.river-hud .river-hud__damage.is-danger {
+  color: #b43d2c;
+}
+.river-hud__objective {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 6px 10px;
+  min-height: 44px;
+  background: #153c42f5;
+  border-radius: 0 0 16px 16px;
+}
+.river-hud__objective > span {
+  font-size: 9px;
+  color: #b5d0c9;
+  letter-spacing: 0.03em;
+}
+.river-hud__objective b {
+  display: block;
+  font-size: 10px;
+  font-weight: 550;
+  color: #f6f4ec;
+  margin-top: 3px;
+}
+.river-hud__objective button {
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  font-size: 10px;
+  color: #c3ecce;
+  padding: 0 2px 0 8px;
+  white-space: nowrap;
+}
+.river-hud.is-storm .river-hud__objective {
+  background: #244851f5;
+}
+.river-hud__details {
+  pointer-events: auto;
+  background: #f6f4ec;
+  color: #102e37;
+  border-radius: 16px;
+  padding: 16px;
+  margin-top: 8px;
+  box-shadow: 0 12px 30px #102e3730;
+}
+.river-hud__details > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 6px 0;
+}
+.river-hud__details p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: #52676d;
+  margin: 10px 0 0;
+}
+.river-pause {
+  pointer-events: auto;
+  padding: 30px 24px;
+  border: 0;
+  border-radius: 24px;
+  width: min(340px, calc(100vw - 40px));
+  box-sizing: border-box;
+  color: #102e37;
+  background: #f6f4ec;
+  text-align: center;
+}
+.river-pause::backdrop {
+  background: #092730b8;
+}
+.river-pause p {
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  color: #176e60;
+}
+.river-pause h2 {
+  font-size: 26px;
+  margin: 16px 0;
+}
+.river-pause > span,
+.river-pause small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #52676d;
+}
+.river-pause button {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  margin: 12px 0;
+  border: 1px solid #102e3720;
+  background: transparent;
+  color: #102e37;
+  font-weight: 650;
+}
+.river-pause .river-pause__resume {
+  margin-top: 24px;
+  background: #176e60;
+  color: white;
+}
+.game-shell .cesium-pending-panel {
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  width: auto;
+  max-width: none;
+  left: 10px;
+  right: 10px;
+  padding: 16px;
+  border: 0;
+  border-radius: 22px;
+  background: #f6f4ec;
+  color: #102e37;
+  box-shadow: 0 8px 40px #102e3738;
+  backdrop-filter: none;
+}
+.game-shell .cesium-pending-panel__topline {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.game-shell .cesium-pending-panel__summary {
+  flex: 1;
+  min-width: 115px;
+}
+.game-shell .cesium-pending-panel__summary strong {
+  color: #102e37;
+  font-size: 18px;
+}
+.game-shell .cesium-pending-panel__eyebrow {
+  color: #176e60;
+  font-size: 10px;
+}
+.game-shell .cesium-pending-panel__summary > span:last-child {
+  color: #52676d;
+  font-size: 10px;
+}
+.game-shell .cesium-pending-panel .cesium-confirm-hud button {
+  min-height: 48px;
+  height: auto;
+  border: 1px solid #102e3725;
+  border-radius: 12px;
+  font-size: 12px;
+  box-shadow: none;
+  padding: 0 12px;
+}
+.game-shell .cesium-pending-panel .cesium-confirm-hud__confirm {
+  background: #176e60;
+  color: white;
+}
+.game-shell .cesium-pending-panel .cesium-confirm-hud__cancel {
+  color: #52676d;
+  background: transparent;
+}
+.game-shell .cesium-pending-panel .orientation-slider__header {
+  color: #52676d;
+  font-size: 11px;
+}
+.game-shell .cesium-pending-panel .orientation-slider__header output {
+  color: #176e60;
+}
+.game-shell .cesium-pending-panel .orientation-slider__input {
+  height: 44px;
+  accent-color: #176e60;
+}
+.game-shell.is-pending-placement .cmd-dock {
+  visibility: hidden;
+  pointer-events: none;
+}
+.game-shell .cesium-map-label.cesium-map-label {
+  padding: 7px 10px;
+  border: 1px solid #ffffffa0;
+  border-radius: 10px;
+  background: #f6f4eced;
+  color: #102e37;
+  box-shadow: 0 3px 12px #102e3720;
+  backdrop-filter: none;
+  min-width: 0;
+}
+.game-shell .cesium-map-label.cesium-map-label .cesium-map-label__name {
+  color: #102e37;
+  font-size: 11px;
+  text-shadow: none;
+}
+.game-shell .cesium-map-label__effect {
+  color: #52676d;
+  font-size: 10px;
+}
+.game-shell .cesium-map-label.is-good .cesium-map-label__effect {
+  color: #176e60;
+}
+.game-shell .cesium-map-label.is-bad .cesium-map-label__effect {
+  color: #b43d2c;
+}
+.game-shell .cesium-map-label__meter {
+  display: none;
+}
+.game-shell .cesium-map-label.is-preview {
+  animation: none;
+  filter: none;
+  border-style: solid;
+}
+.game-shell .cesium-pending-panel .orientation-slider {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.game-shell .cesium-pending-panel .orientation-slider__input {
+  background: transparent;
+}
+.game-shell .tutorial-coach {
+  top: auto;
+  bottom: calc(180px + env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  width: auto;
+  max-width: none;
+  padding: 12px 52px 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: #153c42f0;
+  box-shadow: 0 5px 18px #102e3720;
+}
+.game-shell .tutorial-coach__kicker {
+  display: none;
+}
+.game-shell .tutorial-coach strong {
+  font-size: 12px;
+  color: white;
+}
+.game-shell .tutorial-coach p {
+  font-size: 10px;
+  margin: 4px 0 0;
+  color: #c8dcd8;
+}
+.game-shell .tutorial-coach__skip {
+  min-width: 44px;
+  min-height: 44px;
+  right: 4px;
+  top: 8px;
+  font-size: 11px;
+}
+.game-shell.is-pending-placement .tutorial-coach {
+  display: none;
+}
+.game-shell .game-toast {
+  top: 205px;
+  bottom: auto;
+}
+.river-placement-feedback {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  background: #e9e6da;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #735d31;
+}
+.river-placement-feedback.is-good {
+  background: #e1eee5;
+  color: #176e60;
+}
+.river-placement-feedback.is-bad {
+  background: #f7e5da;
+  color: #99452f;
+}
+.river-placement-feedback strong,
+.river-placement-feedback span {
+  display: block;
+}
+.river-placement-feedback span {
+  font-size: 10px;
+  margin-top: 4px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+.river-recenter {
+  position: absolute;
+  z-index: 8;
+  right: 14px;
+  bottom: calc(190px + env(safe-area-inset-bottom));
+  width: 44px;
+  height: 44px;
+  border: 1px solid #fff9;
+  border-radius: 50%;
+  background: #f6f4ec;
+  color: #176e60;
+  box-shadow: 0 3px 12px #102e3725;
+  display: grid;
+  place-items: center;
+}
+.game-shell .tutorial-coach {
+  right: 68px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-shell *,
+  .game-shell *::before,
+  .game-shell *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
