@@ -570,7 +570,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           const influence = state?.structureInfluences.find(item => item.placementId === id);
           const operation = resolveFacilityActivity(influence, state);
           r.operations.get(id)?.update(model.userData.preview ? 0 : operation.activity,
-            state?.disasterElapsedSeconds ?? 0, reducedMotion.matches);
+            state?.disasterElapsedSeconds ?? 0, reducedMotion.matches,
+            model.userData.preview ? 0 : operation.operationActivity);
           const operationText = labels.current.get(id)?.querySelector("[data-operation]");
           if (operationText && operationText.textContent !== operation.label) operationText.textContent = operation.label;
           const delta =
