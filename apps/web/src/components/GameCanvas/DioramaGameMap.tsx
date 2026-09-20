@@ -1,3 +1,5 @@
+// @refresh reset
+// Renderer-owned objects must be rebuilt together when their runtime shape changes in development.
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
@@ -22,6 +24,8 @@ import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
 import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
 import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
+import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
+import { resolveFacilityActivity } from "./facilityActivity";
 
 type Runtime = {
   renderer: T.WebGLRenderer;
@@ -29,6 +33,7 @@ type Runtime = {
   camera: T.PerspectiveCamera;
   controls: OrbitControls;
   models: Map<string, T.Group>;
+  operations: Map<string, ReturnType<typeof createFacilityOperationVisuals>>;
   ghost: T.Group | null;
   ghostType: string | null;
   pick: (x: number, y: number) => { x: number; z: number } | null;
@@ -256,6 +261,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         camera,
         controls,
         models: new Map(),
+        operations: new Map(),
         ghost: null,
         ghostType: null,
         pick,
@@ -357,6 +363,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       // Scratch vectors are reused each frame; labels must not allocate per facility.
       const cameraCorrection = new T.Vector3();
       const projectedPoint = new T.Vector3();
+      const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       const draw = (now: number) => {
         frame = requestAnimationFrame(draw);
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -372,7 +379,14 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         camera.position.add(cameraCorrection);
         notifyCameraFocus(controls.target.x, controls.target.z, now);
         if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
-        for (const model of r.models.values()) {
+        const state = latest.current.getLatestFloodState?.();
+        for (const [id, model] of r.models) {
+          const influence = state?.structureInfluences.find(item => item.placementId === id);
+          const operation = resolveFacilityActivity(influence, state);
+          r.operations.get(id)?.update(model.userData.preview ? 0 : operation.activity,
+            state?.disasterElapsedSeconds ?? 0, reducedMotion.matches);
+          const operationText = labels.current.get(id)?.querySelector("[data-operation]");
+          if (operationText && operationText.textContent !== operation.label) operationText.textContent = operation.label;
           const delta =
             T.MathUtils.euclideanModulo(
               model.userData.targetRotation - model.rotation.y + Math.PI,
@@ -389,7 +403,6 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
             renderer.shadowMap.needsUpdate = true;
           }
         }
-        const state = latest.current.getLatestFloodState?.();
         waterMaterial.uniforms.time!.value = time;
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
         if (state) inundation.update(state, dt, time);
@@ -506,12 +519,25 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           r.scene.remove(model);
           disposeObject(model);
           r.models.delete(id);
+          r.operations.delete(id);
         }
       }
       for (const placement of props.placements) {
         let model = r.models.get(placement.id);
         if (!model) {
           model = createDioramaFacility(placement.structureId);
+          // Thumbnail water stays illustrative; in-play basin storage must respond to load.
+          if (placement.structureId === "retention-basin") {
+            for (const child of [...model.children]) {
+              if (child.name === "retention-basin:water" || child.name === "retention-basin:foam") {
+                model.remove(child);
+                disposeObject(child);
+              }
+            }
+          }
+          const operation = createFacilityOperationVisuals(placement.structureId);
+          model.add(operation.group);
+          r.operations.set(placement.id, operation);
           model.userData.placementId = placement.id;
           r.models.set(placement.id, model);
           r.scene.add(model);
@@ -520,6 +546,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           model.userData.popStarted = -Infinity;
         }
         const point = geoToWorld(placement.position.longitude, placement.position.latitude);
+        model.userData.preview = placement.preview === true;
         const ground = r.ground(point.x, point.z);
         model.visible = ground !== null;
         model.userData.groundHeight = (ground ?? 0) + 0.5;
@@ -569,6 +596,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
             >
               <strong>{labelFor(p)}</strong>
               <small>{influences[index]?.coverageHint ?? "タップで回転"}</small>
+              {!p.preview ? <small data-operation>大雨に備えて待機</small> : null}
               {(influences[index]?.adverseSiteIds.length ?? 0) > 0 ? (
                 <small>相性注意 {influences[index]!.adverseSiteIds.length}地点</small>
               ) : null}
