@@ -21,7 +21,7 @@ it("keeps mixed positive/adverse activity with a separate warning", () => {
   expect(result.activity).toBe(resolveFacilityActivity(own, storm()).activity);
   expect(result.warning).toBe("相性注意1地点");
   expect(result.label).toContain("排水中");
-  expect(result.label).toContain(result.warning!);
+  expect(result.label).not.toContain(result.warning!);
 });
 it("does not borrow another facility's aggregate protection", () => {
   const own = influence();

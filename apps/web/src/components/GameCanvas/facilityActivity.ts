@@ -14,7 +14,9 @@ export function resolveFacilityActivity(influence: StructureInfluence | undefine
   // A mismatch is a separate warning, not a facility-wide simulation shutdown.
   const warning = influence?.adverseSiteIds.length ? `相性注意${influence.adverseSiteIds.length}地点` : undefined;
   const result = (activity: number, label: string) => ({
-    activity, warning, label: warning ? `${label}・${warning}` : label,
+    // The map already renders the mismatch count on its own line. Keep the
+    // operational label concise rather than duplicating that warning here.
+    activity, warning, label,
   });
   if (!influence || influence.preview || !state) return result(0, "配置を検討中");
   if (state.phase === "idle" || state.phase === "preparation") return result(0, "大雨に備えて待機");
