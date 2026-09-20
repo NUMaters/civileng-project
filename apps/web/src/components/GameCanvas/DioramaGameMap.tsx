@@ -61,6 +61,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       return () => controller.abort();
     }, []);
     const labels = useRef(new Map<string, HTMLDivElement>());
+    const npcMarkers = useRef(new Map<string, HTMLButtonElement>());
     const guidanceLabel = useRef<HTMLDivElement>(null);
     const placementActions = useRef<HTMLDivElement>(null);
     const pending = props.placements.find((p) => p.preview);
@@ -430,6 +431,25 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           if (visible)
             element.style.transform = `translate(${(point.x * 0.5 + 0.5) * viewportWidth}px,${(-point.y * 0.5 + 0.5) * viewportHeight}px) translate(-50%,-100%)`;
         }
+        for (const npc of latest.current.npcMarkers ?? []) {
+          const element = npcMarkers.current.get(npc.id);
+          if (!element) continue;
+          if (latest.current.interactionLocked) {
+            element.style.display = "none";
+            continue;
+          }
+          const position = geoToWorld(npc.position.longitude, npc.position.latitude);
+          const point = projectedPoint.set(
+            position.x,
+            (terrain.sampleGround(position.x, position.z) ?? 0) + 18,
+            position.z,
+          ).project(camera);
+          const visible =
+            point.z < 1 && point.z > -1 && Math.abs(point.x) < 1.08 && Math.abs(point.y) < 1.08;
+          element.style.display = visible ? "" : "none";
+          if (visible)
+            element.style.transform = `translate(${(point.x * 0.5 + 0.5) * viewportWidth}px,${(-point.y * 0.5 + 0.5) * viewportHeight}px) translate(-50%,-100%)`;
+        }
         const actions = placementActions.current;
         const preview = latest.current.placements.find((placement) => placement.preview);
         const previewModel = preview ? r.models.get(preview.id) : undefined;
@@ -612,6 +632,29 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
             </div>
           ) : null)}
         </div>
+        {!props.interactionLocked && props.npcMarkers && props.onSelectNpc ? (
+          <div className="diorama-npc-markers" aria-label="会話できる人物">
+            {props.npcMarkers.map((npc) => (
+              <button
+                type="button"
+                className={`diorama-npc-marker${npc.id === props.highlightedNpcId ? " is-highlighted" : ""}`}
+                key={npc.id}
+                aria-label={`${npc.locationLabel}にいる${npc.name}に話しかける`}
+                onClick={() => props.onSelectNpc?.(npc.id)}
+                ref={(element) => {
+                  if (element) npcMarkers.current.set(npc.id, element);
+                  else npcMarkers.current.delete(npc.id);
+                }}
+                style={{ display: "none" }}
+              >
+                <span className="diorama-npc-marker__avatar" aria-hidden="true">
+                  {npc.kind === "experienced" ? "👷" : "🧑"}
+                </span>
+                <span className="diorama-npc-marker__name">{npc.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {pending ? (
           <div
             className="diorama-placement-actions"
