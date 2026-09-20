@@ -413,9 +413,6 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         />
       </Suspense>
 
-      {npc.available && !talking ? (
-        <div className="npc-prototype-note">住民アイコンで地域や技術の話を聞けます</div>
-      ) : null}
       {npc.available && recommendedNpc && !talking ? (
         <div className="npc-guide" role="status">
           <span>

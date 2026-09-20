@@ -47,19 +47,6 @@
   outline: 3px solid #ffe2a1;
   outline-offset: 3px;
 }
-.npc-prototype-note {
-  position: absolute;
-  bottom: 180px;
-  left: 16px;
-  z-index: 25;
-  max-width: 200px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  color: #e2e8df;
-  background: #132a32de;
-  font-size: 11px;
-  pointer-events: none;
-}
 .npc-guide {
   position: absolute;
   top: calc(176px + env(safe-area-inset-top));
@@ -287,10 +274,6 @@
   }
 }
 @media (max-width: 600px) {
-  .npc-prototype-note {
-    bottom: 150px;
-    max-width: 190px;
-  }
   .npc-map-marker > span {
     max-width: 94px;
   }
