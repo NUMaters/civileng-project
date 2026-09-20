@@ -96,6 +96,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
     const latest = useRef(props);
     latest.current = props;
     const [ready, setReady] = useState(false);
+    const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
     const [error, setError] = useState("");
     const labels = useRef(new Map<string, HTMLDivElement>());
     const guidanceLabel = useRef<HTMLDivElement>(null);
@@ -275,6 +276,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         let node: T.Object3D | null = hit ?? null;
         while (node && !node.userData.placementId) node = node.parent;
         const id = node?.userData.placementId as string | undefined;
+        setSelectedLabelId(id ?? null);
         if (id) {
           latest.current.onSelectPlacement(id);
           const placement = latest.current.placements.find((p) => p.id === id);
@@ -402,7 +404,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           );
           const py = T.MathUtils.clamp(
             (-point.y * 0.5 + 0.5) * container.clientHeight + 32,
-            240,
+            160,
             container.clientHeight - 90,
           );
           actions.style.transform = `translate(${px}px,${py}px) translateX(-50%)`;
@@ -530,7 +532,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
             <strong />
             <small />
           </div>
-          {props.placements.map((p, index) => (
+          {props.placements.map((p, index) => p.preview || p.id === selectedLabelId ? (
             <div
               className={`diorama-label${p.preview ? " is-preview" : ""}`}
               data-heading={p.headingDegrees}
@@ -551,7 +553,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
                 <small>相性注意 {influences[index]!.adverseSiteIds.length}地点</small>
               ) : null}
             </div>
-          ))}
+          ) : null)}
         </div>
         {pending ? (
           <div

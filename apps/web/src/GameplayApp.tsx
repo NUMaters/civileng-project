@@ -189,7 +189,10 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     const influence = calculateStructureInfluences([placement])[0];
     if (influence) {
       const feedback = getPlacementFeedback(influence);
-      setMessage(feedback.message, feedback.tone);
+      setMessage(
+        feedback.tone === "warn" ? "設置しました。位置・向きの相性に注意" : "設置しました",
+        feedback.tone,
+      );
     }
     markTutorialDone();
     setShowTutorial(false);

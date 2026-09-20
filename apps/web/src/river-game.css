@@ -34,10 +34,10 @@
   min-height: 36px;
 }
 .river-hud__location > span {
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 800;
   letter-spacing: 0.02em;
-  padding: 8px 12px;
+  padding: 4px 10px;
   border: 1px solid #ffffff40;
   border-radius: 24px;
   background: #087abbdc;
@@ -79,7 +79,7 @@
 }
 .river-hud__dashboard > * {
   min-width: 0;
-  padding: 8px 6px;
+  padding: 5px 8px;
   position: relative;
   text-align: left;
 }
@@ -131,7 +131,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 5px;
-  padding: 6px 10px;
+  padding: 0 10px;
   min-height: 44px;
   background: #0875afda;
   border-radius: 20px;
@@ -162,7 +162,7 @@
   white-space: nowrap;
 }
 .river-hud.is-storm .river-hud__objective {
-  background: #096da9df;
+  display: none;
 }
 .river-hud__details {
   pointer-events: auto;
@@ -346,7 +346,7 @@
 }
 .game-shell .tutorial-coach {
   top: auto;
-  bottom: calc(210px + env(safe-area-inset-bottom));
+  bottom: calc(158px + env(safe-area-inset-bottom));
   left: 16px;
   right: 16px;
   width: auto;
@@ -380,8 +380,12 @@
   display: none;
 }
 .game-shell .game-toast {
-  top: 235px;
-  bottom: auto;
+  top: auto;
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  max-width: calc(100% - 100px);
+  padding: 8px 12px;
+  font-size: 12px;
+  pointer-events: none;
 }
 .river-placement-feedback {
   margin: 10px 0 0;
@@ -413,7 +417,7 @@
   position: absolute;
   z-index: 8;
   right: 14px;
-  bottom: calc(210px + env(safe-area-inset-bottom));
+  bottom: calc(158px + env(safe-area-inset-bottom));
   width: 44px;
   height: 44px;
   border: 1px solid #fff9;
@@ -437,7 +441,7 @@
 }
 
 .river-hud__metric-icon {
-  display: block;
+  display: none;
   width: 28px;
   height: 24px;
   margin-bottom: 3px;
