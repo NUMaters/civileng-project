@@ -11,6 +11,8 @@ import { createGeographicWorld } from "./geographicWorld";
 import { createGeographicTerrain } from "./geographicTerrain";
 import { createGeographicWaterMaterial, riverFlowCoordinates } from "./geographicWater";
 import { createCameraFocusNotifier } from "./cameraFocusNotification";
+import { createGeographicBridges } from "./geographicBridges";
+import { createGeographicTrain } from "./geographicTrain";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
@@ -136,7 +138,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       const container = host.current;
       if (!container || !geography) return;
       const terrain = createGeographicTerrain(geography.terrain);
-      const world = createGeographicWorld(geography.osm, {
+      const bridges = createGeographicBridges(geography.osm, {
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
+      });
+      const train = createGeographicTrain(geography.osm, terrain.sampleGround);
+      const world = createGeographicWorld({ ...geography.osm,
+        features: geography.osm.features.filter(feature => !bridges.sourceIds.has(feature.id)),
+      }, {
         plateau: geography.plateau,
         localBounds: terrain.bounds,
         groundSampler: terrain.sampleGround,
@@ -161,6 +169,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       } catch {
         disposeObject(terrain.group);
         disposeObject(world);
+        disposeObject(bridges.group);
+        disposeObject(train.group);
         setError("3D描画を開始できません。ブラウザーを再読み込みしてください。");
         return;
       }
@@ -218,7 +228,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         controls.update();
       };
       reset();
-      scene.add(terrain.group, world);
+      scene.add(terrain.group, world, bridges.group, train.group);
       const waterMaterial = createGeographicWaterMaterial();
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {
@@ -353,6 +363,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         last = now;
         if (document.hidden || latest.current.mapActive === false) return;
         time += dt;
+        train.update(time);
         controls.update();
         const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + 150, terrain.bounds.maxZ - 150);
         const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + 150, terrain.bounds.maxX - 150);
@@ -599,7 +610,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
           <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
           <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル（国土地理院）標高タイルを加工</a>
-          <p>建物はLOD1形状。未収録の高さ・橋の高さは仮表現です。浸水はゲーム用で、実際の災害予測ではありません。</p>
+          <p>建物はLOD1形状。未収録の高さ・橋の高さは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。</p>
         </details>
       </div>
     );
