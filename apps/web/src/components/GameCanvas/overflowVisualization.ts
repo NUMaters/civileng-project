@@ -285,28 +285,6 @@ function buildEllipseSpecs(target: SiteTarget) {
 
   return [
     {
-      id: `${ENTITY_PREFIX}breach-core-${site.id}`,
-      longitude: site.longitude,
-      latitude: site.latitude,
-      major: 18 + site.intensity * 12,
-      minor: 12 + site.intensity * 8,
-      rotation: heading,
-      height: 0.45 + site.intensity * 0.4,
-      fill: Color.fromCssColorString("#ff5a3c").withAlpha(0.72 + site.intensity * 0.2),
-      outline: Color.fromCssColorString("#ffe0d4").withAlpha(0.95),
-    },
-    {
-      id: `${ENTITY_PREFIX}breach-ring-${site.id}`,
-      longitude: site.longitude,
-      latitude: site.latitude,
-      major: 28 + site.intensity * 16,
-      minor: 22 + site.intensity * 12,
-      rotation: heading,
-      height: 0.2,
-      fill: Color.fromCssColorString("#ff8a4a").withAlpha(0.18 + site.intensity * 0.12),
-      outline: Color.fromCssColorString("#ffb089").withAlpha(0.85),
-    },
-    {
       id: `${ENTITY_PREFIX}inundation-${site.id}`,
       longitude: inundationCenter.longitude,
       latitude: inundationCenter.latitude,
