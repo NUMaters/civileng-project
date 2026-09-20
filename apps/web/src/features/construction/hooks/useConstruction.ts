@@ -40,6 +40,8 @@ const MESSAGE_INFO_HIDE_MS = 2_200;
 const MESSAGE_WARN_HIDE_MS = 2_800;
 /** 同じ文言の連投を抑える間隔（ms）。 */
 const MESSAGE_THROTTLE_MS = 1_400;
+/** 経済計算は毎フレーム続けるが、HUDへの反映は入力を邪魔しない頻度に抑える。 */
+const ECONOMY_UI_UPDATE_INTERVAL_MS = 100;
 
 export type ToastTone = "info" | "warn" | "success";
 
@@ -159,6 +161,7 @@ export function useConstruction() {
     }
     let frameId = 0;
     let lastAt = performance.now();
+    let lastUiUpdateAt = lastAt - ECONOMY_UI_UPDATE_INTERVAL_MS;
     const tick = (now: number) => {
       const deltaSeconds = Math.min(0.5, Math.max(0, (now - lastAt) / 1000));
       lastAt = now;
@@ -171,9 +174,12 @@ export function useConstruction() {
         });
         if (Math.abs(result.budget - budgetRef.current) >= 0.05) {
           budgetRef.current = result.budget;
-          setBudget(result.budget);
         }
-        setNetIncomePerSecond(result.netIncomePerSecond);
+        if (now - lastUiUpdateAt >= ECONOMY_UI_UPDATE_INTERVAL_MS) {
+          lastUiUpdateAt = now;
+          setBudget(budgetRef.current);
+          setNetIncomePerSecond(result.netIncomePerSecond);
+        }
       }
       frameId = window.requestAnimationFrame(tick);
     };
@@ -286,7 +292,7 @@ export function useConstruction() {
     return confirmed;
   }, [pendingPlacement, setMessage]);
 
-  /** 向き変更は仮配置中のみ。確定済み施設は変更しない。 */
+  /** タップ回転は仮配置・確定済みの両方に反映し、治水判定も更新する。 */
   const rotatePlacement = useCallback((placementId: string, headingDegrees: number) => {
     const nextHeading = normalizeHeadingDegrees(headingDegrees);
     setPendingPlacement((current) => {
@@ -295,6 +301,11 @@ export function useConstruction() {
       }
       return { ...current, headingDegrees: nextHeading };
     });
+    setPlacements((current) =>
+      current.map((placement) =>
+        placement.id === placementId ? { ...placement, headingDegrees: nextHeading } : placement,
+      ),
+    );
   }, []);
 
   /** 仮配置の位置を配置可能域内で更新する（確定前の微調整用）。 */

@@ -76,7 +76,7 @@ function connectWebSocket(url) {
 }
 
 async function waitPort(port) {
-  for (let i = 0; i < 50; i += 1) {
+  for (let i = 0; i < 150; i += 1) {
     try {
       if ((await fetch(`http://127.0.0.1:${port}/json/version`)).ok) return;
     } catch {
@@ -126,9 +126,7 @@ async function main() {
     throw new Error(`Vite not reachable at ${BASE}`);
   }
 
-  const userData = `/tmp/civilcraft-e2e-${PORT}`;
-  fs.rmSync(userData, { recursive: true, force: true });
-  fs.mkdirSync(userData, { recursive: true });
+  const userData = fs.mkdtempSync("/tmp/civilcraft-e2e-");
 
   const child = spawn(
     CHROME,
@@ -144,6 +142,12 @@ async function main() {
     ],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
+  // Drain Chrome's output: a full stderr pipe can otherwise stall the browser.
+  child.stdout.resume();
+  let chromeDiagnostics = "";
+  child.stderr.on("data", (chunk) => {
+    chromeDiagnostics = (chromeDiagnostics + chunk.toString()).slice(-4000);
+  });
 
   const log = [];
   const step = (name, detail) => {
@@ -197,18 +201,32 @@ async function main() {
     step("シングル読込完了");
 
     await evaluate(client, `document.querySelector('.game-menu__start')?.click()`);
-    await waitFor(client, `!!document.querySelector('.cmd-mission')`, 60_000);
-    await waitFor(
-      client,
-      `document.querySelector('.cmd-mission__phase')?.textContent === '準備'`,
-      30_000,
-    );
+    await waitFor(client, `!!document.querySelector('.river-hud')`, 60_000);
+    await waitFor(client, `window.__civilcraftE2E?.getFlood().phase === 'preparation'`, 30_000);
     step("ゲーム開始（準備中）");
+    await evaluate(client, `document.querySelector('[aria-label="ゲームを一時停止"]')?.click()`);
+    await waitFor(client, `document.querySelector('.river-pause')?.open === true`);
+    const pausedBefore = await evaluate(
+      client,
+      `JSON.stringify([window.__civilcraftE2E.getFlood().phaseRemainingSeconds, document.querySelector('.river-hud__budget strong')?.textContent])`,
+    );
+    await sleep(600);
+    const pausedAfter = await evaluate(
+      client,
+      `JSON.stringify([window.__civilcraftE2E.getFlood().phaseRemainingSeconds, document.querySelector('.river-hud__budget strong')?.textContent])`,
+    );
+    if (pausedBefore !== pausedAfter) throw new Error("一時停止中に時間または予算が進行しました");
+    await evaluate(client, `document.querySelector('.river-pause__resume')?.click()`);
+    await waitFor(client, `document.querySelector('.river-pause')?.open === false`);
+    step("一時停止で時間・予算を保持し、再開");
     await waitFor(
       client,
-      `document.querySelector('.cesium-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
+      `document.querySelector('.diorama-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
       60_000,
     );
+    // 建物タイルのready直後は初期カメラと地形ピックの最初の描画がまだ収束していないため、
+    // 実ユーザーの操作開始に近い状態まで1フレーム以上待ってからドラッグを検証する。
+    await sleep(750);
     step("スマホ幅で街の3Dモデル表示");
 
     const dragOnlyDock = await evaluate(
@@ -225,7 +243,7 @@ async function main() {
       client,
       `(() => {
         const card = document.querySelector('.structure-card:not(:disabled)');
-        const canvas = document.querySelector('.cesium-widget canvas');
+        const canvas = document.querySelector('.diorama-game-map canvas');
         if (!(card instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return null;
         const cardRect = card.getBoundingClientRect();
         const canvasRect = canvas.getBoundingClientRect();
@@ -244,20 +262,9 @@ async function main() {
     }
     let draggedToMap = false;
     const dragAttempts = [];
-    const dropCandidates = [
-      [0.35, 0.3],
-      [0.5, 0.3],
-      [0.65, 0.3],
-      [0.35, 0.45],
-      [0.5, 0.45],
-      [0.65, 0.45],
-      [0.35, 0.6],
-      [0.5, 0.6],
-      [0.65, 0.6],
-      [0.35, 0.75],
-      [0.5, 0.75],
-      [0.65, 0.75],
-    ];
+    const dropCandidates = [0.5, 0.4, 0.6, 0.3, 0.7].flatMap((xRatio) =>
+      [0.5, 0.6, 0.4].map((yRatio) => [xRatio, yRatio]),
+    );
     for (const [xRatio, yRatio] of dropCandidates) {
       const targetX = dragPoints.canvasLeft + dragPoints.canvasWidth * xRatio;
       const targetY = dragPoints.canvasTop + dragPoints.canvasHeight * yRatio;
@@ -281,7 +288,7 @@ async function main() {
           pending: !!document.querySelector('[aria-label="仮配置の確定"]'),
           dragging: !!document.querySelector('.game-shell.is-dock-dragging'),
           ghost: !!document.querySelector('.dock-drag-ghost'),
-          canvas: !!document.querySelector('.cesium-widget canvas')
+          canvas: !!document.querySelector('.diorama-game-map canvas')
         })`,
       );
       dragAttempts.push({ xRatio, yRatio, ...draggedToMap });
@@ -297,6 +304,39 @@ async function main() {
       );
     }
     step("実ポインター操作で仮配置");
+    const pendingPanel = await evaluate(
+      client,
+      `(() => {
+        const panel = document.querySelector('[aria-label="仮配置操作"]');
+        return Boolean(
+          panel &&
+          panel.querySelector('[aria-label="キャンセル"]') &&
+          panel.querySelector('[aria-label="確定して配置"]') &&
+          !document.querySelector('[aria-label="向きスライダー"]') &&
+          !document.querySelector('.cesium-pending-panel'),
+        );
+      })()`,
+    );
+    if (!pendingPanel) {
+      throw new Error("施設横の確定・取消または下部パネル廃止の検証に失敗しました");
+    }
+    step("下部パネルなし・施設横の確定と取消");
+    const tap = await evaluate(
+      client,
+      `(() => {
+      const rect = document.querySelector('.diorama-placement-actions').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y - 38,
+        heading: Number(document.querySelector('.diorama-label.is-preview').dataset.heading) };
+    })()`,
+    );
+    await dispatchMouse(client, "mousePressed", tap.x, tap.y, 1);
+    await dispatchMouse(client, "mouseReleased", tap.x, tap.y);
+    await waitFor(
+      client,
+      `Number(document.querySelector('.diorama-label.is-preview')?.dataset.heading) === ${(tap.heading + 36) % 360}`,
+      5_000,
+    );
+    step("施設をタップして36度回転");
     const touchActionAfterDrag = await evaluate(
       client,
       `getComputedStyle(document.querySelector('.structure-card:not(:disabled)')).touchAction`,
@@ -375,12 +415,28 @@ async function main() {
     }
     await waitFor(
       client,
-      `document.querySelector('.result-panel__badge')?.textContent === '成功'`,
-      5_000,
+      `document.querySelector('.result-panel__badge')?.textContent?.trim() === '成功'`,
+      30_000,
     );
-    step("ミッションクリア", result.title ?? result.badge);
+    const resultTitle = await evaluate(
+      client,
+      `document.querySelector('.result-panel h2')?.textContent?.trim()`,
+    );
+    if (!resultTitle) throw new Error("結果状態には到達したが、結果の見出しが描画されていません");
+    step("ミッションクリア", resultTitle);
 
-    await evaluate(client, `document.querySelector('.result-panel__primary')?.click()`);
+    await evaluate(client, `document.querySelector('.result-panel__retry')?.click()`);
+    await waitFor(
+      client,
+      `window.__civilcraftE2E?.getFlood().phase === 'preparation' && window.__civilcraftE2E.placementCount() === 0`,
+    );
+    step("結果から再挑戦、施設と被害をリセット");
+    await evaluate(client, `document.querySelector('[aria-label="ゲームを一時停止"]')?.click()`);
+    await waitFor(client, `document.querySelector('.river-pause')?.open === true`);
+    await evaluate(
+      client,
+      `Array.from(document.querySelectorAll('.river-pause button')).find(el => el.textContent === 'メニューへ戻る')?.click()`,
+    );
     await waitFor(
       client,
       `document.querySelector('.game-menu__title')?.textContent === 'プレイモードを選択'`,
@@ -396,6 +452,7 @@ async function main() {
   } catch (error) {
     console.error("\nE2E PLAYTHROUGH FAILED");
     console.error(error);
+    console.error(chromeDiagnostics);
     console.error(log.join("\n"));
     try {
       child.kill("SIGKILL");

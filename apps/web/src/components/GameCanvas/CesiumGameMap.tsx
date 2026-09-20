@@ -23,6 +23,8 @@ import {
   LightingModel,
   Math as CesiumMath,
   Matrix4,
+  ModelGraphics,
+  JulianDate,
   sampleTerrainMostDetailed,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
@@ -57,12 +59,13 @@ import {
   destroyOverflowVisualization,
   syncOverflowVisualization,
 } from "./overflowVisualization";
-import { createPlaceableZone } from "./placeableZone";
 import {
   syncProtectionVisualization,
   clearProtectionVisualization,
 } from "./protectionVisualization";
 import { nearestPointOnPolyline, resolvePlaceablePosition } from "./riverPlacement";
+import { suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
+import { structureMeshUri } from "./structureMesh";
 import { createRiverWaterSurface, type RiverWaterSurfaceController } from "./riverWaterSurface";
 import { createStructureMaterial } from "./structureMaterials";
 import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
@@ -104,7 +107,7 @@ const CAMERA_FOCUS_SOFT_CLAMP_DEADBAND_M = 12;
 
 /** ズーム距離（地表〜カメラ）。俯瞰で区間全体が見えるよう上限を緩める。 */
 const CAMERA_MIN_ZOOM_DISTANCE_M = 180;
-const CAMERA_MAX_ZOOM_DISTANCE_M = 9_500;
+const CAMERA_MAX_ZOOM_DISTANCE_M = 2_600;
 
 /** 初期スポーン。日本大学工学部周辺の阿武隈川河道上。河川が画面中央に見える斜め俯瞰。 */
 const INITIAL_VIEW = {
@@ -112,7 +115,7 @@ const INITIAL_VIEW = {
   latitude: 37.3655,
   headingDegrees: 8,
   pitchDegrees: -40,
-  range: 1_100,
+  range: 850,
 } as const;
 
 const GSI_DEM_MAX_LEVEL = 14;
@@ -149,14 +152,19 @@ const NUDGE_METERS = 2.5;
 /** 地形高が取れないとき・NaN のときのフォールバック標高（楕円体高 m）。 */
 const FALLBACK_GROUND_HEIGHT_M = 18;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
-const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 20;
+const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 30;
 
 function applyInitialCamera(viewer: Viewer): void {
   // ゲーム画面への切り替え直後はコンテナのサイズが確定していないことがある。
   // resize を先に行ってから視点を設定し、広域の既定カメラが残る競合を防ぐ。
   viewer.resize();
+  viewer.camera.cancelFlight();
+  const focusHeight =
+    viewer.scene.globe.getHeight(
+      Cartographic.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
+    ) ?? 0;
   viewer.camera.lookAt(
-    Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
+    Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude, focusHeight),
     new HeadingPitchRange(
       CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
       CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
@@ -178,6 +186,7 @@ type MapLoadStage = "loading" | "terrain" | "buildings" | "ready" | "degraded";
 
 export type CesiumGameMapHandle = {
   focusNpc: (position: GeoPosition) => void;
+  resetCamera: () => void;
   tryDropStructure: (structureId: string, clientX: number, clientY: number) => boolean;
   /** ドラッグ中に設置予定モデルをカーソル下の地表へ追従表示する。 */
   updateDragGhost: (structureId: string, clientX: number, clientY: number) => DragGhostStatus;
@@ -185,11 +194,12 @@ export type CesiumGameMapHandle = {
   clearDragGhost: () => void;
 };
 
-type CesiumGameMapProps = {
+export type CesiumGameMapProps = {
   npcMarkers?: NpcDefinition[];
   highlightedNpcId?: string | null;
   onSelectNpc?: (id: string) => void;
   interactionLocked?: boolean;
+  onReadyChange?: (ready: boolean) => void;
   placements: PlacedStructure[];
   structures: StructureDefinition[];
   selectedPlacementId: string | null;
@@ -228,6 +238,9 @@ type CesiumGameMapProps = {
    */
   getLatestFloodState?: () => {
     phase: string;
+    structureInfluences: StructureInfluence[];
+    protectedBankSites: ProtectedBankSite[];
+    disasterElapsedSeconds: number;
     rainfallIntensity: number;
     riverLevelMeters: number;
     overflowMeters: number;
@@ -255,6 +268,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
   function CesiumGameMap(
     {
       placements,
+      onReadyChange,
       structures,
       selectedPlacementId,
       onDropPlace,
@@ -280,7 +294,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const viewerRef = useRef<Viewer | null>(null);
     const buildingTilesetRef = useRef<Cesium3DTileset | null>(null);
     const riverWaterRef = useRef<RiverWaterSurfaceController | null>(null);
-    const placeableZoneRef = useRef<{ destroy: () => void } | null>(null);
     const floodStateRef = useRef(floodState);
     const getLatestFloodStateRef = useRef(getLatestFloodState);
     const freeCameraLookRef = useRef(freeCameraLook);
@@ -315,6 +328,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const [mapLoadStage, setMapLoadStage] = useState<MapLoadStage>("loading");
     const [frameTimeMs, setFrameTimeMs] = useState<number | null>(null);
     const [visibilityEpoch, setVisibilityEpoch] = useState(0);
+
+    useEffect(() => {
+      onReadyChange?.(mapLoadStage === "ready" || mapLoadStage === "degraded");
+    }, [mapLoadStage, onReadyChange]);
 
     const labelInfluences = useMemo(() => calculateStructureInfluences(placements), [placements]);
 
@@ -449,6 +466,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         viewer.camera.lookAtTransform(Matrix4.IDENTITY);
         viewer.scene.requestRender();
       },
+      resetCamera: () => {
+        const viewer = viewerRef.current;
+        if (viewer !== null && !viewer.isDestroyed()) applyInitialCamera(viewer);
+      },
       tryDropStructure: (structureId: string, clientX: number, clientY: number) => {
         if (interactionLockedRef.current) return false;
         const viewer = viewerRef.current;
@@ -479,7 +500,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           return false;
         }
 
-        const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
+        const headingDegrees = suggestedStructureHeading(structureId, placeable);
         onDropPlaceRef.current(structureId, placeable, headingDegrees);
         return true;
       },
@@ -524,7 +545,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         const placeable = resolved !== undefined && isInsidePlayArea(resolved);
         // 配置可能域内はスナップせずポインタ直下。域外でもゴーストはカーソル位置に出す。
         const position = resolved ?? picked;
-        const headingDegrees = CesiumMath.toDegrees(viewer.camera.heading);
+        const headingDegrees = suggestedStructureHeading(structureId, position);
         // 約 0.1 m 単位で追従（粗すぎる量子化だと「決まったマス」に感じる）。
         const key = [
           structureId,
@@ -611,6 +632,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       }
 
       let disposed = false;
+      let initialTerrainSettled = false;
+      let initialTilesFramed = false;
+      let hasMapInput = false;
+      let removeInitialInputListener: (() => void) | undefined;
       let eventHandler: ScreenSpaceEventHandler | null = null;
       let viewer: Viewer | null = null;
       let removeCameraMoveEnd: (() => void) | undefined;
@@ -716,8 +741,18 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.screenSpaceCameraController.inertiaSpin = 0.78;
         mapViewer.scene.screenSpaceCameraController.inertiaTranslate = 0.72;
         mapViewer.scene.screenSpaceCameraController.inertiaZoom = 0.62;
+        const markMapInput = () => {
+          hasMapInput = true;
+        };
+        mapViewer.scene.canvas.addEventListener("pointerdown", markMapInput, { passive: true });
+        removeInitialInputListener = () =>
+          mapViewer.scene.canvas.removeEventListener("pointerdown", markMapInput);
         mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
           if (queuedTileCount === 0) {
+            if (initialTerrainSettled && !initialTilesFramed) {
+              initialTilesFramed = true;
+              if (!hasMapInput) applyInitialCamera(mapViewer);
+            }
             setIsMapReady(true);
             // 建物Tilesetの読み込み完了後に地形タイルが空になると、完了表示を
             // 「建物を読み込み中…」へ戻さない。建物がまだ無い場合だけ待機表示にする。
@@ -744,6 +779,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             if (disposed || mapViewer.isDestroyed()) {
               return;
             }
+            initialTerrainSettled = true;
+            if (!hasMapInput) applyInitialCamera(mapViewer);
             if (!renderProfile.loadBuildings) {
               setMapLoadStage("ready");
             }
@@ -787,6 +824,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         // 水面の Water マテリアル／流向ストリークは毎フレーム更新が必要なので描画を継続する。
         // 最新水位もここで渡し、React の間引き更新だけでは増水が階段状に見えないようにする。
         let lastVisualKey = "";
+        let lastFloodGeometryAt = 0;
         let lastStormKey = "";
         const clearSky = Color.fromCssColorString("#9ec6e0");
         const stormSky = Color.fromCssColorString("#4a6170");
@@ -802,7 +840,11 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             frameSampleTotal += frameDelta;
             frameSampleCount += 1;
             if (frameNow - frameSampleStartedAt >= 1_000) {
-              if (import.meta.env.DEV && frameSampleCount > 0) {
+              if (
+                import.meta.env.DEV &&
+                import.meta.env.VITE_SHOW_TELEMETRY === "true" &&
+                frameSampleCount > 0
+              ) {
                 setFrameTimeMs(Math.round((frameSampleTotal / frameSampleCount) * 10) / 10);
               }
               frameSampleStartedAt = frameNow;
@@ -871,7 +913,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                     .map((site) => `${site.id}:${site.intensity.toFixed(2)}`)
                     .join(","),
                 ].join("|");
-                if (visualKey !== lastVisualKey) {
+                // Water shading is cheap; flood polygons are not. Rebuild them at most 10Hz.
+                if (visualKey !== lastVisualKey && now - lastFloodGeometryAt >= 100) {
+                  lastFloodGeometryAt = now;
                   lastVisualKey = visualKey;
                   syncNearOverflowFloodplain(mapViewer, {
                     active,
@@ -909,16 +953,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         startWaterAnimatingRef.current = startWaterAnimating;
         startWaterAnimating();
-
-        // 配置帯は準備／災害中かつ mapActive のときだけ出す（初期化時点では作らない）。
-        placeableZoneRef.current?.destroy();
-        placeableZoneRef.current = null;
-        syncPlaceableZoneForPhase(
-          mapViewer,
-          placeableZoneRef,
-          floodStateRef.current,
-          mapActiveRef.current,
-        );
 
         void createRiverWaterSurface(mapViewer)
           .then((controller) => {
@@ -1182,10 +1216,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           window.removeEventListener("resize", handleViewportResize);
         }
         removeContextLost?.();
+        removeInitialInputListener?.();
         riverWaterRef.current?.destroy();
         riverWaterRef.current = null;
-        placeableZoneRef.current?.destroy();
-        placeableZoneRef.current = null;
         if (dragGhostRafRef.current !== 0) {
           window.cancelAnimationFrame(dragGhostRafRef.current);
           dragGhostRafRef.current = 0;
@@ -1268,7 +1301,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       if (changed) {
         viewer.scene.requestRender();
       }
-    }, [placements, selectedPlacementId, structures]);
+    }, [isMapReady, placements, selectedPlacementId, structures]);
 
     useEffect(() => {
       const viewer = viewerRef.current;
@@ -1276,7 +1309,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return;
       }
 
-      // ロビー裏表示・未開始時は決壊／弱点／影響圏／配置帯をすべて消す。
+      // ロビー裏表示・未開始時は決壊／影響圏／配置帯をすべて消す。
       if (!mapActive || floodState?.phase === "idle" || floodState === undefined) {
         clearProtectionVisualization(viewer);
         dragGhostInfluenceRef.current = null;
@@ -1287,35 +1320,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           riverLevelMeters: 2.2,
           overflowMeters: 0,
         });
-        placeableZoneRef.current?.destroy();
-        placeableZoneRef.current = null;
         clearLegacyFloodZones(viewer);
         viewer.scene.requestRender();
         return;
       }
 
-      syncPlaceableZoneForPhase(viewer, placeableZoneRef, floodState, mapActive);
-
-      const sites = floodState.active === true ? (floodState.overflowSites ?? []) : [];
       refreshProtectionWithDragGhost(viewer, floodState, dragGhostInfluenceRef.current, mapActive);
-      syncNearOverflowFloodplain(viewer, {
-        active: floodState.active === true,
-        riverLevelMeters: floodState.riverLevelMeters ?? 2.2,
-        overflowMeters: floodState.overflowMeters ?? 0,
-        overflowLevelMeters: floodState.overflowLevelMeters,
-      });
-      syncOverflowVisualization(
-        viewer,
-        sites,
-        floodState.floodDepthMeters ?? 0,
-        floodState.floodedAreaPercent ?? 0,
-      );
-      syncInundationVisualization(
-        viewer,
-        sites,
-        floodState.floodDepthMeters ?? 0,
-        floodState.active === true,
-      );
+      // Flood geometry has one owner: the throttled animation loop above.
       // 旧・無関係な固定浸水ゾーンは使わない（決壊地点からの浸水のみ）。
       clearLegacyFloodZones(viewer);
       viewer.scene.requestRender();
@@ -1397,29 +1408,15 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
 
         const target = orientationTarget;
         if (target !== null) {
-          const screenBelow = viewer.scene.cartesianToCanvasCoordinates(
-            Cartesian3.fromDegrees(
-              target.position.longitude,
-              target.position.latitude,
-              target.position.height + 6,
-            ),
-          );
-          const screenAbove = viewer.scene.cartesianToCanvasCoordinates(
-            Cartesian3.fromDegrees(
-              target.position.longitude,
-              target.position.latitude,
-              target.position.height + 18,
-            ),
-          );
           const hud = orientationHudRef.current;
           if (hud !== null) {
-            // 施設の右下にスライダーを置き、モデル本体のドラッグ移設と重なりにくくする。
-            applyScreenHudPosition(hud, screenBelow, 72, 18, "below");
+            hud.style.visibility = "visible";
+            hud.style.transform = "none";
           }
           const confirmHud = confirmHudRef.current;
           if (confirmHud !== null) {
-            // 施設の上に確定／キャンセルをさりげなく置く。
-            applyScreenHudPosition(confirmHud, screenAbove, 0, -12, "above");
+            confirmHud.style.visibility = "visible";
+            confirmHud.style.transform = "none";
           }
         }
       };
@@ -1499,6 +1496,22 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         ? "ready"
         : "loading"
       : "disabled";
+    const pendingStructureName =
+      orientationTarget === null
+        ? "施設"
+        : (structures.find(({ id }) => id === orientationTarget.structureId)?.displayName ??
+          "施設");
+    const pendingInfluence =
+      orientationTarget === null
+        ? undefined
+        : labelInfluences.find((item) => item.placementId === orientationTarget.id);
+    const placementGuidance: Record<string, string> = {
+      levee: "河岸に沿って、水が街へあふれるのを防ぐ",
+      revetment: "川が曲がる岸を補強して、侵食を抑える",
+      "retention-basin": "河岸に水をため、増水の勢いを抑える",
+      "drainage-pump": "街側の河岸から、たまった水をくみ出す",
+      "channel-dredging": "川の中を掘り、水が流れる空間を広げる",
+    };
 
     return (
       <div className="cesium-game-map" data-3d-buildings={buildingsLoadState}>
@@ -1538,41 +1551,77 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           ))}
         </div>
         {orientationTarget !== null ? (
-          <>
-            <div
-              ref={confirmHudRef}
-              className="cesium-confirm-hud"
-              role="group"
-              aria-label="仮配置の確定"
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
-            >
-              <button
-                type="button"
-                className="cesium-confirm-hud__cancel"
-                aria-label="キャンセル"
-                title="キャンセル（Esc）"
-                onClick={() => onCancelPendingPlacement?.()}
+          <div
+            className="cesium-pending-panel"
+            role="region"
+            aria-label="仮配置操作"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="cesium-pending-panel__topline">
+              <div className="cesium-pending-panel__summary">
+                <span className="cesium-pending-panel__eyebrow">建設プレビュー</span>
+                <strong>{pendingStructureName}</strong>
+                <span>施設を動かして場所を調整</span>
+              </div>
+              <div
+                ref={confirmHudRef}
+                className="cesium-confirm-hud"
+                role="group"
+                aria-label="仮配置の確定"
               >
-                <span aria-hidden="true">×</span>
-              </button>
-              <button
-                type="button"
-                className="cesium-confirm-hud__confirm"
-                aria-label="確定して配置"
-                title="確定（Enter）"
-                onClick={() => onConfirmPendingPlacement?.()}
-              >
-                <span aria-hidden="true">✓</span>
-              </button>
+                <button
+                  type="button"
+                  className="cesium-confirm-hud__cancel"
+                  aria-label="キャンセル"
+                  title="キャンセル（Esc）"
+                  onClick={() => onCancelPendingPlacement?.()}
+                >
+                  <span aria-hidden="true">×</span>
+                  <span>戻す</span>
+                </button>
+                <button
+                  type="button"
+                  className="cesium-confirm-hud__confirm"
+                  aria-label="確定して配置"
+                  title="確定（Enter）"
+                  onClick={() => onConfirmPendingPlacement?.()}
+                >
+                  <span aria-hidden="true">✓</span>
+                  <span>配置する</span>
+                </button>
+              </div>
             </div>
+            <p
+              className={`river-placement-feedback is-${pendingInfluence?.coverageTone ?? "warn"}`}
+              role="status"
+            >
+              <strong>
+                {pendingInfluence?.coverageTone === "good"
+                  ? "この場所で効果が見込めます"
+                  : pendingInfluence?.coverageTone === "bad"
+                    ? "位置を調整すると効果が上がります"
+                    : "川沿いで効果のある場所を探そう"}
+              </strong>
+              {pendingInfluence ? (
+                <span>
+                  配置有効率 {Math.round(pendingInfluence.effectiveness * 100)}% ·{" "}
+                  {pendingInfluence.coveredSiteIds.length}地点に届く
+                  {pendingInfluence.adverseSiteIds.length > 0 ? " · 相性に注意" : ""}
+                </span>
+              ) : null}
+              <span>
+                {placementGuidance[orientationTarget.structureId] ??
+                  "施設の位置と向きを調整してください"}
+              </span>
+            </p>
             <div
               ref={orientationHudRef}
               className={`cesium-orientation-hud${orientationTarget.preview === true ? " is-preview" : ""}`}
             >
               <RotationControls
-                floating
+                floating={false}
                 headingDegrees={orientationTarget.headingDegrees}
                 onLiveChange={(headingDegrees) => {
                   // スライダー操作中に施設モデル／影響圏を即回転（手を離す前に向きが分かる）。
@@ -1594,7 +1643,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 }
               />
             </div>
-          </>
+          </div>
         ) : null}
         {mapError === null && mapLoadStage !== "ready" ? (
           <div className="cesium-game-map__status" role="status">
@@ -1602,7 +1651,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
             <span>{mapLoadStageDetail(mapLoadStage, getCesiumRenderProfile().loadBuildings)}</span>
           </div>
         ) : null}
-        {mapError === null && import.meta.env.DEV && frameTimeMs !== null ? (
+        {mapError === null &&
+        import.meta.env.DEV &&
+        import.meta.env.VITE_SHOW_TELEMETRY === "true" &&
+        frameTimeMs !== null ? (
           <div className="cesium-game-map__telemetry" role="status" aria-label="描画フレーム時間">
             {frameTimeMs.toFixed(1)} ms / frame
           </div>
@@ -1733,67 +1785,7 @@ function applyScreenLabelPosition(
     return;
   }
   element.style.visibility = "visible";
-  element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) translate(-50%, -100%)`;
-}
-
-/** 施設の手前など、アンカー点の下に UI を置く。画面端・ドック帯でははみ出さないようクランプする。 */
-function applyScreenHudPosition(
-  element: HTMLDivElement,
-  screen: Cartesian2 | undefined,
-  offsetX: number,
-  offsetY: number,
-  anchor: "below" | "above" = "below",
-): void {
-  if (screen === undefined) {
-    element.style.visibility = "hidden";
-    return;
-  }
-  element.style.visibility = "visible";
-  const parent = element.offsetParent as HTMLElement | null;
-  const viewWidth = parent?.clientWidth ?? window.innerWidth;
-  const viewHeight = parent?.clientHeight ?? window.innerHeight;
-  const safeTop = readSafeAreaInset("top");
-  const safeBottom = readSafeAreaInset("bottom");
-  const dockClearance = estimateDockClearancePx();
-  const padX = 12;
-  const padTop = 12 + safeTop;
-  const padBottom = 12 + safeBottom + dockClearance;
-  const halfWidth = Math.max(element.offsetWidth, 120) / 2;
-  const height = Math.max(element.offsetHeight, 44);
-  let x = screen.x + offsetX;
-  let y = screen.y + offsetY;
-  x = Math.min(viewWidth - padX - halfWidth, Math.max(padX + halfWidth, x));
-  if (anchor === "above") {
-    y = Math.min(viewHeight - padBottom, Math.max(padTop + height, y));
-  } else {
-    y = Math.min(viewHeight - padBottom - height, Math.max(padTop, y));
-  }
-  const anchorTransform = anchor === "above" ? "translate(-50%, -100%)" : "translate(-50%, 0)";
-  element.style.transform = `translate(${x}px, ${y}px) ${anchorTransform}`;
-}
-
-function readSafeAreaInset(edge: "top" | "bottom" | "left" | "right"): number {
-  if (typeof document === "undefined") {
-    return 0;
-  }
-  const probe = document.createElement("div");
-  probe.style.cssText = `position:fixed;visibility:hidden;pointer-events:none;padding-${edge}:env(safe-area-inset-${edge}, 0px);`;
-  document.body.appendChild(probe);
-  const value = Number.parseFloat(getComputedStyle(probe).getPropertyValue(`padding-${edge}`));
-  probe.remove();
-  return Number.isFinite(value) ? value : 0;
-}
-
-/** 下部建設ドックが覆う概算高さ。仮配置 HUD がドック下に沈まないようにする。 */
-function estimateDockClearancePx(): number {
-  if (typeof document === "undefined") {
-    return 120;
-  }
-  const dock = document.querySelector(".cmd-dock") ?? document.querySelector(".construction-menu");
-  if (!(dock instanceof HTMLElement) || dock.offsetParent === null) {
-    return 120;
-  }
-  return Math.min(Math.max(dock.offsetHeight + 16, 96), 220);
+  element.style.transform = `translate3d(${screen.x + offsetX}px, ${screen.y + offsetY}px, 0) translate3d(-50%, -100%, 0)`;
 }
 
 async function loadAlignedTerrain(
@@ -1835,6 +1827,11 @@ async function loadAlignedTerrain(
 async function sampleOverflowBankElevations(viewer: Viewer): Promise<void> {
   const candidates = listOverflowCandidates();
   if (candidates.length === 0) {
+    return;
+  }
+  // GSIのCustomHeightmapTerrainProviderはタイルの可用性情報を持たないため、
+  // sampleTerrainMostDetailedを呼ぶとDeveloperErrorになる。候補側の既定標高を使う。
+  if (viewer.terrainProvider.availability === undefined) {
     return;
   }
   const cartographics = candidates.map((candidate) =>
@@ -1964,8 +1961,8 @@ function tuneImageryLayer(layer: ImageryLayer): void {
   layer.show = true;
   layer.alpha = 1;
   layer.brightness = 1.12;
-  layer.contrast = 1.04;
-  layer.saturation = 1.06;
+  layer.contrast = 0.94;
+  layer.saturation = 0.78;
   layer.gamma = 1;
 }
 
@@ -2369,35 +2366,9 @@ function refreshProtectionWithDragGhost(
   const influences = dragInfluence
     ? [...base.filter((item) => item.placementId !== dragInfluence.placementId), dragInfluence]
     : base;
-  // 弱点マーカーは配置中（確定／仮／ドラッグ）だけ。未配置の常時表示は決壊と紛らわしい。
-  const showWeaknessTargets = influences.length > 0;
   syncProtectionVisualization(viewer, influences, floodState?.protectedBankSites ?? [], {
     showBankSites: floodState?.active === true,
-    showWeaknessTargets,
   });
-}
-
-function syncPlaceableZoneForPhase(
-  viewer: Viewer,
-  placeableZoneRef: { current: { destroy: () => void } | null },
-  floodState:
-    | {
-        phase?: "idle" | "preparation" | "disaster" | "result" | "review";
-      }
-    | null
-    | undefined,
-  mapActive: boolean,
-): void {
-  const phase = floodState?.phase ?? "idle";
-  const shouldShow = mapActive && (phase === "preparation" || phase === "disaster");
-  if (!shouldShow) {
-    placeableZoneRef.current?.destroy();
-    placeableZoneRef.current = null;
-    return;
-  }
-  if (placeableZoneRef.current === null) {
-    placeableZoneRef.current = createPlaceableZone(viewer);
-  }
 }
 
 function clearDragGhostEntities(viewer: Viewer | null): void {
@@ -2637,6 +2608,7 @@ function addCivilEngineeringModel(
   const markerRadius = selected || preview || invalid ? 36 : 18;
   viewer.entities.add({
     id: `${prefix}-${placement.id}-marker`,
+    show: preview || invalid,
     position: Cartesian3.fromDegrees(
       placement.position.longitude,
       placement.position.latitude,
@@ -2735,12 +2707,27 @@ function addCivilEngineeringModel(
         Color.fromCssColorString(invalid ? "#ef6b4a" : "#9aa3a8").withAlpha(0.7),
       );
     }
-    const showOutline = selected || preview || invalid;
+    const showOutline = false;
     const entityId = isPrimaryPart
       ? `${prefix}-${placement.id}`
       : `${prefix}-${placement.id}-part-${part.id}`;
 
     try {
+      if (part.kind === "mesh" && part.mesh !== undefined) {
+        const color =
+          (material as ColorMaterialProperty).color?.getValue(JulianDate.now()) ?? Color.WHITE;
+        viewer.entities.add({
+          id: entityId,
+          position,
+          orientation,
+          model: new ModelGraphics({
+            uri: structureMeshUri(part, [color.red, color.green, color.blue, color.alpha]),
+            shadows: ShadowMode.DISABLED,
+            enableVerticalExaggeration: false,
+          }),
+        });
+        continue;
+      }
       if (isCylinder) {
         viewer.entities.add({
           id: entityId,
@@ -2792,6 +2779,7 @@ function addCivilEngineeringModel(
   ).withAlpha(preview || invalid ? 0.72 : 0.88);
   viewer.entities.add({
     id: `${prefix}-${placement.id}-beacon`,
+    show: false,
     position: Cartesian3.fromDegrees(
       placement.position.longitude,
       placement.position.latitude,

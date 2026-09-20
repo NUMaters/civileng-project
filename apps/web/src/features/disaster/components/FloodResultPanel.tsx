@@ -1,6 +1,7 @@
 import { loadRules } from "@civilcraft/game-data/load";
 import type { FloodSimulationState } from "../services/floodSimulation";
 import type { ReactNode } from "react";
+import "./FloodResultPanel.css";
 
 const CLEAR_THRESHOLD = loadRules().victory.clearThresholdPercent;
 
@@ -12,6 +13,7 @@ type FloodResultPanelProps = Pick<
   onEnterReview: () => void;
   onStartNewGame: () => void;
   children?: ReactNode;
+  onRetry?: () => void;
 };
 
 export function FloodResultPanel({
@@ -23,36 +25,56 @@ export function FloodResultPanel({
   onEnterReview,
   onStartNewGame,
   children,
+  onRetry,
 }: FloodResultPanelProps) {
   if (phase !== "result") {
     return null;
   }
 
-  const failureHint =
-    damagePercent >= CLEAR_THRESHOLD + 4
-      ? "弱点の種類に合う施設を、河岸の適所へ混ぜて配置してみよう。"
-      : `あと ${Math.max(0.1, damagePercent - CLEAR_THRESHOLD + 0.1).toFixed(1)}% 抑えればクリア。配置のタイミングも見直してみよう。`;
   const failureSteps = [
-    "浸水・被災範囲と施設の影響圏が重なる場所を探す",
-    "決壊・注意地点の近くへ施設を仮配置して効果を比べる",
+    "マップで水が街へ広がった河岸を確認する",
+    "その近くへ施設を仮配置し、建設プレビューで効果を確かめる",
     "大雨が始まる前に配置を確定し、予算を残す",
   ];
 
   return (
-    <div className="result-overlay">
+    <div className="result-overlay cc-result">
       <section className="result-panel" role="dialog" aria-modal="true" aria-label="結果">
+        <p className="result-panel__eyebrow">阿武隈川 / 治水チャレンジの記録</p>
         <span className={`result-panel__badge ${isClear ? "is-clear" : "is-failure"}`}>
           {isClear ? "成功" : "失敗"}
         </span>
-        <h2>{isClear ? "まちを守り切った" : "被害が広がった"}</h2>
+        <h2>{isClear ? "街を守る、一手になった。" : "次の一手で、街を守ろう。"}</h2>
         <p>
           {isClear
-            ? `被災度 ${damagePercent.toFixed(1)}% — クリア条件（${CLEAR_THRESHOLD}% 未満）を達成。`
-            : `被災度 ${damagePercent.toFixed(1)}%。クリアは ${CLEAR_THRESHOLD}% 未満。${failureHint}`}
+            ? "今回の対策は、クリア条件を達成しました。"
+            : "今回はクリア条件に届きませんでした。浸水した場所を確認し、次の配置につなげよう。"}
+        </p>
+
+        <div className="result-panel__score">
+          <span>スコア</span>
+          <strong>{score.toLocaleString("ja-JP")}</strong>
+        </div>
+
+        <dl className="result-panel__metrics">
+          <div>
+            <dt>今回の被災度</dt>
+            <dd>{damagePercent.toFixed(2)}%</dd>
+          </div>
+          <div>
+            <dt>配置数</dt>
+            <dd>{placementCount} 基</dd>
+          </div>
+        </dl>
+
+        <p className="result-panel__threshold">
+          クリア条件：被災度 {CLEAR_THRESHOLD}% 未満
+          <br />
+          {CLEAR_THRESHOLD}% ちょうどの場合は未達成です。
         </p>
         {!isClear ? (
           <div className="result-panel__next-steps">
-            <strong>次の一手</strong>
+            <strong>配置を見直すヒント</strong>
             <ul>
               {failureSteps.map((step) => (
                 <li key={step}>{step}</li>
@@ -61,24 +83,13 @@ export function FloodResultPanel({
           </div>
         ) : null}
 
-        <div className="result-panel__score">
-          <span>SCORE</span>
-          <strong>{score.toLocaleString("ja-JP")}</strong>
-        </div>
-
-        <dl className="result-panel__metrics">
-          <div>
-            <dt>被害度</dt>
-            <dd>{damagePercent.toFixed(1)}%</dd>
-          </div>
-          <div>
-            <dt>配置数</dt>
-            <dd>{placementCount} 基</dd>
-          </div>
-        </dl>
-
         {children}
         <div className="result-panel__actions">
+          {onRetry ? (
+            <button type="button" className="result-panel__retry" onClick={onRetry}>
+              もう一度挑戦
+            </button>
+          ) : null}
           <button type="button" className="result-panel__primary" onClick={onStartNewGame}>
             メニューへ戻る
           </button>
@@ -86,6 +97,11 @@ export function FloodResultPanel({
             マップを確認
           </button>
         </div>
+        {!onRetry ? (
+          <p className="result-panel__return-note">
+            再挑戦はメニューでシングルプレイを選択してください。
+          </p>
+        ) : null}
       </section>
     </div>
   );

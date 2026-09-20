@@ -1,0 +1,488 @@
+/* Bright mobile river-defense interface, with the city as the play surface. */
+.game-shell {
+  --river-ink: #123c64;
+  --river-paper: #f7fcff;
+  --river-green: #0782b9;
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  color: var(--river-paper);
+}
+.game-shell .game-shell__veil--top {
+  height: 160px;
+  background: linear-gradient(#048eda30, transparent);
+}
+.game-shell .game-shell__veil--bottom {
+  height: 150px;
+  background: linear-gradient(transparent, #048eda22);
+}
+.river-hud {
+  position: absolute;
+  z-index: 10;
+  inset: calc(8px + env(safe-area-inset-top)) 8px auto;
+  pointer-events: none;
+}
+.river-hud button {
+  pointer-events: auto;
+  cursor: pointer;
+  font: inherit;
+}
+.river-hud__location {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+  text-shadow: none;
+  min-height: 36px;
+}
+.river-hud__location > span {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 4px 10px;
+  border: 1px solid #ffffff40;
+  border-radius: 24px;
+  background: #087abbdc;
+}
+.river-hud__location small {
+  font-size: 11px;
+  letter-spacing: 0;
+  margin-left: 8px;
+  font-weight: 500;
+}
+.river-hud__location i {
+  display: inline-block;
+  width: 10px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2de2ce;
+  box-shadow: 0 0 0 4px #ffffff18;
+  margin-right: 7px;
+}
+.river-hud .river-hud__menu {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #ffffff40;
+  border-radius: 50%;
+  color: white;
+  background: #09699f;
+  display: grid;
+  place-items: center;
+}
+.river-hud__dashboard {
+  display: grid;
+  grid-template-columns: 0.95fr 1.25fr 1fr;
+  border-radius: 20px;
+  border: 1px solid #ffffffd9;
+  background: #f7fcfff5;
+  color: #123c64;
+  box-shadow: 0 5px 20px #123c6420;
+  margin-top: 6px;
+}
+.river-hud__dashboard > * {
+  min-width: 0;
+  padding: 5px 8px;
+  position: relative;
+  text-align: left;
+}
+.river-hud__dashboard > * + * {
+  border-left: 1px solid #123c6414;
+}
+.river-hud__dashboard span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  color: #487596;
+}
+.river-hud__dashboard strong,
+.river-hud__dashboard time {
+  display: block;
+  font-size: 23px;
+  letter-spacing: -0.04em;
+  line-height: 1.4;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+.river-hud__dashboard strong small {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+.river-hud__budget > span small {
+  margin-left: 4px;
+  color: #0782b9;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.river-hud .river-hud__damage {
+  border: 0;
+  border-left: 1px solid #123c6414;
+  background: transparent;
+  color: #0782b9;
+  border-radius: 0;
+  color: #078664;
+}
+.river-hud__damage > span > span {
+  display: inline;
+}
+.river-hud .river-hud__damage.is-danger {
+  color: #b43d2c;
+}
+.river-hud__objective {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  padding: 0 10px;
+  min-height: 44px;
+  background: #0875afda;
+  border-radius: 20px;
+  margin-top: 5px;
+  backdrop-filter: blur(12px);
+}
+.river-hud__objective > span {
+  min-width: 0;
+  font-size: 11px;
+  color: #d4f3ff;
+  letter-spacing: 0.03em;
+}
+.river-hud__objective b {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+  color: #f7fcff;
+  margin-top: 3px;
+}
+.river-hud__objective button {
+  flex-shrink: 0;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  color: #ffffff;
+  padding: 0 2px 0 8px;
+  white-space: nowrap;
+}
+.river-hud.is-storm .river-hud__objective {
+  display: none;
+}
+.river-hud__details {
+  pointer-events: auto;
+  background: #f7fcff;
+  color: #123c64;
+  border-radius: 16px;
+  padding: 10px 14px;
+  margin-top: 8px;
+  box-shadow: 0 12px 30px #123c6430;
+}
+.river-hud__details > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  gap: 8px;
+  padding: 4px 0;
+}
+.river-hud__details p {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #487596;
+  margin: 10px 0 0;
+}
+.river-pause {
+  pointer-events: auto;
+  padding: 30px 24px;
+  border: 0;
+  border-radius: 24px;
+  width: min(340px, calc(100vw - 40px));
+  box-sizing: border-box;
+  color: #123c64;
+  background: #f7fcff;
+  text-align: center;
+}
+.river-pause::backdrop {
+  background: #092730b8;
+}
+.river-pause p {
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  color: #0782b9;
+}
+.river-pause h2 {
+  font-size: 26px;
+  margin: 16px 0;
+}
+.river-pause > span,
+.river-pause small {
+  display: block;
+  font-size: 11px;
+  line-height: 1.8;
+  color: #487596;
+}
+.river-pause button {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 12px;
+  margin: 12px 0;
+  border: 1px solid #123c6420;
+  background: transparent;
+  color: #123c64;
+  font-weight: 650;
+}
+.river-pause .river-pause__resume {
+  margin-top: 24px;
+  background: #0782b9;
+  color: white;
+}
+.game-shell .cesium-pending-panel {
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  width: auto;
+  max-width: none;
+  left: 10px;
+  right: 10px;
+  padding: 16px;
+  border: 0;
+  border-radius: 22px;
+  background: #f7fcff;
+  color: #123c64;
+  box-shadow: 0 8px 40px #123c6438;
+  backdrop-filter: none;
+}
+.game-shell .cesium-pending-panel__topline {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.game-shell .cesium-pending-panel__summary {
+  flex: 1;
+  min-width: 115px;
+}
+.game-shell .cesium-pending-panel__summary strong {
+  color: #123c64;
+  font-size: 18px;
+}
+.game-shell .cesium-pending-panel__eyebrow {
+  color: #0782b9;
+  font-size: 12px;
+}
+.game-shell .cesium-pending-panel__summary > span:last-child {
+  color: #487596;
+  font-size: 12px;
+}
+.game-shell .cesium-pending-panel .cesium-confirm-hud button {
+  min-height: 48px;
+  height: auto;
+  border: 1px solid #123c6425;
+  border-radius: 12px;
+  font-size: 12px;
+  box-shadow: none;
+  padding: 0 12px;
+}
+.game-shell .cesium-pending-panel .cesium-confirm-hud__confirm {
+  background: #0782b9;
+  color: white;
+}
+.game-shell .cesium-pending-panel .cesium-confirm-hud__cancel {
+  color: #487596;
+  background: transparent;
+}
+.game-shell .cesium-pending-panel .orientation-slider__header {
+  color: #487596;
+  font-size: 11px;
+}
+.game-shell .cesium-pending-panel .orientation-slider__header output {
+  color: #0782b9;
+}
+.game-shell .cesium-pending-panel .orientation-slider__input {
+  height: 44px;
+  accent-color: #0782b9;
+}
+.game-shell.is-pending-placement .cmd-dock {
+  visibility: hidden;
+  pointer-events: none;
+}
+.game-shell .cesium-map-label.cesium-map-label {
+  padding: 7px 10px;
+  border: 1px solid #ffffffa0;
+  border-radius: 10px;
+  background: #f7fcffed;
+  color: #123c64;
+  box-shadow: 0 3px 12px #123c6420;
+  backdrop-filter: none;
+  min-width: 0;
+}
+.game-shell .cesium-map-label.cesium-map-label .cesium-map-label__name {
+  color: #123c64;
+  font-size: 11px;
+  text-shadow: none;
+}
+.game-shell .cesium-map-label__effect {
+  color: #487596;
+  font-size: 12px;
+}
+.game-shell .cesium-map-label.is-good .cesium-map-label__effect {
+  color: #0782b9;
+}
+.game-shell .cesium-map-label.is-warn .cesium-map-label__effect {
+  color: #795b28;
+}
+.game-shell .cesium-map-label.is-bad .cesium-map-label__effect {
+  color: #b43d2c;
+}
+.game-shell .cesium-map-label__meter {
+  display: none;
+}
+.game-shell .cesium-map-label.is-preview {
+  animation: none;
+  filter: none;
+  border-style: solid;
+}
+.game-shell .cesium-pending-panel .orientation-slider {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.game-shell .cesium-pending-panel .orientation-slider__input {
+  background: transparent;
+}
+.game-shell .tutorial-coach {
+  top: auto;
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  left: 16px;
+  right: 16px;
+  width: auto;
+  max-width: none;
+  padding: 12px 52px 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: #096fa9ed;
+  box-shadow: 0 5px 18px #123c6420;
+}
+.game-shell .tutorial-coach__kicker {
+  display: none;
+}
+.game-shell .tutorial-coach strong {
+  font-size: 12px;
+  color: white;
+}
+.game-shell .tutorial-coach p {
+  font-size: 12px;
+  margin: 4px 0 0;
+  color: #e0f5ff;
+}
+.game-shell .tutorial-coach__skip {
+  min-width: 44px;
+  min-height: 44px;
+  right: 4px;
+  top: 8px;
+  font-size: 11px;
+}
+.game-shell.is-pending-placement .tutorial-coach {
+  display: none;
+}
+.game-shell .game-toast {
+  top: auto;
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  max-width: calc(100% - 100px);
+  padding: 8px 12px;
+  font-size: 12px;
+  pointer-events: none;
+}
+.river-placement-feedback {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  background: #fff1cf;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #775518;
+}
+.river-placement-feedback.is-good {
+  background: #dff9f4;
+  color: #0782b9;
+}
+.river-placement-feedback.is-bad {
+  background: #f7e5da;
+  color: #99452f;
+}
+.river-placement-feedback strong,
+.river-placement-feedback span {
+  display: block;
+}
+.river-placement-feedback span {
+  font-size: 12px;
+  margin-top: 4px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+.river-recenter {
+  position: absolute;
+  z-index: 8;
+  right: 14px;
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  width: 44px;
+  height: 44px;
+  border: 1px solid #fff9;
+  border-radius: 50%;
+  background: #f7fcff;
+  color: #0782b9;
+  box-shadow: 0 3px 12px #123c6425;
+  display: grid;
+  place-items: center;
+}
+.game-shell .tutorial-coach {
+  right: 68px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-shell *,
+  .game-shell *::before,
+  .game-shell *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.river-hud__metric-icon {
+  display: none;
+  width: 28px;
+  height: 24px;
+  margin-bottom: 3px;
+  font-size: 23px;
+  font-style: normal;
+  line-height: 24px;
+}
+.river-hud__income {
+  display: block;
+  color: #078664;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.river-hud__water strong {
+  color: #087fbc;
+}
+.river-hud__dashboard > button {
+  align-self: stretch;
+}
+.river-hud__objective > .river-hud__rain {
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.river-hud button:focus-visible,
+.river-recenter:focus-visible {
+  outline: 3px solid #20d9ef;
+  outline-offset: 3px;
+}
+@media (max-width: 360px) {
+  .river-hud__dashboard > * {
+    padding-inline: 4px;
+  }
+  .river-hud__dashboard strong,
+  .river-hud__dashboard time {
+    font-size: 21px;
+  }
+  .river-hud__objective {
+    padding-inline: 8px;
+  }
+}

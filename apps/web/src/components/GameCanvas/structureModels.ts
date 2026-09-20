@@ -2,395 +2,187 @@ import type { StructureMaterialKind } from "./structureMaterials";
 
 export type StructureModelPart = {
   id: string;
-  kind: "box" | "cylinder";
+  kind: "box" | "cylinder" | "mesh";
+  /** Closed triangle mesh, local meters relative to the part center (east, north, up).
+   * Renderer: rotate with placement heading, translate by centerHeight/offsets,
+   * compute per-face normals, and use the same opaque material as other parts.
+   * dimensions is the mesh bounding size, NOT a box fallback (which fills basin holes).
+   */
+  mesh?: { positions: [number, number, number][]; indices: number[] };
   dimensions?: { length: number; width: number; height: number };
   radius?: number;
   offsetEast?: number;
   offsetNorth?: number;
   centerHeight: number;
   material: StructureMaterialKind;
-  /** accent マテリアル用。施設ごとの識別色。 */
   accentHex?: string;
   repeatX?: number;
   repeatY?: number;
 };
 
-/**
- * 土木施設の立体パーツ定義。
- * 単色ボックスではなく、土・コンクリート・水面などの層で構成する。
- *
- * Box の dimensions.length は Cesium ローカル X、width は Y。
- * HPR 向き 0° で X=東・Y=北のため、堤防・護岸・河道掘削の長い辺は
- * 施設向き（法面矢印）の直角方向＝堤体線に沿う。影響圏 strip も同じ長軸を使う。
- */
-export function getStructureModelParts(structureId: string): StructureModelPart[] {
-  const models: Record<string, StructureModelPart[]> = {
-    levee: [
-      {
-        id: "toe",
-        kind: "box",
-        dimensions: { length: 96, width: 34, height: 2.2 },
-        centerHeight: 1.1,
-        material: "earth",
-        repeatX: 4,
-        repeatY: 2,
-      },
-      {
-        id: "slope-lower",
-        kind: "box",
-        dimensions: { length: 92, width: 26, height: 2.8 },
-        centerHeight: 3.5,
-        material: "grass",
-        repeatX: 5,
-        repeatY: 2,
-      },
-      {
-        id: "slope-upper",
-        kind: "box",
-        dimensions: { length: 88, width: 16, height: 2.6 },
-        centerHeight: 6.2,
-        material: "grass",
-        repeatX: 4,
-        repeatY: 1.5,
-      },
-      {
-        id: "crest",
-        kind: "box",
-        dimensions: { length: 84, width: 8, height: 1.4 },
-        centerHeight: 8.1,
-        material: "asphalt",
-        repeatX: 6,
-        repeatY: 1,
-      },
-      {
-        id: "shoulder",
-        kind: "box",
-        dimensions: { length: 84, width: 1.2, height: 0.7 },
-        offsetNorth: 4.2,
-        centerHeight: 8.55,
-        material: "concrete",
-        repeatX: 8,
-        repeatY: 1,
-      },
-      {
-        id: "crest-badge",
-        kind: "box",
-        dimensions: { length: 6, width: 1.4, height: 0.35 },
-        centerHeight: 8.95,
-        material: "accent",
-        accentHex: "#e8a72d",
-      },
-    ],
-    "retention-basin": [
-      {
-        id: "outer-berm",
-        kind: "cylinder",
-        dimensions: { length: 0, width: 0, height: 3.2 },
-        radius: 42,
-        centerHeight: 1.6,
-        material: "earth",
-        repeatX: 6,
-        repeatY: 2,
-      },
-      {
-        id: "inner-berm",
-        kind: "cylinder",
-        dimensions: { length: 0, width: 0, height: 2.4 },
-        radius: 36,
-        centerHeight: 2.8,
-        material: "grass",
-        repeatX: 5,
-        repeatY: 2,
-      },
-      {
-        id: "pool",
-        kind: "cylinder",
-        dimensions: { length: 0, width: 0, height: 1.1 },
-        radius: 30,
-        centerHeight: 3.4,
-        material: "water",
-        repeatX: 3,
-        repeatY: 3,
-      },
-      {
-        id: "outlet-base",
-        kind: "box",
-        dimensions: { length: 10, width: 10, height: 3 },
-        offsetEast: 30,
-        centerHeight: 2.4,
-        material: "concrete",
-      },
-      {
-        id: "outlet-tower",
-        kind: "box",
-        dimensions: { length: 6, width: 6, height: 7 },
-        offsetEast: 30,
-        centerHeight: 6.5,
-        material: "concrete",
-      },
-      {
-        id: "outlet-pipe",
-        kind: "cylinder",
-        dimensions: { length: 0, width: 0, height: 8 },
-        radius: 1.4,
-        offsetEast: 24,
-        centerHeight: 3.2,
-        material: "metal",
-      },
-      {
-        id: "gate",
-        kind: "box",
-        dimensions: { length: 3, width: 0.6, height: 4 },
-        offsetEast: 30,
-        offsetNorth: 4,
-        centerHeight: 5.5,
-        material: "accent",
-        accentHex: "#2c91d1",
-      },
-    ],
-    "drainage-pump": [
-      {
-        id: "pad",
-        kind: "box",
-        dimensions: { length: 34, width: 28, height: 1.2 },
-        centerHeight: 0.6,
-        material: "concrete",
-        repeatX: 3,
-        repeatY: 2,
-      },
-      {
-        id: "hall",
-        kind: "box",
-        dimensions: { length: 24, width: 18, height: 10 },
-        centerHeight: 6.2,
-        material: "concrete",
-        repeatX: 2,
-        repeatY: 2,
-      },
-      {
-        id: "window-band",
-        kind: "box",
-        dimensions: { length: 20, width: 0.6, height: 2.4 },
-        offsetNorth: 9.2,
-        centerHeight: 6.5,
-        material: "metal",
-      },
-      {
-        id: "roof",
-        kind: "box",
-        dimensions: { length: 26, width: 20, height: 1.6 },
-        centerHeight: 12.2,
-        material: "metal",
-        repeatX: 3,
-        repeatY: 2,
-      },
-      {
-        id: "stack",
-        kind: "cylinder",
-        dimensions: { length: 0, width: 0, height: 9 },
-        radius: 2.2,
-        offsetEast: 7,
-        centerHeight: 16,
-        material: "concrete",
-      },
-      {
-        id: "stack-cap",
-        kind: "cylinder",
-        dimensions: { length: 0, width: 0, height: 1.2 },
-        radius: 2.8,
-        offsetEast: 7,
-        centerHeight: 21,
-        material: "metal",
-      },
-      {
-        id: "intake",
-        kind: "box",
-        dimensions: { length: 8, width: 16, height: 4.5 },
-        offsetEast: -16,
-        centerHeight: 2.8,
-        material: "concrete",
-      },
-      {
-        id: "intake-water",
-        kind: "box",
-        dimensions: { length: 6, width: 12, height: 1.2 },
-        offsetEast: -16,
-        centerHeight: 1.4,
-        material: "water",
-      },
-      {
-        id: "door",
-        kind: "box",
-        dimensions: { length: 0.5, width: 3.2, height: 4.5 },
-        offsetNorth: -9.2,
-        centerHeight: 3.5,
-        material: "accent",
-        accentHex: "#d9673c",
-      },
-    ],
-    revetment: [
-      {
-        id: "riprap",
-        kind: "box",
-        dimensions: { length: 76, width: 18, height: 2.4 },
-        offsetNorth: -3,
-        centerHeight: 1.2,
-        material: "riprap",
-        repeatX: 5,
-        repeatY: 2,
-      },
-      {
-        id: "step-1",
-        kind: "box",
-        dimensions: { length: 72, width: 5, height: 2.2 },
-        offsetNorth: 2,
-        centerHeight: 2.5,
-        material: "concrete",
-        repeatX: 6,
-        repeatY: 1,
-      },
-      {
-        id: "step-2",
-        kind: "box",
-        dimensions: { length: 72, width: 5, height: 2.2 },
-        offsetNorth: 5.5,
-        centerHeight: 4.7,
-        material: "concrete",
-        repeatX: 6,
-        repeatY: 1,
-      },
-      {
-        id: "wall",
-        kind: "box",
-        dimensions: { length: 70, width: 3.5, height: 5.5 },
-        offsetNorth: 8.5,
-        centerHeight: 7.2,
-        material: "concrete",
-        repeatX: 5,
-        repeatY: 2,
-      },
-      {
-        id: "coping",
-        kind: "box",
-        dimensions: { length: 74, width: 5, height: 0.9 },
-        offsetNorth: 8.5,
-        centerHeight: 10.2,
-        material: "concrete",
-        repeatX: 7,
-        repeatY: 1,
-      },
-      {
-        id: "rail",
-        kind: "box",
-        dimensions: { length: 70, width: 0.35, height: 1.1 },
-        offsetNorth: 10.2,
-        centerHeight: 11.1,
-        material: "metal",
-      },
-      {
-        id: "badge",
-        kind: "box",
-        dimensions: { length: 5, width: 0.4, height: 0.5 },
-        offsetNorth: 8.5,
-        centerHeight: 10.8,
-        material: "accent",
-        accentHex: "#8b73d1",
-      },
-    ],
-    "channel-dredging": [
-      {
-        id: "spoil-left",
-        kind: "box",
-        dimensions: { length: 100, width: 8, height: 3.2 },
-        offsetNorth: 18,
-        centerHeight: 1.6,
-        material: "earth",
-        repeatX: 5,
-        repeatY: 1.5,
-      },
-      {
-        id: "spoil-right",
-        kind: "box",
-        dimensions: { length: 100, width: 8, height: 3.2 },
-        offsetNorth: -18,
-        centerHeight: 1.6,
-        material: "earth",
-        repeatX: 5,
-        repeatY: 1.5,
-      },
-      {
-        id: "bench-left",
-        kind: "box",
-        dimensions: { length: 98, width: 5, height: 1.6 },
-        offsetNorth: 11,
-        centerHeight: 0.9,
-        material: "grass",
-      },
-      {
-        id: "bench-right",
-        kind: "box",
-        dimensions: { length: 98, width: 5, height: 1.6 },
-        offsetNorth: -11,
-        centerHeight: 0.9,
-        material: "grass",
-      },
-      {
-        id: "channel",
-        kind: "box",
-        dimensions: { length: 102, width: 18, height: 2.2 },
-        centerHeight: 0.4,
-        material: "water",
-        repeatX: 4,
-        repeatY: 1.5,
-      },
-      {
-        id: "cut-mark",
-        kind: "box",
-        dimensions: { length: 14, width: 2, height: 0.4 },
-        centerHeight: 2.4,
-        material: "accent",
-        accentHex: "#26a682",
-      },
-    ],
+/** Dimensions follow local X (along the bank), Y (across the bank), Z. */
+function box(
+  id: string,
+  length: number,
+  width: number,
+  height: number,
+  centerHeight: number,
+  material: StructureMaterialKind,
+  offsetEast = 0,
+  offsetNorth = 0,
+): StructureModelPart {
+  return {
+    id,
+    kind: "box",
+    dimensions: { length, width, height },
+    centerHeight,
+    material,
+    offsetEast,
+    offsetNorth,
   };
-
-  return (
-    models[structureId] ?? [
-      {
-        id: "facility",
-        kind: "box",
-        dimensions: { length: 22, width: 22, height: 10 },
-        centerHeight: 5,
-        material: "concrete",
-      },
-    ]
-  );
 }
 
-/** ドラッグゴースト用の外接サイズ（m）。 */
+/** Closed prism with a trapezoidal cross-section; four broad sloping/flat faces. */
+function wedge(
+  id: string,
+  length: number,
+  width: number,
+  crestWidth: number,
+  height: number,
+  centerHeight: number,
+  material: StructureMaterialKind,
+  offsetNorth = 0,
+): StructureModelPart {
+  const x = length / 2;
+  const y = width / 2;
+  const c = crestWidth / 2;
+  const z = height / 2;
+  return {
+    ...box(id, length, width, height, centerHeight, material, 0, offsetNorth),
+    kind: "mesh",
+    mesh: {
+      positions: [
+        [-x, -y, -z],
+        [x, -y, -z],
+        [x, y, -z],
+        [-x, y, -z],
+        [-x, -c, z],
+        [x, -c, z],
+        [x, c, z],
+        [-x, c, z],
+      ],
+      indices: [
+        0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3,
+        0, 4, 3, 4, 7,
+      ],
+    },
+  };
+}
+
+/** Rounded rectangular berm: four concentric loops form an actual empty enclosure.
+ * Outer/inner toes sit at z=0; the broad crest is at z=9. No solid lid covers water.
+ */
+function basinBerm(): StructureModelPart {
+  const positions: [number, number, number][] = [];
+  const indices: number[] = [];
+  const loops = [
+    { x: 46, y: 36, r: 14, z: -4.5 },
+    { x: 41, y: 31, r: 12, z: 4.5 },
+    { x: 34, y: 24, r: 8, z: 4.5 },
+    { x: 30, y: 20, r: 6, z: -4.5 },
+  ];
+  for (const { x, y, r, z } of loops) {
+    for (let corner = 0; corner < 4; corner += 1) {
+      const cx = corner === 0 || corner === 3 ? x - r : -x + r;
+      const cy = corner < 2 ? y - r : -y + r;
+      for (let step = 0; step <= 3; step += 1) {
+        const angle = ((corner + step / 3) * Math.PI) / 2;
+        positions.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle), z]);
+      }
+    }
+  }
+  const count = 16;
+  for (let loop = 0; loop < 4; loop += 1) {
+    const nextLoop = (loop + 1) % 4;
+    for (let i = 0; i < count; i += 1) {
+      const next = (i + 1) % count;
+      const a = loop * count + i;
+      const b = loop * count + next;
+      const c = nextLoop * count + next;
+      const d = nextLoop * count + i;
+      indices.push(a, b, c, a, c, d);
+    }
+  }
+  return { ...box("berm", 92, 72, 9, 4.5, "grass"), kind: "mesh", mesh: { positions, indices } };
+}
+
+/**
+ * Broad engineering silhouettes with no decorative badges or subpixel railings.
+ * Keep all slabs at least 0.8 m thick to match the scene renderer's minimum.
+ * These visual dimensions never participate in the hydraulic simulation.
+ */
+export function getStructureModelParts(structureId: string): StructureModelPart[] {
+  switch (structureId) {
+    case "levee":
+      // A continuous raised trapezoid, with a broad crest and visible earth footing.
+      return [
+        box("toe", 98, 38, 2, 1, "earth"),
+        wedge("embankment", 96, 36, 12, 12, 8, "grass"),
+        box("crest", 96, 9, 1, 14.5, "asphalt"),
+      ];
+    case "retention-basin":
+      // Water intersects the inner slope below its crest, leaving a deep visible rim.
+      return [
+        box("bed", 90, 70, 1, 0.5, "earth"),
+        basinBerm(),
+        box("pool", 68, 48, 1, 3, "water"),
+        box("outlet", 10, 12, 12, 6, "concrete", 37),
+        box("outlet-roof", 12, 14, 1.2, 12.6, "metal", 37),
+      ];
+    case "drainage-pump":
+      return [
+        box("pad", 36, 28, 1.2, 0.6, "concrete"),
+        box("hall", 26, 20, 16, 9.2, "concrete"),
+        box("window-band", 20, 0.8, 3.5, 12, "metal", 0, 10.2),
+        box("roof", 30, 24, 2, 18.2, "metal"),
+        box("intake", 10, 16, 2, 1, "concrete", -17),
+        box("intake-water", 7, 12, 0.8, 2.4, "water", -17),
+      ];
+    case "revetment":
+      return [
+        box("riprap", 76, 18, 1.6, 0.8, "riprap", 0, -3),
+        box("apron", 74, 9, 1.6, 1.6, "concrete", 0, 2),
+        wedge("wall", 74, 8, 4, 10, 5, "concrete", 7),
+        box("coping", 76, 6, 1.2, 10.6, "concrete", 0, 7),
+      ];
+    case "channel-dredging":
+      return [
+        box("channel-bed", 102, 32, 0.8, 0.4, "riprap"),
+        wedge("bank-left", 100, 10, 5, 6, 3.8, "earth", 13),
+        wedge("bank-right", 100, 10, 5, 6, 3.8, "earth", -13),
+        box("channel", 102, 22, 1, 1.3, "water"),
+      ];
+    default:
+      return [box("facility", 22, 22, 10, 5, "concrete")];
+  }
+}
+
+/** Symmetric bounds around the placement origin for the drag ghost (meters). */
 export function getStructureFootprintMeters(structureId: string): {
   length: number;
   width: number;
   height: number;
 } {
-  const parts = getStructureModelParts(structureId);
-  let length = 22;
-  let width = 22;
-  let height = 8;
-  for (const part of parts) {
-    if (part.kind === "cylinder") {
-      const diameter = (part.radius ?? 10) * 2;
-      length = Math.max(length, diameter);
-      width = Math.max(width, diameter);
-      height = Math.max(height, part.dimensions?.height ?? part.centerHeight * 2);
-      continue;
-    }
-    if (part.dimensions === undefined) {
-      continue;
-    }
-    length = Math.max(length, part.dimensions.length + Math.abs(part.offsetEast ?? 0) * 2);
-    width = Math.max(width, part.dimensions.width + Math.abs(part.offsetNorth ?? 0) * 2);
-    height = Math.max(height, part.centerHeight + part.dimensions.height * 0.5);
+  let length = 0;
+  let width = 0;
+  let height = 0;
+  for (const part of getStructureModelParts(structureId)) {
+    const diameter = (part.radius ?? 10) * 2;
+    const partLength = part.kind === "cylinder" ? diameter : (part.dimensions?.length ?? 0);
+    const partWidth = part.kind === "cylinder" ? diameter : (part.dimensions?.width ?? 0);
+    length = Math.max(length, partLength + Math.abs(part.offsetEast ?? 0) * 2);
+    width = Math.max(width, partWidth + Math.abs(part.offsetNorth ?? 0) * 2);
+    height = Math.max(height, part.centerHeight + (part.dimensions?.height ?? 0) * 0.5);
   }
   return { length, width, height };
 }

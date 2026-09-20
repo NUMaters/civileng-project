@@ -12,7 +12,7 @@ import {
 } from "../services/floodSimulation";
 
 /** HUD / React への反映間隔。描画側はこれより高頻度で補間する。 */
-const UI_EMIT_SECONDS = 1 / 20;
+const UI_EMIT_SECONDS = 1 / 10;
 /** 1 フレームあたりの物理積分ステップ上限（安定用）。合計は実時間に追いつくまで複数回進める。 */
 const MAX_SIM_STEP_SECONDS = 0.05;
 /** タブ復帰などで一気に飛ばしすぎない上限（秒）。 */
@@ -35,7 +35,10 @@ export type UseFloodSimulationResult = FloodSimulationState & {
   advanceForTest: (seconds: number) => FloodSimulationState;
 };
 
-export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimulationResult {
+export function useFloodSimulation(
+  placements: PlacedStructure[],
+  paused = false,
+): UseFloodSimulationResult {
   const [state, setState] = useState(createInitialFloodState);
   const placementsRef = useRef(placements);
   const stateRef = useRef(state);
@@ -52,7 +55,7 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
   }, [placements]);
 
   useEffect(() => {
-    if (state.phase !== "preparation" && state.phase !== "disaster") {
+    if (paused || (state.phase !== "preparation" && state.phase !== "disaster")) {
       return;
     }
     // 水位は毎フレーム連続で進め、React への通知だけ間引いて階段状の見た目を防ぐ。
@@ -96,7 +99,7 @@ export function useFloodSimulation(placements: PlacedStructure[]): UseFloodSimul
 
     frameId = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(frameId);
-  }, [state.phase]);
+  }, [state.phase, paused]);
 
   const startGame = useCallback(() => {
     setState(() => {
