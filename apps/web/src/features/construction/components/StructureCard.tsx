@@ -33,16 +33,27 @@ export function StructureCard({
     startX: number;
     startY: number;
   } | null>(null);
+  const suppressClickRef = useRef(false);
 
   return (
     <button
       className={`structure-card structure-card--${visual.tone}${selected ? " is-selected" : ""}`}
       disabled={disabled}
-      onClick={() => onSelect(structure.id)}
+      onClick={(event) => {
+        // Pointer capture can still synthesize a click after a touch drag. That click would
+        // call selectStructure and clear the pending placement we just dropped on the river.
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          event.preventDefault();
+          return;
+        }
+        onSelect(structure.id);
+      }}
       onPointerDown={(event) => {
         if (disabled || event.button !== 0) {
           return;
         }
+        suppressClickRef.current = false;
         // preventDefault しない＝横スクロールを阻害しない
         onSelect(structure.id);
         const target = event.currentTarget;
@@ -74,6 +85,7 @@ export function StructureCard({
             return;
           }
           // 配置ドラッグ確定: 即 touch-action を止め、capture で指を追う
+          suppressClickRef.current = true;
           try {
             target.style.touchAction = "none";
             target.setPointerCapture(pointerId);
