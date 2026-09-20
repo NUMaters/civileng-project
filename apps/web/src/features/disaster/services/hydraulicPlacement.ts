@@ -6,6 +6,24 @@ import {
 } from "../../../components/GameCanvas/abukumaRiverGeometry";
 import { nearestPointOnPolyline } from "../../../components/GameCanvas/riverPlacement";
 
+/** 長軸が heading+90 度の施設は、川の接線に長軸を合わせて仮配置する。 */
+export function suggestedStructureHeading(
+  structureId: string,
+  position: { longitude: number; latitude: number },
+): number {
+  const { channelHeadingDegrees } = getRiverPlacementContext(
+    position.longitude,
+    position.latitude,
+    0,
+  );
+  const alongChannel =
+    structureId === "levee" ||
+    structureId === "revetment" ||
+    structureId === "channel-dredging" ||
+    structureId === "retention-basin";
+  return (channelHeadingDegrees + (alongChannel ? 270 : 0)) % 360;
+}
+
 export type RiverPlacementContext = {
   /** 中心線までの距離（m）。 */
   distanceToCenterlineMeters: number;

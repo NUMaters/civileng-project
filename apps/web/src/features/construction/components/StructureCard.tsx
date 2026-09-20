@@ -4,6 +4,24 @@ import { formatBudget } from "../services/constructionService";
 import { getStructureVisual } from "../structureVisuals";
 import type { StructureDefinition } from "../types/construction";
 
+const TOOL_PURPOSES: Record<string, string> = {
+  levee: "せき止める",
+  "retention-basin": "ためる",
+  "drainage-pump": "くみ出す",
+  revetment: "岸を守る",
+  "channel-dredging": "流れを広げる",
+};
+
+const TOOL_SILHOUETTES: Record<string, string> = {
+  levee: "M5 32 17 12h10l12 20Z M17 12l5 20 M5 37h34",
+  "retention-basin": "M5 15v16q17 10 34 0V15 M5 15q17-10 34 0-17 10-34 0Z M11 27q11 6 22 0",
+  "drainage-pump":
+    "M7 35V19h18v16Z M11 19v-7h10v7 M25 26h7V12h7 M11 35h10 M13 26h6 M35 18v5m-3-3 3 3 3-3",
+  revetment: "M5 35 19 10h8L17 35Z M15 18h12 M11 26h12 M26 31q3-3 6 0t7 0 M24 37q3-3 6 0t9 0",
+  "channel-dredging":
+    "M4 13h7l6 22h10l6-22h7 M17 14h10 M22 14v14m-4-4 4 4 4-4 M3 24h7m-3-3 3 3-3 3 M41 24h-7m3-3-3 3 3 3",
+};
+
 type StructureCardProps = {
   structure: StructureDefinition;
   selected: boolean;
@@ -120,19 +138,27 @@ export function StructureCard({
       type="button"
       aria-pressed={selected}
       aria-grabbed={selected}
+      aria-label={`${structure.displayName}、${TOOL_PURPOSES[structure.id] ?? "川を守る"}、${formatBudget(structure.constructionCost)}${disabled ? "、予算不足" : ""}`}
     >
       <span className="structure-card__thumb" aria-hidden="true">
-        <img
+        <svg
           className="structure-card__image"
-          src={visual.imageSrc}
-          alt=""
-          draggable={false}
-          width={56}
-          height={56}
-        />
+          viewBox="0 0 44 44"
+          width={36}
+          height={36}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          focusable="false"
+        >
+          <path d={TOOL_SILHOUETTES[structure.id] ?? TOOL_SILHOUETTES.levee} />
+        </svg>
       </span>
       <span className="structure-card__body">
         <strong>{structure.displayName}</strong>
+        <span className="structure-card__purpose">{TOOL_PURPOSES[structure.id] ?? "川を守る"}</span>
         <small>{formatBudget(structure.constructionCost)}</small>
       </span>
       {selected ? <span className="structure-card__check" aria-hidden="true" /> : null}

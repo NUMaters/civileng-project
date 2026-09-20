@@ -24,12 +24,12 @@ export function TutorialCoachmark({
       {step === 1 ? (
         <>
           <strong>下のドックから施設を選び、川へドラッグ</strong>
-          <p>カードを上方向にスワイプして、黄色い配置帯へドロップします。</p>
+          <p>カードを川や河岸へ運んで離し、「配置する」で建設します。</p>
         </>
       ) : (
         <>
-          <strong>向きを調整して ✓ で確定</strong>
-          <p>施設上のスライダーで向きを変え、チェックで配置を確定します。</p>
+          <strong>場所を確認して「配置する」</strong>
+          <p>施設をドラッグして微調整。向きは下のスライダーで変えられます。</p>
         </>
       )}
       <button className="tutorial-coach__skip" type="button" onClick={onDismiss}>

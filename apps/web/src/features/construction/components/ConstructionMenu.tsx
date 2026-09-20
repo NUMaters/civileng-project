@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { getHazardKindLabel } from "@civilcraft/game-data/types";
 import { formatBudget } from "../services/constructionService";
 import { getStructureEffectLabel, getStructureZoneMeaning } from "../structureVisuals";
 import type { StructureDefinition } from "../types/construction";
 import { StructureCard } from "./StructureCard";
 import { effectRangeLabel } from "../../hud/commandCenterUtils";
+import "./construction-dock.css";
 
 type ConstructionMenuProps = {
   budget: number;
@@ -30,6 +31,7 @@ export function ConstructionMenu({
 }: ConstructionMenuProps) {
   const selected = structures.find(({ id }) => id === selectedStructureId);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const detailsId = useId();
 
   useEffect(() => {
     setDetailsOpen(false);
@@ -38,19 +40,16 @@ export function ConstructionMenu({
   return (
     <section className="cmd-dock" aria-label="建設ドック">
       {selected !== undefined ? (
-        <div className={`cmd-dock__tooltip${detailsOpen ? " is-expanded" : ""}`} key={selected.id}>
+        <div
+          className={`cmd-dock__tooltip${detailsOpen ? " is-expanded" : ""}`}
+          key={selected.id}
+          id={detailsId}
+          hidden={!detailsOpen}
+        >
           <header className="cmd-dock__tooltip-head">
             <strong>{selected.displayName}</strong>
             <span>{formatBudget(selected.constructionCost)}</span>
           </header>
-          <button
-            className="cmd-dock__tooltip-toggle"
-            type="button"
-            aria-expanded={detailsOpen}
-            onClick={() => setDetailsOpen((open) => !open)}
-          >
-            {detailsOpen ? "閉じる" : "詳細"}
-          </button>
           <p className="cmd-dock__tooltip-desc">{selected.description}</p>
           <dl className="cmd-dock__tooltip-meta">
             <div>
@@ -76,11 +75,20 @@ export function ConstructionMenu({
 
       <div className="cmd-dock__bar">
         <div className="cmd-dock__label">
-          <span>施設</span>
-          <small className="cmd-dock__hint">カードを選択して川へドラッグ</small>
-          <small className="cmd-dock__scroll-hint" aria-hidden="true">
-            ← 横にスワイプ →
-          </small>
+          <span>治水ツール</span>
+          <small className="cmd-dock__hint">上へドラッグして川に配置</small>
+          {selected !== undefined ? (
+            <button
+              className="cmd-dock__tooltip-toggle"
+              type="button"
+              aria-label={`${selected.displayName}の詳細${detailsOpen ? "を閉じる" : "を見る"}`}
+              aria-expanded={detailsOpen}
+              aria-controls={detailsId}
+              onClick={() => setDetailsOpen((open) => !open)}
+            >
+              {detailsOpen ? "閉じる" : "詳細"}
+            </button>
+          ) : null}
         </div>
         <div className="cmd-dock__list">
           {structures.map((structure) => (

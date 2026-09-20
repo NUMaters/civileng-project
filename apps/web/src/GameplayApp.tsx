@@ -5,15 +5,12 @@ import { MapBootFallback } from "./components/GameCanvas/MapBootFallback";
 import { GameToast } from "./components/GameToast";
 import { ConstructionMenu, useConstruction } from "./features/construction";
 import type { GeoPosition } from "./features/construction/types/construction";
-import { CommandStatusPanel } from "./features/hud/CommandStatusPanel";
-import { HudLegend } from "./features/hud/HudLegend";
-import { HudMinimap } from "./features/hud/HudMinimap";
-import { MobileHudPanel } from "./features/hud/MobileHudPanel";
+import { RiverMissionHud } from "./features/hud/RiverMissionHud";
 import { TutorialCoachmark } from "./features/hud/TutorialCoachmark";
 import { hasSeenTutorial, markTutorialDone } from "./features/hud/tutorialStorage";
 import "./command-hud.css";
+import "./river-game.css";
 import {
-  FloodHud,
   FloodResultPanel,
   RainOverlay,
   ReviewModeBar,
@@ -51,13 +48,6 @@ const MOVE_SEND_THROTTLE_MS = 400;
 /** ローカル単独プレイではWS再接続を止め、開発サーバーのプロキシ負荷を避ける。 */
 const REALTIME_ENABLED = import.meta.env.VITE_REALTIME_ENABLED === "true";
 
-const statusLabel: Record<string, string> = {
-  connecting: "同期中",
-  connected: "連携中",
-  disconnected: "単独プレイ",
-  error: "通信エラー",
-};
-
 type GameplayAppProps = {
   playMode: PlayMode;
   inGame: boolean;
@@ -84,7 +74,9 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   } = construction;
   // 仮配置（preview）も含め、設置調整中から影響圏を地図に出す。
   // 数値の治水効果は floodSimulation 側で preview を除外する。
-  const flood = useFloodSimulation(construction.visiblePlacements);
+  const [paused, setPaused] = useState(false);
+  const [mapReady, setMapReady] = useState(false);
+  const flood = useFloodSimulation(construction.visiblePlacements, paused || !inGame || !mapReady);
   const { advanceForTest, getLatestState, phase, restart, startFreshGame, startRainNow } = flood;
   const socket = useGameSocket(REALTIME_ENABLED && playMode === "multi");
   const mapRef = useRef<CesiumGameMapHandle>(null);
@@ -95,16 +87,15 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   const [showTutorial, setShowTutorial] = useState(() => !hasSeenTutorial());
 
   useEffect(() => {
-    if (!inGame) {
-      return;
-    }
-    setEconomyPhase(phase);
-  }, [inGame, phase, setEconomyPhase]);
-
-  useEffect(() => {
     resetSession();
     startFreshGame();
+    setPaused(false);
+    mapRef.current?.resetCamera();
   }, [sessionId, resetSession, startFreshGame]);
+
+  useEffect(() => {
+    setEconomyPhase(inGame && !paused && mapReady ? phase : "idle");
+  }, [inGame, phase, paused, mapReady, sessionId, setEconomyPhase]);
 
   // 開発時のみ E2E から配置・状況取得できるようにする。
   useEffect(() => {
@@ -204,7 +195,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   }, [confirmPendingPlacement, socket]);
 
   useEffect(() => {
-    if (!inGame || pendingPlacement === null) {
+    if (!inGame || paused || pendingPlacement === null) {
       return;
     }
     const onKeyDown = (event: KeyboardEvent) => {
@@ -220,7 +211,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [inGame, cancelPendingPlacement, pendingPlacement, handleConfirmPlacement]);
+  }, [inGame, paused, cancelPendingPlacement, pendingPlacement, handleConfirmPlacement]);
 
   const handleCameraFocusChange = useCallback(
     (position: GeoPosition) => {
@@ -235,6 +226,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   );
 
   const handleReturnToMenu = useCallback(() => {
+    setPaused(false);
     resetSession();
     restart();
     onReturnToMenu();
@@ -371,6 +363,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
       <Suspense fallback={<MapBootFallback />}>
         <CesiumGameMap
           ref={mapRef}
+          onReadyChange={setMapReady}
           mapActive={inGame}
           placements={construction.visiblePlacements}
           structures={construction.structures}
@@ -391,45 +384,14 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
 
       {inGame && !hideConstructionUi ? (
         <div className="hud-frame" aria-hidden={false}>
-          <FloodHud
-            phase={flood.phase}
-            phaseRemainingSeconds={flood.phaseRemainingSeconds}
-            rainfallIntensity={flood.rainfallIntensity}
-            riverLevelMeters={flood.riverLevelMeters}
-            overflowMeters={flood.overflowMeters}
-            floodDepthMeters={flood.floodDepthMeters}
-            damagePercent={flood.damagePercent}
-            overflowSites={flood.overflowSites}
-            floodedAreaPercent={flood.floodedAreaPercent}
-            mitigation={flood.mitigation}
-            onStartGame={flood.startGame}
-            onStartRainNow={flood.startRainNow}
-            onExit={handleReturnToMenu}
-          />
-
-          <CommandStatusPanel
+          <RiverMissionHud
+            flood={flood}
             budget={construction.budget}
-            budgetRatio={construction.budgetRatio}
             incomeLabel={construction.incomeLabel}
-            netIncomePerSecond={construction.netIncomePerSecond}
-            damagePercent={flood.damagePercent}
-            mitigation={flood.mitigation}
-            socketStatus={playMode === "multi" ? socket.status : undefined}
-            socketLabel={playMode === "multi" ? statusLabel[socket.status] : undefined}
-          />
-
-          <div className="hud-frame__desktop">
-            <HudLegend phase={flood.phase} />
-            <HudMinimap
-              damagePercent={flood.damagePercent}
-              overflowSiteCount={flood.overflowSites.length}
-            />
-          </div>
-
-          <MobileHudPanel
-            phase={flood.phase}
-            damagePercent={flood.damagePercent}
-            overflowSiteCount={flood.overflowSites.length}
+            paused={paused}
+            onPause={setPaused}
+            onStartRain={flood.startRainNow}
+            onExit={handleReturnToMenu}
           />
         </div>
       ) : null}
@@ -444,6 +406,28 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
             setShowTutorial(false);
           }}
         />
+      ) : null}
+
+      {inGame && !hideConstructionUi && !hasPendingPlacement ? (
+        <button
+          type="button"
+          className="river-recenter"
+          aria-label="川の中心へ視点を戻す"
+          onClick={() => mapRef.current?.resetCamera()}
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="6" />
+            <path d="M12 2v5m0 10v5M2 12h5m10 0h5" />
+          </svg>
+        </button>
       ) : null}
 
       {inGame && !hideConstructionUi ? (
@@ -481,6 +465,11 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
           placementCount={construction.placements.length}
           onEnterReview={flood.enterReviewMode}
           onStartNewGame={handleReturnToMenu}
+          onRetry={() => {
+            resetSession();
+            startFreshGame();
+            mapRef.current?.resetCamera();
+          }}
         />
       ) : null}
 
@@ -500,14 +489,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
                 className="review-mode-legend__swatch review-mode-legend__swatch--influence"
                 aria-hidden="true"
               />
-              施設の影響圏
-            </span>
-            <span>
-              <i
-                className="review-mode-legend__swatch review-mode-legend__swatch--risk"
-                aria-hidden="true"
-              />
-              決壊・注意地点
+              配置した治水施設
             </span>
           </div>
           <ReviewModeBar

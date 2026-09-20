@@ -52,13 +52,14 @@ const MOBILE_PROFILE: CesiumRenderProfile = {
   // 描画負荷は解像度・SSE・簡略化したエフェクト側で抑える。
   loadBuildings: true,
   usePlateauTerrain: false,
-  imageryMaximumLevel: 16,
+  // Allow close-up photo detail; tile selection still follows the camera's visible area.
+  imageryMaximumLevel: 18,
   dynamicFrameIntervalMs: 1000 / 18,
   // 施設ラベルはHTMLオーバーレイなので、低コストでカメラ移動への追従を改善できる。
   overlayFrameIntervalMs: 1000 / 24,
   skyAtmosphere: false,
   stormEffects: false,
-  waterFlowStreakCount: 4,
+  waterFlowStreakCount: 2,
   waterFrameIntervalMs: 1000 / 12,
   waterUseNormalMap: false,
   rainMaxDrops: 22,
@@ -74,14 +75,18 @@ const MOBILE_SAFE_PROFILE: CesiumRenderProfile = {
   resolutionScaleFloor: 0.45,
   globeMaximumScreenSpaceError: 12,
   buildingMaximumScreenSpaceError: 26,
-  imageryMaximumLevel: 15,
+  imageryMaximumLevel: 17,
   overlayFrameIntervalMs: 1000 / 20,
 };
 
 let cachedProfile: CesiumRenderProfile | null = null;
 
 function isMobileViewport(): boolean {
-  return typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
+  return (
+    typeof window !== "undefined" &&
+    (window.matchMedia("(max-width: 720px)").matches ||
+      window.matchMedia("(pointer: coarse) and (max-width: 1200px)").matches)
+  );
 }
 
 function isLowEndDevice(): boolean {
@@ -103,7 +108,13 @@ function hasDeviceMemorySignal(): boolean {
 export function resolveCesiumRenderProfile(): CesiumRenderProfile {
   if (isMobileViewport()) {
     if (isLowEndDevice()) {
-      return { ...MOBILE_PROFILE, loadBuildings: false };
+      return {
+        ...MOBILE_SAFE_PROFILE,
+        // Keep the surrounding town three-dimensional even on low-end phones.
+        buildingMaximumScreenSpaceError: 32,
+        waterFlowStreakCount: 0,
+        rainMaxDrops: 12,
+      };
     }
     if (!hasDeviceMemorySignal()) {
       return MOBILE_SAFE_PROFILE;
