@@ -26,7 +26,7 @@ describe("source river boundary", () => {
     const source = data();
     source.features.push(...data("basin", "basin").features);
     const world = createGeographicWorld(source, { surfaceSampler: (x, z, _layer, feature) =>
-      feature.properties.water === "basin" ? 20 : 3 + x / 100 + z / 200 });
+      "water" in feature.properties && feature.properties.water === "basin" ? 20 : 3 + x / 100 + z / 200 });
     try {
       const sample = createRiverSurfaceSampler(world.waterMeshes), stage = createRiverStageController(world.waterMeshes);
       const ray = new THREE.Raycaster(new THREE.Vector3(-20, 100, 30), new THREE.Vector3(0, -1, 0));
