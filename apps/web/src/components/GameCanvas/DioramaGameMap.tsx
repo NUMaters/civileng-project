@@ -29,6 +29,7 @@ import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
+import { FACILITY_LABEL_MARGIN, layoutFacilityLabel, type FacilityLabelLayout } from "./facilityLabelLayout";
 
 type Runtime = {
   renderer: T.WebGLRenderer;
@@ -64,6 +65,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       return () => controller.abort();
     }, []);
     const labels = useRef(new Map<string, HTMLDivElement>());
+    const labelSizes = useRef(new WeakMap<Element, { width: number; height: number }>());
+    const labelSizeObserver = useRef<ResizeObserver | null>(null);
     const npcMarkers = useRef(new Map<string, HTMLButtonElement>());
     const guidanceLabel = useRef<HTMLDivElement>(null);
     const placementActions = useRef<HTMLDivElement>(null);
@@ -379,6 +382,60 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       const observer = new ResizeObserver(resize);
       observer.observe(container);
       resize();
+      // Measure only on size/overlay changes, never after transform writes in draw().
+      const labelBounds = { left: 0, top: 0, right: 0, bottom: 0 };
+      const shell = container.closest(".game-shell") ?? container.parentElement!;
+      let hud: Element | null = null, dock: Element | null = null;
+      const measureLabelBounds = () => {
+        const rect = container.getBoundingClientRect();
+        labelBounds.left = FACILITY_LABEL_MARGIN;
+        labelBounds.right = rect.width - FACILITY_LABEL_MARGIN;
+        labelBounds.top = FACILITY_LABEL_MARGIN;
+        labelBounds.bottom = rect.height - FACILITY_LABEL_MARGIN;
+        for (const element of [hud, dock]) {
+          if (!element) continue;
+          const style = getComputedStyle(element);
+          if (style.display === "none" || style.visibility === "hidden") continue;
+          const obstacle = element.getBoundingClientRect();
+          if (obstacle.width <= 0 || obstacle.height <= 0 || obstacle.right <= rect.left || obstacle.left >= rect.right) continue;
+          if (element === hud) labelBounds.top = Math.max(labelBounds.top, obstacle.bottom - rect.top + FACILITY_LABEL_MARGIN);
+          else labelBounds.bottom = Math.min(labelBounds.bottom, obstacle.top - rect.top - FACILITY_LABEL_MARGIN);
+        }
+      };
+      const boundsObserver = new ResizeObserver(measureLabelBounds);
+      boundsObserver.observe(container);
+      const refreshLabelObstacles = () => {
+        const nextHud = shell.querySelector(".river-hud"), nextDock = shell.querySelector(".cmd-dock");
+        if (hud !== nextHud) {
+          if (hud) boundsObserver.unobserve(hud);
+          hud = nextHud;
+          if (hud) boundsObserver.observe(hud);
+        }
+        if (dock !== nextDock) {
+          if (dock) boundsObserver.unobserve(dock);
+          dock = nextDock;
+          if (dock) boundsObserver.observe(dock);
+        }
+        measureLabelBounds();
+      };
+      // Direct shell changes cover HUD/dock mount/unmount and preview's hidden dock.
+      // Do not observe label attributes/text: those are intentionally updated in draw().
+      const shellObserver = new MutationObserver(refreshLabelObstacles);
+      shellObserver.observe(shell, { childList: true, attributes: true, attributeFilter: ["class"] });
+      refreshLabelObstacles();
+      const sizeObserver = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const border = entry.borderBoxSize[0];
+          const size = border ? { width: border.inlineSize, height: border.blockSize } : entry.target.getBoundingClientRect();
+          labelSizes.current.set(entry.target, { width: size.width, height: size.height });
+        }
+      });
+      labelSizeObserver.current = sizeObserver;
+      for (const element of labels.current.values()) sizeObserver.observe(element);
+      const labelLayout: FacilityLabelLayout = {
+        x: 0, y: 0, pointerSide: "bottom", pointerHeight: 7, pointerBaseX: 0, pointerTipX: 0,
+        pointerLeft: 0, pointerWidth: 0,
+      };
       let frame = 0,
         last = performance.now(),
         time = 0;
@@ -434,17 +491,29 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
           if (!model) {
-            element.style.display = "none";
+            element.style.visibility = "hidden";
             continue;
           }
           const point = projectedPoint.copy(model.position);
           point.y += 35;
           point.project(camera);
-          const visible =
-            point.z < 1 && point.z > -1 && Math.abs(point.x) < 1.1 && Math.abs(point.y) < 1.1;
-          element.style.display = visible ? "" : "none";
-          if (visible)
-            element.style.transform = `translate(${(point.x * 0.5 + 0.5) * viewportWidth}px,${(-point.y * 0.5 + 0.5) * viewportHeight}px) translate(-50%,-100%)`;
+          const size = labelSizes.current.get(element);
+          const visible = point.z < 1 && point.z > -1 && Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1 &&
+            size !== undefined && layoutFacilityLabel(
+              (point.x * 0.5 + 0.5) * viewportWidth, (-point.y * 0.5 + 0.5) * viewportHeight,
+              size.width, size.height, labelBounds, labelLayout,
+            );
+          // visibility preserves measurement while hidden, unlike display:none.
+          element.style.visibility = visible ? "visible" : "hidden";
+          if (visible) {
+            element.style.transform = `translate(${labelLayout.x}px,${labelLayout.y}px)`;
+            element.dataset.pointerSide = labelLayout.pointerSide;
+            element.style.setProperty("--facility-pointer-height", `${labelLayout.pointerHeight}px`);
+            element.style.setProperty("--facility-pointer-base-x", `${labelLayout.pointerBaseX}px`);
+            element.style.setProperty("--facility-pointer-tip-x", `${labelLayout.pointerTipX}px`);
+            element.style.setProperty("--facility-pointer-left", `${labelLayout.pointerLeft}px`);
+            element.style.setProperty("--facility-pointer-width", `${labelLayout.pointerWidth}px`);
+          }
         }
         for (const npc of latest.current.npcMarkers ?? []) {
           const element = npcMarkers.current.get(npc.id);
@@ -544,6 +613,10 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       return () => {
         cancelAnimationFrame(frame);
         observer.disconnect();
+        boundsObserver.disconnect();
+        shellObserver.disconnect();
+        sizeObserver.disconnect();
+        if (labelSizeObserver.current === sizeObserver) labelSizeObserver.current = null;
         renderer.domElement.removeEventListener("pointerdown", pointerDown);
         renderer.domElement.removeEventListener("pointermove", pointerMove);
         renderer.domElement.removeEventListener("pointerup", pointerUp);
@@ -641,8 +714,12 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
               }
               key={p.id}
               ref={(el) => {
-                if (el) labels.current.set(p.id, el);
-                else labels.current.delete(p.id);
+                const previous = labels.current.get(p.id);
+                if (previous) labelSizeObserver.current?.unobserve(previous);
+                if (el) {
+                  labels.current.set(p.id, el);
+                  labelSizeObserver.current?.observe(el);
+                } else labels.current.delete(p.id);
               }}
             >
               <strong>{labelFor(p)}</strong>
