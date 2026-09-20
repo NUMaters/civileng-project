@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GEOGRAPHIC_MATERIAL_PALETTE } from "./geographicMaterialPalette";
 import { createGeographicBuildingMaterial, BUILDING_DECORATION_PROVENANCE } from "./geographicBuildingMaterial";
 import { createGeographicRoof, type GeographicRoof } from "./geographicRoof";
 import { groundY } from "./dioramaSpace";
@@ -78,8 +79,8 @@ type Layer = "building" | "campus" | "water" | "waterway" | "road" | "rail" | "b
 export type GeographicSurfaceLayer = Exclude<Layer, "building">;
 type Buffer = { layer: Layer; tx: number; tz: number; positions: number[]; normals: number[]; colors: number[]; uvs: number[]; roofMasks: number[]; riverStageEligible: boolean; sourceIds: Set<string> };
 type Point = LocalPoint & { u?: number; v?: number; roofMask?: number };
-const COLORS = ["#438edb", "#638bad", "#d87c55", "#50a7d7", "#df9966"].map((c) => new THREE.Color(c));
-const WALL_COLOR = new THREE.Color("#f6e8c9");
+const COLORS = GEOGRAPHIC_MATERIAL_PALETTE.roofs.map((c) => new THREE.Color(c));
+const WALL_COLOR = new THREE.Color(GEOGRAPHIC_MATERIAL_PALETTE.wall);
 const SURFACE_COLORS: Record<Exclude<Layer, "building">, THREE.Color> = {
   campus: new THREE.Color("#9bd675"), water: new THREE.Color("#4dbada"),
   waterway: new THREE.Color("#4dbada"), road: new THREE.Color("#ded0af"),
