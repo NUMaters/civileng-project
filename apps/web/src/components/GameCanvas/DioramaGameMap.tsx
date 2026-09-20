@@ -584,7 +584,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           const size = labelSizes.current.get(element);
           const envelope = labelEnvelopes.current.get(model);
           // Update this transform only, not its children. Cached local geometry follows
-          // placement, heading and pop scale with 22 bounded point projections.
+          // placement, heading and pop scale with the cached static hull boundary.
           model.updateWorldMatrix(true, false);
           labelClipMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(model.matrixWorld);
           const visible = size !== undefined && envelope !== undefined &&

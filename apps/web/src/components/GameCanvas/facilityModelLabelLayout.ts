@@ -1,49 +1,61 @@
 import * as T from "three";
+import { ConvexHull } from "three/addons/math/ConvexHull.js";
 import { layoutFacilityLabel, type FacilityLabelBounds, type FacilityLabelLayout } from "./facilityLabelLayout";
 
 export const FACILITY_BODY_GAP = 7;
 export const MAX_FACILITY_POINTER_LENGTH = 32;
 export type FacilityLabelEnvelope = {
   corners: readonly T.Vector3[];
-  /** Bounded support vertices on actual static geometry, not empty box corners. */
+  /** Exact static convex-hull boundary vertices, not a fixed directional sample. */
   supports: readonly T.Vector3[];
+  sourcePointCount: number;
+  uniquePointCount: number;
 };
 export type ProjectedFacilityBody = FacilityLabelBounds & {
   topX: number; topY: number; bottomX: number; bottomY: number;
 };
 
-/** Call once, before attaching operation effects. Cache 8 box corners and at most
- * 14 actual geometry support vertices. Never walk the scene tree during label layout.
+/** Call once, before attaching operation effects. Cache 8 box corners and the
+ * exact boundary vertices of the static geometry's convex hull. Never walk the
+ * scene tree during label layout.
  */
 export function cacheFacilityLabelEnvelope(model: T.Group): FacilityLabelEnvelope {
   model.updateWorldMatrix(true, true);
   const inverse = model.matrixWorld.clone().invert();
   const box = new T.Box3();
-  const directions = [new T.Vector3(1, 0, 0), new T.Vector3(-1, 0, 0),
-    new T.Vector3(0, 1, 0), new T.Vector3(0, -1, 0), new T.Vector3(0, 0, 1), new T.Vector3(0, 0, -1)];
-  for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) directions.push(new T.Vector3(x, y, z));
-  const best = directions.map(() => -Infinity), supports = directions.map(() => new T.Vector3());
-  const point = new T.Vector3(), matrix = new T.Matrix4();
+  let sourcePointCount = 0;
+  const uniquePoints = new Map<string, T.Vector3>(), point = new T.Vector3(), matrix = new T.Matrix4();
   model.traverse(object => {
     if (!(object instanceof T.Mesh)) return;
     const positions = object.geometry.getAttribute("position");
-    if (!positions) return;
-    matrix.multiplyMatrices(inverse, object.matrixWorld);
-    for (let i = 0; i < positions.count; i++) {
-      point.fromBufferAttribute(positions, i).applyMatrix4(matrix);
-      box.expandByPoint(point);
-      for (let j = 0; j < directions.length; j++) {
-        const score = point.dot(directions[j]);
-        if (score > best[j]) { best[j] = score; supports[j].copy(point); }
+      if (!positions) return;
+      matrix.multiplyMatrices(inverse, object.matrixWorld);
+      for (let i = 0; i < positions.count; i++) {
+        point.fromBufferAttribute(positions, i).applyMatrix4(matrix);
+        box.expandByPoint(point);
+        sourcePointCount++;
+        const key = `${point.x},${point.y},${point.z}`;
+        if (!uniquePoints.has(key)) uniquePoints.set(key, point.clone());
       }
-    }
   });
-  if (box.isEmpty()) return { corners: [], supports: [] };
+  if (box.isEmpty()) return { corners: [], supports: [], sourcePointCount, uniquePointCount: 0 };
   const corners: T.Vector3[] = [];
   for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) {
     for (const z of [box.min.z, box.max.z]) corners.push(new T.Vector3(x, y, z));
   }
-  return { corners, supports };
+  const points = [...uniquePoints.values()];
+  const hull = new ConvexHull().setFromPoints(points);
+  const boundary = new Set<T.Vector3>();
+  for (const face of hull.faces) {
+    if (face.mark !== 0) continue;
+    let edge = face.edge;
+    do {
+      boundary.add(edge.head().point);
+      edge = edge.next;
+    } while (edge !== face.edge);
+  }
+  const supports = boundary.size > 0 ? [...boundary].map(p => p.clone()) : points;
+  return { corners, supports, sourcePointCount, uniquePointCount: points.length };
 }
 
 /** Project only the bounded cache using the current model-view-projection matrix.
@@ -58,18 +70,26 @@ export function projectFacilityBody(
   out.left = out.top = out.topY = Infinity;
   out.right = out.bottom = out.bottomY = -Infinity;
   const e = clip.elements;
+  // Keep the cached AABB corners as a cheap conservative clip/near-plane
+  // check for the caller's existing fail-closed semantics. Bounds themselves
+  // come only from the exact convex-hull boundary below.
   for (const corner of envelope.corners) {
     const w = e[3] * corner.x + e[7] * corner.y + e[11] * corner.z + e[15];
     if (!Number.isFinite(w) || w <= 0) return false;
     point.copy(corner).applyMatrix4(clip);
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !Number.isFinite(point.z) || point.z < -1 || point.z > 1) return false;
-    const x = (point.x * 0.5 + 0.5) * width, y = (-point.y * 0.5 + 0.5) * height;
+  }
+  // With positive clip-space w, perspective projection is a linear-fractional
+  // map, so each screen-axis extremum of the convex hull is attained at a
+  // cached boundary vertex.
+  // This loop is bounded by the creation-time hull, not by the current scene
+  // geometry.
+  for (const support of envelope.supports) {
+    const projected = point.copy(support).applyMatrix4(clip);
+    const x = (projected.x * 0.5 + 0.5) * width, y = (-projected.y * 0.5 + 0.5) * height;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
     out.left = Math.min(out.left, x); out.right = Math.max(out.right, x);
     out.top = Math.min(out.top, y); out.bottom = Math.max(out.bottom, y);
-  }
-  for (const support of envelope.supports) {
-    point.copy(support).applyMatrix4(clip);
-    const x = (point.x * 0.5 + 0.5) * width, y = (-point.y * 0.5 + 0.5) * height;
     if (y < out.topY) { out.topY = y; out.topX = x; }
     if (y > out.bottomY) { out.bottomY = y; out.bottomX = x; }
   }

@@ -64,7 +64,7 @@ it("caches a fixed 8-corner envelope and actual geometry attachment points", () 
   const model = createDioramaFacility("drainage-pump");
   const cached = cacheFacilityLabelEnvelope(model);
   expect(cached.corners).toHaveLength(8);
-  expect(cached.supports).toHaveLength(14);
+  expect(cached.supports.length).toBeGreaterThan(14);
   const vertices = new Set<string>();
   model.traverse(object => {
     if (!(object instanceof T.Mesh)) return;
@@ -79,38 +79,63 @@ it("caches a fixed 8-corner envelope and actual geometry attachment points", () 
   disposeDioramaObject(model);
 });
 
-it.each([0, 90, 140])("clears the actual projected pump at heading %s after zoom/pop transforms", heading => {
-  const model = createDioramaFacility("drainage-pump"), envelope = cacheFacilityLabelEnvelope(model);
+const FACILITY_MODEL_IDS = ["levee", "retention-basin", "drainage-pump", "revetment", "channel-dredging"];
+
+it.each(FACILITY_MODEL_IDS)("matches projected convex-hull extrema for %s across headings and pitches", structureId => {
+  const model = createDioramaFacility(structureId), envelope = cacheFacilityLabelEnvelope(model);
   const camera = new T.PerspectiveCamera(43, 390 / 700, 1, 6000);
-  camera.setViewOffset(390, 700, -85, 70, 390, 700);
   model.position.set(14, 3, -10);
-  model.rotation.y = -T.MathUtils.degToRad(heading);
   model.scale.setScalar(1.05);
-  model.updateWorldMatrix(true, false);
   const target = model.position.clone().add(new T.Vector3(0, 11.5, 0));
-  const point = new T.Vector3(), projected = body(), matrix = new T.Matrix4(), out = layout();
-  for (const zoom of [1, 1.3]) {
-    camera.position.copy(target).add(new T.Vector3(70, 130, 145).multiplyScalar(zoom));
+  const point = new T.Vector3(), projected = body(), matrix = new T.Matrix4();
+  for (const heading of [0, 90, 140]) for (const direction of [new T.Vector3(70, 130, 145), new T.Vector3(70, 220, 80)]) {
+    model.rotation.y = -T.MathUtils.degToRad(heading);
+    model.updateWorldMatrix(true, true);
+    camera.position.copy(target).add(direction);
     camera.lookAt(target); camera.updateMatrixWorld(true);
-    matrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(model.matrixWorld);
+    const viewProjection = new T.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    matrix.multiplyMatrices(viewProjection, model.matrixWorld);
     expect(projectFacilityBody(envelope, matrix, 390, 700, projected, point)).toBe(true);
-    expect(layoutFacilityLabelOutsideBody(projected, 240, 82, 390, 700, bounds, out)).toBe(true);
-    assertClear(out, projected, 240, 82);
-    // Conservative envelope contains every rendered static vertex at the current pose.
+    const actual = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
+    const scratch = new T.Vector3(), objectClip = new T.Matrix4();
     model.traverse(object => {
       if (!(object instanceof T.Mesh)) return;
       const positions = object.geometry.getAttribute("position");
+      objectClip.multiplyMatrices(viewProjection, object.matrixWorld);
       for (let i = 0; i < positions.count; i++) {
-        point.fromBufferAttribute(positions, i).applyMatrix4(matrix);
-        const x = (point.x * 0.5 + 0.5) * 390, y = (-point.y * 0.5 + 0.5) * 700;
-        expect(x).toBeGreaterThanOrEqual(projected.left - 1e-6);
-        expect(x).toBeLessThanOrEqual(projected.right + 1e-6);
-        expect(y).toBeGreaterThanOrEqual(projected.top - 1e-6);
-        expect(y).toBeLessThanOrEqual(projected.bottom + 1e-6);
+        scratch.fromBufferAttribute(positions, i).applyMatrix4(objectClip);
+        const x = (scratch.x * 0.5 + 0.5) * 390, y = (-scratch.y * 0.5 + 0.5) * 700;
+        actual.left = Math.min(actual.left, x); actual.right = Math.max(actual.right, x);
+        actual.top = Math.min(actual.top, y); actual.bottom = Math.max(actual.bottom, y);
       }
     });
+    expect(projected.left).toBeCloseTo(actual.left, 5);
+    expect(projected.right).toBeCloseTo(actual.right, 5);
+    expect(projected.top).toBeCloseTo(actual.top, 5);
+    expect(projected.bottom).toBeCloseTo(actual.bottom, 5);
   }
   disposeDioramaObject(model);
+});
+
+it("keeps static hull projection work within the bounded label budget", () => {
+  const models = FACILITY_MODEL_IDS.map(createDioramaFacility);
+  try {
+    const envelopes = models.map(cacheFacilityLabelEnvelope);
+    const boundaryCounts = envelopes.map(envelope => envelope.supports.length);
+    const sourcePointCounts = envelopes.map(envelope => envelope.sourcePointCount);
+    const uniquePointCounts = envelopes.map(envelope => envelope.uniquePointCount);
+    expect(boundaryCounts.every(count => count > 14 && count < 1024)).toBe(true);
+    expect(uniquePointCounts.every((count, i) => count <= sourcePointCounts[i]!)).toBe(true);
+    expect(boundaryCounts.reduce((sum, count) => sum + count, 0)).toBeLessThan(4096);
+    console.info("facility label convex-hull budget", {
+      models: envelopes.length, sourcePointCounts, uniquePointCounts, boundaryCounts,
+      totalSourcePoints: sourcePointCounts.reduce((sum, count) => sum + count, 0),
+      totalUniquePoints: uniquePointCounts.reduce((sum, count) => sum + count, 0),
+      totalBoundaryVertices: boundaryCounts.reduce((sum, count) => sum + count, 0),
+    });
+  } finally {
+    models.forEach(disposeDioramaObject);
+  }
 });
 
 it("rejects behind-camera and near-plane-crossing envelopes", () => {
