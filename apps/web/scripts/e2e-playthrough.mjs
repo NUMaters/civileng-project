@@ -99,6 +99,17 @@ async function evaluate(client, expression) {
   return result.result?.value;
 }
 
+async function dispatchMouse(client, type, x, y, buttons = 0) {
+  await client.call("Input.dispatchMouseEvent", {
+    type,
+    x,
+    y,
+    button: type === "mouseReleased" ? "left" : type === "mousePressed" ? "left" : "none",
+    buttons,
+    clickCount: type === "mousePressed" ? 1 : 0,
+  });
+}
+
 async function waitFor(client, expression, timeoutMs = 30_000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -124,7 +135,8 @@ async function main() {
     [
       `--remote-debugging-port=${PORT}`,
       "--headless=new",
-      "--disable-gpu",
+      "--enable-unsafe-swiftshader",
+      "--use-gl=swiftshader",
       "--no-first-run",
       "--no-default-browser-check",
       `--user-data-dir=${userData}`,
@@ -195,6 +207,93 @@ async function main() {
       throw new Error("中央配置の代替導線が残っています");
     }
     step("配置導線はドックからのドラッグに限定");
+
+    const dragPoints = await evaluate(
+      client,
+      `(() => {
+        const card = document.querySelector('.structure-card:not(:disabled)');
+        const canvas = document.querySelector('.cesium-widget canvas');
+        if (!(card instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return null;
+        const cardRect = card.getBoundingClientRect();
+        const canvasRect = canvas.getBoundingClientRect();
+        return {
+          startX: cardRect.left + cardRect.width / 2,
+          startY: cardRect.top + cardRect.height / 2,
+          canvasLeft: canvasRect.left,
+          canvasTop: canvasRect.top,
+          canvasWidth: canvasRect.width,
+          canvasHeight: canvasRect.height,
+        };
+      })()`,
+    );
+    if (dragPoints === null) {
+      throw new Error("ドラッグ検証用の施設カードまたは地図キャンバスが見つかりません");
+    }
+    let draggedToMap = false;
+    const dragAttempts = [];
+    const dropCandidates = [
+      [0.35, 0.3],
+      [0.5, 0.3],
+      [0.65, 0.3],
+      [0.35, 0.45],
+      [0.5, 0.45],
+      [0.65, 0.45],
+      [0.35, 0.6],
+      [0.5, 0.6],
+      [0.65, 0.6],
+      [0.35, 0.75],
+      [0.5, 0.75],
+      [0.65, 0.75],
+    ];
+    for (const [xRatio, yRatio] of dropCandidates) {
+      const targetX = dragPoints.canvasLeft + dragPoints.canvasWidth * xRatio;
+      const targetY = dragPoints.canvasTop + dragPoints.canvasHeight * yRatio;
+      await dispatchMouse(client, "mousePressed", dragPoints.startX, dragPoints.startY, 1);
+      // まず真上へ移動して、横スクロールではなく配置ドラッグの意図を確定させる。
+      await dispatchMouse(client, "mouseMoved", dragPoints.startX, dragPoints.startY - 40, 1);
+      for (const ratio of [0.25, 0.5, 0.75, 1]) {
+        await dispatchMouse(
+          client,
+          "mouseMoved",
+          dragPoints.startX + (targetX - dragPoints.startX) * ratio,
+          dragPoints.startY + (targetY - dragPoints.startY) * ratio,
+          1,
+        );
+      }
+      await dispatchMouse(client, "mouseReleased", targetX, targetY);
+      await sleep(150);
+      draggedToMap = await evaluate(
+        client,
+        `({
+          pending: !!document.querySelector('[aria-label="仮配置の確定"]'),
+          dragging: !!document.querySelector('.game-shell.is-dock-dragging'),
+          ghost: !!document.querySelector('.dock-drag-ghost'),
+          canvas: !!document.querySelector('.cesium-widget canvas')
+        })`,
+      );
+      dragAttempts.push({ xRatio, yRatio, ...draggedToMap });
+      if (draggedToMap.pending) {
+        draggedToMap = true;
+        break;
+      }
+      draggedToMap = false;
+    }
+    if (!draggedToMap) {
+      throw new Error(
+        `実ポインター操作で配置可能帯へドロップできませんでした: ${JSON.stringify({ dragPoints, dragAttempts })}`,
+      );
+    }
+    step("実ポインター操作で仮配置");
+    const touchActionAfterDrag = await evaluate(
+      client,
+      `getComputedStyle(document.querySelector('.structure-card:not(:disabled)')).touchAction`,
+    );
+    if (touchActionAfterDrag === "none") {
+      throw new Error(`ドラッグ後のカード操作が復元されません: ${touchActionAfterDrag}`);
+    }
+    await evaluate(client, `document.querySelector('[aria-label="キャンセル"]')?.click()`);
+    await waitFor(client, `!document.querySelector('[aria-label="仮配置の確定"]')`, 5_000);
+    step("仮配置をキャンセル");
 
     await waitFor(client, `!!window.__civilcraftE2E`, 10_000);
     await evaluate(client, `window.__civilcraftE2E.setBudget(20000)`);
