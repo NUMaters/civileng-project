@@ -11,6 +11,7 @@ import { resolvePlaceablePosition } from "./riverPlacement";
 import { geoToWorld, riverX, worldToGeo } from "./dioramaSpace";
 import { createGeographicWorld } from "./geographicWorld";
 import { createGeographicTerrain } from "./geographicTerrain";
+import { GEOGRAPHIC_LIGHTING_STYLE } from "./geographicLightingStyle";
 import { createGeographicWaterMaterial, riverFlowCoordinates } from "./geographicWater";
 import { createCameraFocusNotifier } from "./cameraFocusNotification";
 import { createGeographicBridges } from "./geographicBridges";
@@ -152,7 +153,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       });
       const train = createGeographicTrain(geography.osm, terrain.sampleGround);
       const landcover = createGeographicLandcover(geography.landcover, {
-        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround, renderedTerrainSurface: terrain.renderedSurface,
       });
       const vegetationExclusions = createImageryVegetationExclusions(geography.osm, geography.plateau, geography.landcover);
       const imageryVegetation = createGeographicImageryVegetation(geography.imageryTrees, {
@@ -170,11 +171,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         plateau: geography.plateau,
         localBounds: terrain.bounds,
         groundSampler: terrain.sampleGround,
+        renderedTerrainSurface: terrain.renderedSurface,
         surfaceGridSpacing: 12,
         // Missing building heights remain explicitly provisional in source metadata.
         provisionalBuildingHeight: 6,
         surfaceSampler: (x, z, layer) => {
-          const ground = terrain.sampleGround(x, z);
+          const usesRenderedGround = layer === "road" || layer === "rail" || layer === "campus";
+          const ground = usesRenderedGround ? terrain.sampleRenderedGround(x, z) : terrain.sampleGround(x, z);
           if (ground === null) return null;
           // DEM is ground, not water bathymetry or surveyed bridge decks.
           // Small surface offsets avoid z-fighting; bridge clearance is provisional.
@@ -205,13 +208,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       renderer.shadowMap.autoUpdate = false;
       renderer.shadowMap.needsUpdate = true;
       renderer.toneMapping = T.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1;
+      renderer.toneMappingExposure = GEOGRAPHIC_LIGHTING_STYLE.exposure;
       container.appendChild(renderer.domElement);
       const scene = new T.Scene();
-      scene.background = new T.Color("#87d6f5");
-      scene.fog = new T.Fog("#b6e6ef", 1700, 3700);
-      scene.add(new T.HemisphereLight("#d5f5ff", "#7e9d60", 0.85));
-      const sun = new T.DirectionalLight("#fff5da", 2.4);
+      scene.background = new T.Color(GEOGRAPHIC_LIGHTING_STYLE.background);
+      scene.fog = new T.Fog(GEOGRAPHIC_LIGHTING_STYLE.fog.color, GEOGRAPHIC_LIGHTING_STYLE.fog.near, GEOGRAPHIC_LIGHTING_STYLE.fog.far);
+      scene.add(new T.HemisphereLight(GEOGRAPHIC_LIGHTING_STYLE.hemisphere.sky, GEOGRAPHIC_LIGHTING_STYLE.hemisphere.ground, GEOGRAPHIC_LIGHTING_STYLE.hemisphere.intensity));
+      const sun = new T.DirectionalLight(GEOGRAPHIC_LIGHTING_STYLE.sun.color, GEOGRAPHIC_LIGHTING_STYLE.sun.intensity);
       sun.position.set(-360, 650, 300);
       sun.castShadow = true;
       sun.shadow.mapSize.set(1024, 1024);

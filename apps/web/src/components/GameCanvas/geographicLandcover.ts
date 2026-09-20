@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { createVegetationStyleResources, vegetationColor, VEGETATION_STYLE_PROVENANCE } from "./geographicVegetationStyle";
 import { createGeographicWorld } from "./geographicWorld";
+import type { RenderedTerrainSurface } from "./geographicTerrain";
 import { koriyamaGeoToLocal, type GeodataFeature } from "./koriyamaGeodata";
 import type { KoriyamaLandcover, LandcoverFeature } from "./koriyamaLandcover";
 import type { BridgeBounds } from "./geographicBridges";
@@ -28,7 +29,7 @@ export function landcoverDisplayColor(feature: LandcoverFeature) {
 }
 
 export function createGeographicLandcover(data: KoriyamaLandcover, options: {
-  bounds: BridgeBounds; groundSampler: (x: number, z: number) => number | null;
+  bounds: BridgeBounds; groundSampler: (x: number, z: number) => number | null; renderedTerrainSurface?: RenderedTerrainSurface;
 }) {
   const byId = new Map(data.features.map(feature => [feature.id, feature]));
   const surfaces: GeodataFeature[] = data.features.flatMap(feature => feature.geometry.type === "MultiPolygon" ? [{
@@ -36,10 +37,11 @@ export function createGeographicLandcover(data: KoriyamaLandcover, options: {
   }] : []);
   const group = new THREE.Group(); group.name = "geographic-landcover";
   const cover = createGeographicWorld({ type: "FeatureCollection", bbox: data.bbox, features: surfaces }, {
-    localBounds: options.bounds, surfaceGridSpacing: 12,
+    localBounds: options.bounds, surfaceGridSpacing: 12, renderedTerrainSurface: options.renderedTerrainSurface,
     groundSampler: options.groundSampler,
     surfaceSampler: (x, z, _layer, feature) => {
-      const ground = options.groundSampler(x, z);
+      const ground = options.renderedTerrainSurface
+        ? options.renderedTerrainSurface.sampleRenderedGround(x, z) : options.groundSampler(x, z);
       return ground === null ? null : ground + landcoverSurfaceLift(byId.get(feature.id)!);
     },
     polygonSurfaceColor: feature => landcoverDisplayColor(byId.get(feature.id)!),
