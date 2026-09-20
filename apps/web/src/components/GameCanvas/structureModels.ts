@@ -1,4 +1,5 @@
 import type { StructureMaterialKind } from "./structureMaterials";
+import { BASIN_PORTS } from "./facilityVisualPorts";
 
 export type StructureModelPart = {
   id: string;
@@ -79,8 +80,8 @@ function wedge(
   };
 }
 
-/** Rounded rectangular berm: four concentric loops form an actual empty enclosure.
- * Outer/inner toes sit at z=0; the broad crest is at z=9. No solid lid covers water.
+/** Rounded berm with a lowered north inlet and an east culvert bore.
+ * Closed sector prisms retain the empty enclosure and the original 92x72x9 bounds.
  */
 function basinBerm(): StructureModelPart {
   const positions: [number, number, number][] = [];
@@ -91,34 +92,62 @@ function basinBerm(): StructureModelPart {
     { x: 34, y: 24, r: 8, z: 4.5 },
     { x: 30, y: 20, r: 6, z: -4.5 },
   ];
+  const rings: [number, number, number][][] = [];
   for (const { x, y, r, z } of loops) {
+    const ring: [number, number, number][] = [];
     for (let corner = 0; corner < 4; corner += 1) {
       const cx = corner === 0 || corner === 3 ? x - r : -x + r;
       const cy = corner < 2 ? y - r : -y + r;
       for (let step = 0; step <= 3; step += 1) {
         const angle = ((corner + step / 3) * Math.PI) / 2;
-        positions.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle), z]);
+        ring.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle), z]);
+      }
+      if (corner === 0) {
+        for (const east of [7, BASIN_PORTS.inletHalfWidth, -BASIN_PORTS.inletHalfWidth, -7]) {
+          ring.push([east, y, Math.abs(east) <= BASIN_PORTS.inletHalfWidth && z > 0
+            ? BASIN_PORTS.sillHeight - 4.5 : z]);
+        }
+      }
+      if (corner === 3) {
+        for (const north of [-4, -BASIN_PORTS.outletHalfWidth, BASIN_PORTS.outletHalfWidth, 4]) {
+          ring.push([x, north, z]);
+        }
       }
     }
+    rings.push(ring);
   }
-  const count = 16;
-  for (let loop = 0; loop < 4; loop += 1) {
-    const nextLoop = (loop + 1) % 4;
-    for (let i = 0; i < count; i += 1) {
-      const next = (i + 1) % count;
-      const a = loop * count + i;
-      const b = loop * count + next;
-      const c = nextLoop * count + next;
-      const d = nextLoop * count + i;
-      indices.push(a, b, c, a, c, d);
+  const count = rings[0].length;
+  for (let i = 0; i < count; i++) {
+    const next = (i + 1) % count;
+    const bore = rings[0][i][0] === 46 && rings[0][next][0] === 46 &&
+      Math.abs(rings[0][i][1]) <= BASIN_PORTS.outletHalfWidth &&
+      Math.abs(rings[0][next][1]) <= BASIN_PORTS.outletHalfWidth;
+    const base = positions.length;
+    for (const index of [i, next]) {
+      for (let loop = 0; loop < 4; loop++) {
+        const p = [...rings[loop][index]] as [number, number, number];
+        if (bore) {
+          p[0] = loop < 2 ? BASIN_PORTS.outletOuterX : BASIN_PORTS.outletInnerX;
+          p[2] = loop === 0 || loop === 3 ? BASIN_PORTS.outletCeiling - 4.5 : 4.5;
+        }
+        positions.push(p);
+      }
     }
+    for (let loop = 0; loop < 4; loop++) {
+      const nextLoop = (loop + 1) % 4;
+      indices.push(base + loop, base + loop + 4, base + nextLoop + 4,
+        base + loop, base + nextLoop + 4, base + nextLoop);
+    }
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3,
+      base + 4, base + 6, base + 5, base + 4, base + 7, base + 6);
   }
   return { ...box("berm", 92, 72, 9, 4.5, "grass"), kind: "mesh", mesh: { positions, indices } };
 }
 
 /**
  * Broad engineering silhouettes with no decorative badges or subpixel railings.
- * Keep all slabs at least 0.8 m thick to match the scene renderer's minimum.
+ * Box slabs must be at least 0.8 m thick (the legacy renderer's minimum).
+ * Thin basin beds/inverts use closed meshes to preserve their exact clearance.
  * These visual dimensions never participate in the hydraulic simulation.
  */
 export function getStructureModelParts(structureId: string): StructureModelPart[] {
@@ -131,12 +160,12 @@ export function getStructureModelParts(structureId: string): StructureModelPart[
         box("crest", 96, 9, 1, 14.5, "asphalt"),
       ];
     case "retention-basin":
-      // Water intersects the inner slope below its crest, leaving a deep visible rim.
+      // Dry storage by default; operational filling belongs to the view adapter.
       return [
-        box("bed", 90, 70, 1, 0.5, "earth"),
+        wedge("bed", 68, 48, 48, 0.2, 0.1, "earth"),
         basinBerm(),
-        box("pool", 68, 48, 1, 3, "water"),
-        box("outlet", 10, 12, 12, 6, "concrete", 37),
+        { ...wedge("drain-floor", 16, 6, 6, 0.3, 0.15, "concrete"), offsetEast: 38 },
+        box("outlet", 10, 12, 6, 9, "concrete", 37),
         box("outlet-roof", 12, 14, 1.2, 12.6, "metal", 37),
       ];
     case "drainage-pump":

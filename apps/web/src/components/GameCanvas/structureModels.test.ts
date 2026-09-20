@@ -72,14 +72,17 @@ describe("getStructureModelParts", () => {
     }
   });
 
-  it("leaves basin water visible inside a substantial continuous rounded rim", () => {
+  it("keeps dry storage inside an open rounded enclosure without a solid lid", () => {
     const parts = getStructureModelParts("retention-basin");
     const berm = parts.find((part) => part.id === "berm")!;
-    const pool = parts.find((part) => part.id === "pool")!;
-    const waterTop = pool.centerHeight + pool.dimensions!.height / 2;
-    expect(berm.dimensions!.height - waterTop).toBeGreaterThanOrEqual(5);
-    expect(pool.dimensions!.length).toBeGreaterThan(60);
-    expect(pool.dimensions!.width).toBeGreaterThan(40);
+    const bed = parts.find((part) => part.id === "bed")!;
+    expect(parts.some(part => part.material === "water")).toBe(false);
+    // Legacy box rendering clamps thin slabs to 0.8; these must stay exact meshes.
+    expect(bed.kind).toBe("mesh");
+    expect(parts.find(part => part.id === "drain-floor")!.kind).toBe("mesh");
+    expect(berm.dimensions!.height).toBe(9);
+    expect(bed.dimensions!.length).toBeGreaterThan(60);
+    expect(bed.dimensions!.width).toBeGreaterThan(40);
     // Every projected triangle avoids the pool center: no accidental lid or solid disk.
     const { positions, indices } = berm.mesh!;
     for (let i = 0; i < indices.length; i += 3) {

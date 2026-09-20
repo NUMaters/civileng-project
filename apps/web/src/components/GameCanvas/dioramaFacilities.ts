@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { getStructureModelParts } from "./structureModels";
+import { BASIN_PORTS, PUMP_BORE_RADIUS, PUMP_PORTS } from "./facilityVisualPorts";
 
 const COLORS = {
   grass: 0x9bd849,
@@ -105,6 +106,8 @@ export function createDioramaFacility(structureId: string): THREE.Group {
     }
     case "retention-basin": {
       modelMesh("berm", "grass");
+      // Broad pale overflow sill distinguishes the intentional low point.
+      box([BASIN_PORTS.inletHalfWidth * 2, 0.08, 7], [0, BASIN_PORTS.sillHeight + 0.04, -27.5], "cream");
       // Rounded water surface stays inside the actual open berm, below its crest.
       const pool = new THREE.Shape();
       pool.moveTo(-24, -22);
@@ -120,11 +123,13 @@ export function createDioramaFacility(structureId: string): THREE.Group {
       // Opaque basin bed remains visible while the operational water is absent.
       // Without this, the underlying river is visible through an apparently full basin.
       add(water, "earth", [0, 0.2, 0]);
-      add(water, "water", [0, 4.2, 0]);
       water.dispose();
-      for (const [x, z] of [[-17, -8], [11, 10], [17, -10]]) {
-        box([7, 0.12, 0.9], [x!, 4.3, z!], "foam", 0.05);
-      }
+      // Dry field strips, not decorative standing water in the card/preview.
+      for (const z of [-10, 0, 10]) box([42, 0.08, 5], [0, 0.24, z], "grass");
+      // The lowered berm itself is the inlet apron; this slab is the independent
+      // outlet invert. Its roof is part of the berm, leaving a genuine clear bore.
+      box([BASIN_PORTS.outletOuterX - BASIN_PORTS.outletInnerX, BASIN_PORTS.outletFloor, 6],
+        [38, BASIN_PORTS.outletFloor / 2, 0], "stone");
       tree(-36, -22, 8, 0.7);
       tree(35, 22, 8, 0.65);
       box([9, 6, 10], [37, 9, -2], "cream", 0.8);
@@ -133,18 +138,35 @@ export function createDioramaFacility(structureId: string): THREE.Group {
     }
     case "drainage-pump": {
       box([36, 2, 36], [0, 1, 0], "stone", 1);
-      box([27, 14, 20], [0, 9, -5], "cream", 1);
-      box([29, 1.8, 22], [0, 16.9, -5], "blue", 0.7);
-      box([15, 4, 12], [0, 19.8, -5], "cream", 0.7);
-      box([17, 1.2, 14], [0, 22.4, -5], "blue", 0.5);
-      box([9, 2.4, 0.4], [0, 20, 1.1], "blue", 0.15);
-      for (const x of [-9, 0, 9]) {
-        box([3.8, 3.4, 0.4], [x, 12.4, 5.1], "blue", 0.15);
-        // Each thick elbow exits the front wall and turns down to a flared foot.
-        tube([[x, 8, 4.8], [x, 8, 8], [x, 7, 11], [x, 4.7, 13], [x, 2.7, 13]], 1.9, "blue");
-        box([5.3, 1, 5.3], [x, 2.5, 13], "blue", 0.45);
+      box([27, 14, 20], [0, 9, 5], "cream", 1);
+      box([29, 1.8, 22], [0, 16.9, 5], "blue", 0.7);
+      box([15, 4, 12], [0, 19.8, 5], "cream", 0.7);
+      box([17, 1.2, 14], [0, 22.4, 5], "blue", 0.5);
+      box([9, 2.4, 0.4], [0, 20, -1.1], "blue", 0.15);
+      for (const { mouth } of PUMP_PORTS) {
+        const [x, y, z] = mouth;
+        box([3.8, 3.4, 0.4], [x, 12.4, -5.1], "blue", 0.15);
+        // Open horizontal mouth, not a jet emerging through a solid foot block.
+        tube([[x, 8, -4.8], [x, 8, -8], [x, y, z + 2], mouth], 1.9, "blue");
+        const lip = new THREE.RingGeometry(PUMP_BORE_RADIUS, 1.9, 16).rotateY(Math.PI);
+        add(lip, "cream", mouth);
+        lip.dispose();
+        const bore = new THREE.CylinderGeometry(PUMP_BORE_RADIUS, PUMP_BORE_RADIUS, 1.5, 16, 1, true)
+          .rotateX(Math.PI / 2);
+        // Inward-facing lining: reverse triangles and normals without capping the hole.
+        const indices = bore.index!;
+        for (let i = 0; i < indices.count; i += 3) {
+          const a = indices.getX(i); indices.setX(i, indices.getX(i + 1)); indices.setX(i + 1, a);
+        }
+        bore.computeVertexNormals();
+        add(bore, "dark", [x, y, z + 0.75]);
+        bore.dispose();
       }
-      for (const z of [-10, -3]) box([0.4, 4, 4], [13.6, 11, z], "blue", 0.15);
+      // Land-side sump, contained inside the existing 36x36 pad.
+      box([16, 0.1, 2], [0, 2.1, 16], "dark");
+      box([18, 1.4, 0.8], [0, 2.7, 17.4], "stone");
+      for (const x of [-8.6, 8.6]) box([0.8, 1.4, 2.4], [x, 2.7, 16], "stone");
+      for (const z of [10, 3]) box([0.4, 4, 4], [13.6, 11, z], "blue", 0.15);
       break;
     }
     case "revetment": {
