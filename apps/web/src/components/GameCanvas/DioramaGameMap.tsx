@@ -31,6 +31,18 @@ import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
 import { FACILITY_LABEL_MARGIN, layoutFacilityLabel, type FacilityLabelLayout } from "./facilityLabelLayout";
+import { createRiverStageController } from "./riverStage";
+import { createRiverSurfaceSampler } from "./riverSurface";
+import { createRiverBoundaryResolver } from "./riverBoundary";
+import { frameRenderedFloodPatch, selectRenderedFloodPatch } from "./floodCameraFocus";
+
+export type DioramaGameMapHandle = CesiumGameMapHandle & {
+  focusRenderedFlood: () => void;
+  returnFromFlood: () => void;
+};
+type DioramaGameMapProps = CesiumGameMapProps & {
+  onFloodFocusChange?: (state: { available: boolean; viewing: boolean }) => void;
+};
 
 type Runtime = {
   renderer: T.WebGLRenderer;
@@ -44,10 +56,12 @@ type Runtime = {
   pick: (x: number, y: number) => { x: number; z: number } | null;
   reset: () => void;
   ground: (x: number, z: number) => number | null;
+  focusFlood: () => void;
+  returnFromFlood: () => void;
 };
 
 /** Local, meter-scaled Abukuma diorama. Game rules remain in geographic coordinates. */
-export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>(
+export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapProps>(
   function DioramaGameMap(props, ref) {
     const host = useRef<HTMLDivElement>(null);
     const runtime = useRef<Runtime | null>(null);
@@ -85,6 +99,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       ref,
       () => ({
         resetCamera: () => runtime.current?.reset(),
+        focusRenderedFlood: () => runtime.current?.focusFlood(),
+        returnFromFlood: () => runtime.current?.returnFromFlood(),
         focusNpc: (position) => {
           const r = runtime.current;
           if (!r) return;
@@ -240,7 +256,10 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       controls.mouseButtons.LEFT = T.MOUSE.PAN;
       controls.touches.ONE = T.TOUCH.PAN;
       controls.touches.TWO = T.TOUCH.DOLLY_ROTATE;
+      let floodReturnPose: { position: T.Vector3; target: T.Vector3 } | null = null;
       const reset = () => {
+        floodReturnPose = null;
+        controls.maxDistance = 1500;
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
         controls.target.set(riverX(focus.z), terrain.sampleGround(riverX(focus.z), focus.z) ?? 0, focus.z);
@@ -274,8 +293,46 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         mesh.material = waterMaterial;
       }
       oldWaterMaterials.forEach(material => material.dispose());
-      const inundation = createDioramaInundation(terrain.sampleGround);
+      const riverStage = createRiverStageController(world.waterMeshes);
+      const sampleRiverSurface = createRiverSurfaceSampler(world.waterMeshes);
+      const riverBoundary = createRiverBoundaryResolver(geography.osm, sampleRiverSurface);
+      const inundation = createDioramaInundation(terrain.sampleGround, riverBoundary);
       scene.add(inundation.group);
+      let lastFloodFocusKey = "";
+      let cachedPatches: ReturnType<typeof inundation.getRenderedPatches> | null = null;
+      let cachedViewport = "";
+      let cachedFraming: ReturnType<typeof frameRenderedFloodPatch> = null;
+      const floodFraming = () => {
+        const patches = inundation.getRenderedPatches();
+        const review = latest.current.getLatestFloodState?.().phase === "review";
+        const key = `${camera.aspect}/${viewportHeight}/${review}`;
+        if (patches !== cachedPatches || key !== cachedViewport) {
+          cachedPatches = patches;
+          cachedViewport = key;
+          const ratio = Math.max(0.1, 1 - 2 * Math.max(140, review ? 110 : 170) / Math.max(1, viewportHeight));
+          const patch = selectRenderedFloodPatch(patches.filter(p => frameRenderedFloodPatch(p, camera.fov, camera.aspect, ratio)));
+          cachedFraming = patch ? frameRenderedFloodPatch(patch, camera.fov, camera.aspect, ratio) : null;
+        }
+        return cachedFraming;
+      };
+      const focusFlood = () => {
+        const framing = floodFraming();
+        if (!framing) return;
+        floodReturnPose ??= { position: camera.position.clone(), target: controls.target.clone() };
+        // Only a user tap moves the camera. Preserve its azimuth/pitch and a return pose.
+        const direction = camera.position.clone().sub(controls.target).normalize();
+        controls.target.set(framing.target.x, framing.target.y, framing.target.z);
+        camera.position.copy(controls.target).addScaledVector(direction, framing.distance);
+        controls.update();
+      };
+      const returnFromFlood = () => {
+        if (!floodReturnPose) return;
+        camera.position.copy(floodReturnPose.position);
+        controls.target.copy(floodReturnPose.target);
+        floodReturnPose = null;
+        controls.maxDistance = 1500;
+        controls.update();
+      };
       const raycaster = new T.Raycaster(),
         cursor = new T.Vector2();
       const pick = (x: number, y: number) => {
@@ -298,6 +355,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         pick,
         reset,
         ground: terrain.sampleGround,
+        focusFlood,
+        returnFromFlood,
       };
       runtime.current = r;
       let moving: {
@@ -457,14 +516,16 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         time += dt;
         train.update(time);
         controls.update();
-        const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + 150, terrain.bounds.maxZ - 150);
-        const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + 150, terrain.bounds.maxX - 150);
+        const margin = floodReturnPose ? 0 : 150;
+        const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + margin, terrain.bounds.maxZ - margin);
+        const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + margin, terrain.bounds.maxX - margin);
         cameraCorrection.set(x - controls.target.x, 0, z - controls.target.z);
         controls.target.add(cameraCorrection);
         camera.position.add(cameraCorrection);
         notifyCameraFocus(controls.target.x, controls.target.z, now);
         if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
         const state = latest.current.getLatestFloodState?.();
+        riverStage.update(state?.riverLevelMeters ?? 2.2);
         for (const [id, model] of r.models) {
           const influence = state?.structureInfluences.find(item => item.placementId === id);
           const operation = resolveFacilityActivity(influence, state);
@@ -491,6 +552,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         waterMaterial.uniforms.time!.value = time;
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
         if (state) inundation.update(state, dt, time);
+        const available = floodFraming() !== null;
+        const viewing = floodReturnPose !== null;
+        const focusKey = `${available}/${viewing}`;
+        if (lastFloodFocusKey !== focusKey) {
+          lastFloodFocusKey = focusKey;
+          latest.current.onFloodFocusChange?.({ available, viewing });
+        }
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
           if (!model) {
@@ -633,6 +701,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         renderer.dispose();
         renderer.domElement.remove();
         runtime.current = null;
+        latest.current.onFloodFocusChange?.({ available: false, viewing: false });
         latest.current.onReadyChange?.(false);
       };
     }, [geography]);
