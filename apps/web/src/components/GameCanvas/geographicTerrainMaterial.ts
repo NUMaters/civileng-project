@@ -1,8 +1,9 @@
 import * as THREE from "three";
+import { GEOGRAPHIC_MATERIAL_PALETTE } from "./geographicMaterialPalette";
 
 /** Decorative ground treatment only: neither satellite classification nor observed vegetation. */
 export function createGeographicTerrainMaterial() {
-  const material = new THREE.MeshStandardMaterial({ color: "#78bc4d", roughness: 0.92 });
+  const material = new THREE.MeshStandardMaterial({ color: GEOGRAPHIC_MATERIAL_PALETTE.ground, roughness: 0.92 });
   material.name = "geographic-ground-relief";
   material.userData.provenance = "Illustrative ground palette and actual-normal slope tint; no observed vegetation or land-use inference; DEM vertices and normals unchanged";
   material.customProgramCacheKey = () => "geographic-ground-relief-v2-vivid";

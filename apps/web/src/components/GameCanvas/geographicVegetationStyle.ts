@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GEOGRAPHIC_MATERIAL_PALETTE } from "./geographicMaterialPalette";
 
 export const VEGETATION_STYLE_PROVENANCE = "Decorative shared crown shape and ID-based green palette; not observed species or leaf color. Horizontal radius envelope and source centres unchanged.";
 export function vegetationHashUnit(id: string): number {
@@ -6,7 +7,7 @@ export function vegetationHashUnit(id: string): number {
   for (let i = 0; i < id.length; i++) hash = Math.imul(hash ^ id.charCodeAt(i), 16777619);
   return (hash >>> 0) / 4294967296;
 }
-const GREENS = ["#70b45b", "#80ba62", "#5eae70", "#89bb63"];
+const GREENS = GEOGRAPHIC_MATERIAL_PALETTE.crowns;
 export function vegetationColor(id: string) {
   return new THREE.Color(GREENS[Math.floor(vegetationHashUnit(id) * GREENS.length)]!);
 }
