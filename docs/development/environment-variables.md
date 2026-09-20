@@ -43,9 +43,7 @@ cp .env.example .env
 | `NPC_BACKEND_ADDR`        | `127.0.0.1:8082`         | `cmd/npc` のlistenアドレス                                                  |
 | `NPC_BACKEND_TOKEN`       | ローカル用共有トークン   | Main BackendとNPC Backend間のBearer認証                                     |
 | `NPC_TRUSTED_PROXY_CIDRS` | 未設定                   | Main Backend手前で`X-Forwarded-For`を信頼するプロキシのCIDR（カンマ区切り） |
-| `NPC_LLM_PROVIDER`        | `fixed`                  | NPC Backendの回答方式（`openai` / `ollama` / `fixed`）                      |
-| `NPC_LLM_BASE_URL`        | `http://127.0.0.1:11434` | Ollama API                                                                  |
-| `NPC_LLM_MODEL`           | `qwen3:14b`              | Ollamaモデル                                                                |
+| `NPC_LLM_PROVIDER`        | `fixed`                  | NPC Backendの回答方式（`openai` / `fixed`）。未設定時は固定回答             |
 | `OPENAI_BASE_URL`         | `https://api.openai.com` | OpenAI API（NPC Backendだけが使用）                                         |
 | `OPENAI_MODEL`            | `gpt-4o-mini`            | OpenAIモデル（NPC Backendだけが使用）                                       |
 | `OPENAI_API_KEY`          | Secretとして設定         | OpenAIキー。Git・Web・Main Backendへ渡さない                                |

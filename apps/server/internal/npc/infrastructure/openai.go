@@ -14,6 +14,8 @@ import (
 	"github.com/NUMaters/civileng-project/apps/server/internal/npc/domain"
 )
 
+const maxLLMResponseBytes = 32 * 1024
+
 // OpenAI calls the OpenAI Chat Completions endpoint from the server only.
 // The model is restricted to the source-checked answer candidates for the hint.
 type OpenAI struct {

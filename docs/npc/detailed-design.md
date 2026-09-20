@@ -65,7 +65,7 @@
 
 | カテゴリ                                                                   | データソース                                    | 配信経路                                            |
 | -------------------------------------------------------------------------- | ----------------------------------------------- | --------------------------------------------------- |
-| LLM生成回答（準備・自由入力）                                              | Ollama→サーバーで一度だけ表示用構造へ変換       | API経由（通信方式はAPI設計Issueで決定）             |
+| LLM生成回答（準備・自由入力）                                              | OpenAI API→サーバーで一度だけ表示用構造へ変換   | API経由（通信方式はAPI設計Issueで決定）             |
 | 承認済みマスターデータ（質問候補・自己紹介・災害中定型文・フォールバック） | `packages/game-data/npc/*.json`（人間承認済み） | API経由（会話開始時、通信方式はAPI設計Issueで決定） |
 | フロントエンド静的UIラベル（話す／閉じる／もっと詳しく聞く 等）            | フロントエンドコード内の定数                    | 配信なし（ビルドに同梱）                            |
 
@@ -75,7 +75,7 @@
 
 `[NPC実装と同時に新規実装する候補]`
 
-`apps/server/internal/npc/`を新設し、既存4層規約（`domain/application/infrastructure/presentation`）に従う。`domain`：NPC・会話セッション・知識レコードのエンティティ。`application`：会話開始・質問処理・災害中応答生成のユースケース、および18章のサーバー権威型検証。`infrastructure`：知識データローダー、Ollamaクライアント、ふりがな辞書アノテーター。`presentation`：通信ハンドラ（具体的な通信方式・エンドポイントはAPI設計Issueで決定、19章）。
+`apps/server/internal/npc/`を新設し、既存4層規約（`domain/application/infrastructure/presentation`）に従う。`domain`：NPC・会話セッション・知識レコードのエンティティ。`application`：会話開始・質問処理・災害中応答生成のユースケース、および18章のサーバー権威型検証。`infrastructure`：知識データローダー、OpenAIクライアント、ふりがな辞書アノテーター。`presentation`：通信ハンドラ（具体的な通信方式・エンドポイントはAPI設計Issueで決定、19章）。
 
 ## 6. packages/uiの汎用よみやすさ表示
 
@@ -159,11 +159,11 @@ export type ReadingAwareSegment = {
 
 `apps/web/src/features/npc/readingLevelStorage.ts`に実装する。
 
-## 10. ロビーと常時メニュー
+## 10. 会話パネル内の設定
 
-`[要確認]`
+`[確定仕様]`
 
-ロビー画面・常時メニューへの具体的なコンポーネント配置は未定（`requirements.md`23章の未決定事項を参照）。
+よみやすさ設定の操作は会話パネル内へ配置する。ロビー画面、常時メニューおよびマップマーカーへの配置は今回の対象外とする。
 
 ## 11. NPCマスターデータ・配置・マップ表示
 
@@ -413,11 +413,11 @@ LLM出力後、サーバーは内部生成結果の形式、回答本文の空�
 
 **重要語欠落検出**：`glossaryTermId`を持つべき語が本文中に出現するのに対応するセグメントに`reading`が付与されていないデータを検出するバリデーションをマスターデータ登録パイプラインに組み込む（NPC-NFR-011）。
 
-## 26. Ollama接続
+## 26. OpenAI API接続
 
 `[チーム協議]`
 
-`docs/npc/dialogue-ai-design.md`の環境変数案（`NPC_LLM_*`）を踏襲。
+`docs/npc/dialogue-ai-design.md`の環境変数案（`NPC_LLM_PROVIDER`、`OPENAI_API_KEY`、`OPENAI_MODEL`、`OPENAI_BASE_URL`）を踏襲。
 
 ## 27. LLMフォールバックの挙動
 
@@ -426,7 +426,7 @@ LLM出力後、サーバーは内部生成結果の形式、回答本文の空�
 次のいずれかが発生した場合、NPC定義の`fallbackResponseIds`から処理結果に対応するIDを解決し、`npc-fallback-responses.json`に登録された承認済みフォールバック応答を表示する。
 
 - LLMタイムアウト
-- LLM接続失敗（Ollama接続失敗を含む）
+- LLM接続失敗（OpenAI API接続失敗を含む）
 - LLM内部生成結果の解析失敗
 - 回答本文の空文字・文字数・文数・禁止パターン等の出力検証失敗
 - 承認済み根拠情報の範囲外となる回答の検出

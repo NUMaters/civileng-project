@@ -53,15 +53,9 @@ func RegisterBackend(mux *http.ServeMux) error {
 	if err != nil {
 		return err
 	}
-	provider := env("NPC_LLM_PROVIDER", "ollama")
+	provider := env("NPC_LLM_PROVIDER", "fixed")
 	var selectAnswer application.SelectAnswer
 	switch provider {
-	case "ollama":
-		client, err := infrastructure.NewOllama(env("NPC_LLM_BASE_URL", "http://127.0.0.1:11434"), env("NPC_LLM_MODEL", "qwen3:14b"))
-		if err != nil {
-			return err
-		}
-		selectAnswer = client.Select
 	case "openai":
 		client, err := infrastructure.NewOpenAI(
 			env("OPENAI_API_KEY", ""),
