@@ -117,6 +117,9 @@ export function createDioramaFacility(structureId: string): THREE.Group {
       pool.lineTo(-32, -14);
       pool.quadraticCurveTo(-32, -22, -24, -22);
       const water = new THREE.ShapeGeometry(pool, 8).rotateX(-Math.PI / 2);
+      // Opaque basin bed remains visible while the operational water is absent.
+      // Without this, the underlying river is visible through an apparently full basin.
+      add(water, "earth", [0, 0.2, 0]);
       add(water, "water", [0, 4.2, 0]);
       water.dispose();
       for (const [x, z] of [[-17, -8], [11, 10], [17, -10]]) {

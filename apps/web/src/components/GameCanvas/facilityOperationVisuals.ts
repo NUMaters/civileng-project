@@ -71,7 +71,7 @@ export function createFacilityOperationVisuals(structureId: string): {
     // Modulo before multiplication also keeps extreme finite times safe.
     const time = reducedMotion || !Number.isFinite(elapsed) ? 0 : ((elapsed % 8) + 8) % 8;
     material.opacity = 0.45 + amount * 0.4;
-    if (water) water.position.y = 4.2 * amount;
+    if (water) water.position.y = 0.22 + 3.98 * amount;
     if (jets) {
       for (let i = 0; i < 3; i++) {
         transform.position.set((i - 1) * 9, 2.7, 13);
@@ -96,7 +96,7 @@ export function createFacilityOperationVisuals(structureId: string): {
         }
         case "retention-basin":
           // Enter from the local +Z edge, moving inward, entirely inside the berm.
-          transform.position.set((i - 1) * 3, 4.2 * amount + 0.06, 19 - phase * 9);
+          transform.position.set((i - 1) * 3, 0.28 + 3.98 * amount, 19 - phase * 9);
           transform.rotation.y = Math.PI;
           break;
         case "levee": {

@@ -136,7 +136,8 @@ it("fills monotonically to 4.2 and confines water and inlet to the berm", () => 
   const water = v.group.getObjectByName("basin-fill")!;
   for (const amount of [0.001, 0.1, 0.5, 1, 2]) {
     v.update(amount, 3);
-    expect(water.position.y).toBe(Math.min(amount, 1) * 4.2);
+    expect(water.position.y).toBeCloseTo(0.22 + Math.min(amount, 1) * 3.98);
+    expect(water.position.y).toBeGreaterThan(0.2);
     for (const mesh of meshes(v.group)) for (const p of vertices(mesh)) {
       expect(Math.abs(p.x)).toBeLessThanOrEqual(32.001);
       expect(Math.abs(p.z)).toBeLessThanOrEqual(22.001);
