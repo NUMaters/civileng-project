@@ -111,14 +111,28 @@ it("always regresses synthetic rendered-terrain draping, holes, no-data and non-
     syntheticLine("bridge", "road", "yes"),
   ] }, {
     localBounds: { minX: 0, minZ: 0, maxX: 4, maxZ: 4 }, groundSampler: () => 0,
-    renderedTerrainSurface: surface, surfaceSampler: (_x, _z, layer) => layer === "water" ? 40 : 50, tileSize: 16,
+    renderedTerrainSurface: { ...surface, sampleRenderedGround: (x, z) => 1000 + x * 7 + z * 11 },
+    surfaceSampler: (x, z, layer) => layer === "water" ? 40 + x * 0.25 + z * 0.5 : 50 + x * 0.25 + z * 0.5,
+    tileSize: 16,
   });
-  expect(nonGround.children.filter((child) => (child as THREE.Mesh).userData.layer === "water").every((child) => {
-    const p = (child as THREE.Mesh).geometry.getAttribute("position"); return Array.from(p.array).some((value, i) => i % 3 === 1 && value === 40);
-  })).toBe(true);
-  expect(nonGround.children.filter((child) => (child as THREE.Mesh).userData.layer === "bridge-road").every((child) => {
-    const p = (child as THREE.Mesh).geometry.getAttribute("position"); return Array.from(p.array).some((value, i) => i % 3 === 1 && value === 50);
-  })).toBe(true);
+  const waterMeshes = nonGround.children.filter((child) => (child as THREE.Mesh).userData.layer === "water") as THREE.Mesh[];
+  const bridgeMeshes = nonGround.children.filter((child) => (child as THREE.Mesh).userData.layer === "bridge-road") as THREE.Mesh[];
+  expect(waterMeshes).not.toHaveLength(0);
+  expect(bridgeMeshes).not.toHaveLength(0);
+  const assertRawSurface = (meshes: THREE.Mesh[], base: number) => {
+    const heights: number[] = [];
+    for (const mesh of meshes) {
+      const p = mesh.geometry.getAttribute("position");
+      for (let i = 0; i < p.count; i++) {
+        const expected = base + p.getX(i) * 0.25 + p.getZ(i) * 0.5;
+        heights.push(p.getY(i));
+        expect(p.getY(i)).toBeCloseTo(expected, 5);
+      }
+    }
+    expect(new Set(heights.map((height) => height.toFixed(5))).size).toBeGreaterThan(1);
+  };
+  assertRawSurface(waterMeshes, 40);
+  assertRawSurface(bridgeMeshes, 50);
   disposeWorld(nonGround);
 });
 
