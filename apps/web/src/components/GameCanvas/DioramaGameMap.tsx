@@ -444,11 +444,18 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
             (terrain.sampleGround(position.x, position.z) ?? 0) + 18,
             position.z,
           ).project(camera);
+          const px = (point.x * 0.5 + 0.5) * viewportWidth;
+          const py = (-point.y * 0.5 + 0.5) * viewportHeight;
           const visible =
-            point.z < 1 && point.z > -1 && Math.abs(point.x) < 1.08 && Math.abs(point.y) < 1.08;
+            point.z < 1 &&
+            point.z > -1 &&
+            Math.abs(point.x) < 1.08 &&
+            Math.abs(point.y) < 1.08 &&
+            py >= 185 &&
+            py <= viewportHeight - 175;
           element.style.display = visible ? "" : "none";
           if (visible)
-            element.style.transform = `translate(${(point.x * 0.5 + 0.5) * viewportWidth}px,${(-point.y * 0.5 + 0.5) * viewportHeight}px) translate(-50%,-100%)`;
+            element.style.transform = `translate(${px}px,${py}px) translate(-50%,-100%)`;
         }
         const actions = placementActions.current;
         const preview = latest.current.placements.find((placement) => placement.preview);

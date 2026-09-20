@@ -62,7 +62,7 @@
 }
 .npc-guide {
   position: absolute;
-  top: 16px;
+  top: calc(176px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 45;
@@ -280,7 +280,7 @@
 }
 @media (max-width: 720px) {
   .npc-guide {
-    top: calc(80px + env(safe-area-inset-top));
+    top: calc(176px + env(safe-area-inset-top));
     width: min(360px, calc(100% - 20px));
     padding: 8px 10px;
     font-size: 12px;
