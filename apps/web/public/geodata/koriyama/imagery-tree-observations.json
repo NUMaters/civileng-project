@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "candidate-observations-not-yet-integrated",
+  "status": "candidate-observations-rendered-only-after-geographic-validation",
   "source": {
     "provider": "Geospatial Information Authority of Japan",
     "layer": "seamlessphoto",
