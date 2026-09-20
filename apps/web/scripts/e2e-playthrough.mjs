@@ -186,6 +186,16 @@ async function main() {
     );
     step("ゲーム開始（準備中）");
 
+    const dragOnlyDock = await evaluate(
+      client,
+      `document.querySelector('.cmd-dock__keyboard-place') === null &&
+        !document.body.textContent?.includes('地図中央に仮配置')`,
+    );
+    if (!dragOnlyDock) {
+      throw new Error("中央配置の代替導線が残っています");
+    }
+    step("配置導線はドックからのドラッグに限定");
+
     await waitFor(client, `!!window.__civilcraftE2E`, 10_000);
     await evaluate(client, `window.__civilcraftE2E.setBudget(20000)`);
     const placed = await evaluate(

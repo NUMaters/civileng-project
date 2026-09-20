@@ -706,27 +706,6 @@
   line-height: 1.4;
 }
 
-.cmd-dock__keyboard-place {
-  width: 100%;
-  margin-top: 9px;
-  min-height: 32px;
-  padding: 6px 9px;
-  border: 1px solid rgb(94 200 232 / 35%);
-  border-radius: 8px;
-  background: rgb(94 200 232 / 10%);
-  color: var(--cmd-cyan-soft);
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.cmd-dock__keyboard-place:hover,
-.cmd-dock__keyboard-place:focus-visible {
-  border-color: var(--cmd-cyan);
-  background: rgb(94 200 232 / 18%);
-}
-
 .cmd-dock__bar {
   width: 100%;
   padding: 10px 12px 12px;
@@ -1324,12 +1303,6 @@
   .cmd-dock__label {
     margin-bottom: 4px;
     align-items: center;
-  }
-
-  .cmd-dock__keyboard-place {
-    min-height: 28px;
-    margin-top: 4px;
-    padding: 4px 8px;
   }
 
   .cmd-dock__hint {
