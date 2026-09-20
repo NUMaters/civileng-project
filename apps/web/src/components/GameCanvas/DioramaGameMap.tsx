@@ -30,7 +30,9 @@ import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
-import { FACILITY_LABEL_MARGIN, layoutFacilityLabel, type FacilityLabelLayout } from "./facilityLabelLayout";
+import { FACILITY_LABEL_MARGIN, type FacilityLabelLayout } from "./facilityLabelLayout";
+import { cacheFacilityLabelEnvelope, projectFacilityBody, layoutFacilityLabelOutsideBody,
+  type FacilityLabelEnvelope } from "./facilityModelLabelLayout";
 import { scoreGuidanceAnchor } from "./guidanceLabelLayout";
 import { createRiverStageController } from "./riverStage";
 import { createRiverSurfaceSampler } from "./riverSurface";
@@ -70,6 +72,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
     latest.current = props;
     const [ready, setReady] = useState(false);
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+    const selectedFacilityLabel = useRef(selectedLabelId);
+    selectedFacilityLabel.current = selectedLabelId;
+    const labelEnvelopes = useRef(new WeakMap<T.Group, FacilityLabelEnvelope>());
     const [error, setError] = useState("");
     const [geography, setGeography] = useState<KoriyamaSceneData | null>(null);
     useEffect(() => {
@@ -504,6 +509,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         pointerLeft: 0, pointerWidth: 0,
       };
       const candidateHintLayout = { ...labelLayout };
+      const projectedBody = { left: 0, top: 0, right: 0, bottom: 0, topX: 0, topY: 0, bottomX: 0, bottomY: 0 };
+      const labelClipMatrix = new T.Matrix4();
+      const projectedBodyPoint = new T.Vector3();
       let frame = 0,
         last = performance.now(),
         time = 0;
@@ -565,20 +573,25 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           lastFloodFocusKey = focusKey;
           latest.current.onFloodFocusChange?.({ available, viewing });
         }
+        const activeLabelId = latest.current.placements.find(placement => placement.preview)?.id ?? selectedFacilityLabel.current;
+        camera.updateMatrixWorld();
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
-          if (!model) {
+          if (!model || !model.visible || id !== activeLabelId) {
             element.style.visibility = "hidden";
             continue;
           }
-          const point = projectedPoint.copy(model.position);
-          point.y += 35;
-          point.project(camera);
           const size = labelSizes.current.get(element);
-          const visible = point.z < 1 && point.z > -1 && Math.abs(point.x) <= 1 && Math.abs(point.y) <= 1 &&
-            size !== undefined && layoutFacilityLabel(
-              (point.x * 0.5 + 0.5) * viewportWidth, (-point.y * 0.5 + 0.5) * viewportHeight,
-              size.width, size.height, labelBounds, labelLayout,
+          const envelope = labelEnvelopes.current.get(model);
+          // Update this transform only, not its children. Cached local geometry follows
+          // placement, heading and pop scale with the cached static hull boundary.
+          model.updateWorldMatrix(true, false);
+          labelClipMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(model.matrixWorld);
+          const visible = size !== undefined && envelope !== undefined &&
+            projectFacilityBody(envelope, labelClipMatrix, viewportWidth, viewportHeight, projectedBody, projectedBodyPoint) &&
+            layoutFacilityLabelOutsideBody(
+              projectedBody, size.width, size.height, viewportWidth, viewportHeight,
+              labelBounds, labelLayout,
             );
           // visibility preserves measurement while hidden, unlike display:none.
           element.style.visibility = visible ? "visible" : "hidden";
@@ -733,6 +746,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
               }
             }
           }
+          labelEnvelopes.current.set(model, cacheFacilityLabelEnvelope(model));
           const operation = createFacilityOperationVisuals(placement.structureId);
           model.add(operation.group);
           r.operations.set(placement.id, operation);
