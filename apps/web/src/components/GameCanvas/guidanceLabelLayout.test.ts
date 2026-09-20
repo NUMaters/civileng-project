@@ -87,7 +87,10 @@ it("uses cached measurements, one hint and unchanged prep/preview gates in the m
   expect(loop).toContain("labelSizes.current.get(hint)");
   expect(loop).toContain('state.phase === "preparation" || state.phase === "idle"');
   expect(loop).toContain("!latest.current.placements.some((placement) => placement.preview)");
-  expect(loop).toContain("score < bestScore");
+  expect(loop).toContain("score < Infinity");
+  expect(loop).toContain("bestScore");
+  expect(loop).toContain("isPreferredDioramaGuidanceCandidate(site.hasContribution, score");
+  expect(loop).toContain("chosen?.hasContribution");
   expect(loop).toContain('hint.style.visibility = chosen ? "visible" : "hidden"');
   expect(loop).toContain("if (ground === null) continue");
   expect(loop).not.toMatch(/getBoundingClientRect|getComputedStyle|offsetWidth|offsetHeight|py < 290|viewportHeight - 240|px < 90|hint.style.display/);
