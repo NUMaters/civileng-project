@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { createGeographicBuildingMaterial, BUILDING_DECORATION_PROVENANCE } from "./geographicBuildingMaterial";
+import { createGeographicRoof, type GeographicRoof } from "./geographicRoof";
 import { groundY } from "./dioramaSpace";
 import {
   koriyamaGeoToLocal,
@@ -24,6 +25,8 @@ export type GeographicBuildingHeight = {
   method?: string;
 };
 export type GeographicWorldOptions = {
+  /** The game opts in to disclosed decorative hips; set false to retain untagged flat roofs. */
+  allowIllustrativeHip?: boolean;
   /** Decorative classification colors only; does not change source geometry. */
   polygonSurfaceColor?: (feature: GeographicFeature) => string | undefined;
   plateau?: KoriyamaPlateauGeodata;
@@ -56,6 +59,11 @@ export type GeographicWorldStats = {
   excludedByBounds: number;
   skippedNoDataBuildings: number;
   skippedNoDataTriangles: number;
+  pitchedRoofParts: number;
+  illustrativeRoofParts: number;
+  taggedRoofParts: number;
+  flatRoofParts: number;
+  campusExcludedBuildings: number;
 };
 export type GeographicWorld = THREE.Group & {
   /** World-space positions; no transform required for the river shader. Owned by group meshes. */
@@ -65,9 +73,9 @@ export type GeographicWorld = THREE.Group & {
 };
 type Layer = "building" | "campus" | "water" | "waterway" | "road" | "rail" | "bridge-road" | "bridge-rail";
 export type GeographicSurfaceLayer = Exclude<Layer, "building">;
-type Buffer = { layer: Layer; tx: number; tz: number; positions: number[]; normals: number[]; colors: number[]; uvs: number[]; riverStageEligible: boolean; sourceIds: Set<string> };
-type Point = LocalPoint & { u?: number; v?: number };
-const COLORS = ["#528dce", "#718da9", "#cf7857", "#68a7cf", "#df9369"].map((c) => new THREE.Color(c));
+type Buffer = { layer: Layer; tx: number; tz: number; positions: number[]; normals: number[]; colors: number[]; uvs: number[]; roofMasks: number[]; riverStageEligible: boolean; sourceIds: Set<string> };
+type Point = LocalPoint & { u?: number; v?: number; roofMask?: number };
+const COLORS = ["#438edb", "#638bad", "#d87c55", "#50a7d7", "#df9966"].map((c) => new THREE.Color(c));
 const WALL_COLOR = new THREE.Color("#f6e8c9");
 const SURFACE_COLORS: Record<Exclude<Layer, "building">, THREE.Color> = {
   campus: new THREE.Color("#9bd675"), water: new THREE.Color("#4dbada"),
@@ -234,6 +242,7 @@ function clip(points: Point[], axis: "x" | "z", boundary: number, keepAbove: boo
       const point: Point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
       if (a.u !== undefined && b.u !== undefined) point.u = a.u + (b.u - a.u) * t;
       if (a.v !== undefined && b.v !== undefined) point.v = a.v + (b.v - a.v) * t;
+      if (a.roofMask !== undefined && b.roofMask !== undefined) point.roofMask = a.roofMask + (b.roofMask - a.roofMask) * t;
       point[axis] = boundary;
       result.push(point);
     }
@@ -274,7 +283,8 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
   group.waterGeometries = []; group.waterMeshes = [];
   const stats: GeographicWorldStats = { buildings: 0, unknownHeights: 0, estimatedHeights: 0, sourceHeights: 0,
     heightSources: {}, tiles: 0, batches: 0, vertices: 0, peakBufferedVertices: 0,
-    suppressedOsmBuildings: 0, plateauModelHeights: 0, excludedByBounds: 0, skippedNoDataBuildings: 0, skippedNoDataTriangles: 0 };
+    suppressedOsmBuildings: 0, plateauModelHeights: 0, excludedByBounds: 0, skippedNoDataBuildings: 0, skippedNoDataTriangles: 0,
+    pitchedRoofParts: 0, illustrativeRoofParts: 0, taggedRoofParts: 0, flatRoofParts: 0, campusExcludedBuildings: 0 };
   group.stats = stats;
   const heightRecords: Record<string, ReturnType<typeof buildingHeight>> = {};
   const bridgeRecords: { id: string; kind: string; bridge: unknown; layer: unknown }[] = [];
@@ -285,11 +295,21 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     return { ...collection, features } as T;
   }
   const combined = combineBuildings(bounded(data), options.plateau ? bounded(options.plateau) : undefined);
+  const campuses = combined.features.flatMap((f) => f.properties.kind === "campus" && f.geometry.type === "MultiPolygon"
+    ? [{ id: f.id, coordinates: f.geometry.coordinates, bounds: footprintBounds(f.geometry.coordinates) }] : []);
+  type RoofRecord = { style: GeographicRoof["style"]; eaveY: number; topY: number; sourceId: string;
+    provenance: GeographicRoof["provenance"]; campusAssociation: "source-use-tag" | "inferred-footprint-overlap" | "none"; campusSourceIds: string[] };
+  const roofRecords: Record<string, RoofRecord[]> = {};
   stats.suppressedOsmBuildings = combined.suppressed.length;
   const sampleGround = options.groundSampler ?? groundY;
   const sampleSurface = options.surfaceSampler ?? ((_x: number, _z: number, layer: GeographicSurfaceLayer) => SURFACE_Y[layer]);
   group.userData = {
     buildingDecoration: BUILDING_DECORATION_PROVENANCE,
+    buildingRoofs: roofRecords,
+    roofPolicy: { allowIllustrativeHip: options.allowIllustrativeHip ?? true,
+      disclosure: "Small compact untagged roofs are illustrative, not observed. Tagged shapes still have inferred pitch/ridge. Source maximum height is unchanged; roof rise is allocated within it.",
+      campusExclusion: "School use tags or actual campus footprint overlap (including boundary touch); geometric association is inferred, not a verified school-use classification.",
+      crossSourceRoofTags: "Never transferred from OSM to PLATEAU by proximity" },
     attributions: [KORIYAMA_ATTRIBUTION, KORIYAMA_PLATEAU_ATTRIBUTION],
     suppressedOsmBuildingIds: combined.suppressed,
     buildingDeduplication: "OSM footprint intersects or touches PLATEAU footprint; PLATEAU preferred; not an identity match",
@@ -319,6 +339,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute(buffer.normals, 3));
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(buffer.colors, 3));
     if (buffer.layer === "building") geometry.setAttribute("facadeUv", new THREE.Float32BufferAttribute(buffer.uvs, 2));
+    if (buffer.layer === "building") geometry.setAttribute("roofMask", new THREE.Float32BufferAttribute(buffer.roofMasks, 1));
     geometry.computeBoundingBox(); geometry.computeBoundingSphere();
     const water = buffer.layer === "water" || buffer.layer === "waterway";
     const mesh = new THREE.Mesh(geometry, water ? waterMaterial : buffer.layer === "building" ? buildingMaterial : material);
@@ -331,7 +352,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     group.add(mesh);
     if (water) { group.waterGeometries.push(geometry); group.waterMeshes.push(mesh); }
     stats.batches++; stats.vertices += count; buffered -= count;
-    buffer.positions = []; buffer.normals = []; buffer.colors = []; buffer.uvs = [];
+    buffer.positions = []; buffer.normals = []; buffer.colors = []; buffer.uvs = []; buffer.roofMasks = [];
     buffer.sourceIds.clear();
   }
   function emit(buffer: Buffer, a: Point, b: Point, c: Point, color: THREE.Color, sourceId?: string) {
@@ -351,7 +372,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       buffer.positions.push(p.x, p.y, p.z);
       buffer.normals.push(nx / length, ny / length, nz / length);
       buffer.colors.push(color.r, color.g, color.b);
-      if (buffer.layer === "building") buffer.uvs.push(p.u ?? 0, p.v ?? 0);
+      if (buffer.layer === "building") { buffer.uvs.push(p.u ?? 0, p.v ?? 0); buffer.roofMasks.push(p.roofMask ?? 0); }
     }
     buffered += 3; stats.peakBufferedVertices = Math.max(stats.peakBufferedVertices, buffered);
   }
@@ -378,7 +399,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       const key = `${layer}/${tx}/${tz}/${riverStageEligible ? "abukuma" : "static"}`;
       let buffer = buffers.get(key);
       if (!buffer) {
-        buffer = { layer, tx, tz, positions: [], normals: [], colors: [], uvs: [], riverStageEligible, sourceIds: new Set() };
+        buffer = { layer, tx, tz, positions: [], normals: [], colors: [], uvs: [], roofMasks: [], riverStageEligible, sourceIds: new Set() };
         buffers.set(key, buffer); tiles.add(`${tx}/${tz}`);
       }
       for (let i = 1; i < polygon.length - 1; i++) emit(buffer, polygon[0]!, polygon[i]!, polygon[i + 1]!, color, feature?.id);
@@ -464,6 +485,14 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       }
       // Preflight every clipped polygon before emitting anything: no partial building on missing DEM.
       if (height && noData) { stats.skippedNoDataBuildings++; continue; }
+      const properties = feature.properties as Record<string, unknown>;
+      const buildingUse = ["building", "amenity", "usage", "building:use"].map((key) => properties[key]).filter((v) => typeof v === "string").join(" ");
+      const schoolUse = /school|university|college|education|campus|学校|大学|教育/i.test(buildingUse);
+      const featurePolygons = feature.geometry.coordinates;
+      const featureBounds = height && prepared.length ? footprintBounds(featurePolygons) : null;
+      const campusSourceIds = featureBounds ? campuses.filter((campus) => intersectsBounds(featureBounds, campus.bounds) &&
+        footprintsTouch(featurePolygons, campus.coordinates)).map((campus) => campus.id) : [];
+      const campusAssociation: RoofRecord["campusAssociation"] = schoolUse ? "source-use-tag" : campusSourceIds.length ? "inferred-footprint-overlap" : "none";
       if (height && prepared.length) {
         heightRecords[feature.id] = height; stats.buildings++;
         if (height.unknown) stats.unknownHeights++;
@@ -471,18 +500,51 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
         if (!height.unknown && !height.estimated) stats.sourceHeights++;
         if (height.source === "plateau-lod1-z-bounds") stats.plateauModelHeights++;
         stats.heightSources[height.source] = (stats.heightSources[height.source] ?? 0) + 1;
+        if (campusAssociation !== "none") stats.campusExcludedBuildings++;
       }
       for (const { rings, roofs, base } of prepared) {
         const top = base + height!.meters;
-        const roofPoint = (p: Point): Point => ({ ...p, y: top, u: p.x - rings[0]![0]!.x, v: p.z - rings[0]![0]!.z });
-        for (const [a, b, c] of roofs) triangle("building", roofPoint(a), roofPoint(b), roofPoint(c), color);
+        const sourceRoofShape = typeof properties["roof:shape"] === "string" ? properties["roof:shape"] : null;
+        // A multipart/holed/irregular building stays flat, even if one of its pieces is rectangular.
+        const roof = feature.geometry.coordinates.length === 1 && rings.length === 1 && rings[0]!.length === 4
+          ? createGeographicRoof({ rings, baseY: base, heightM: height!.meters, sourceRoofShape,
+            allowIllustrativeHip: options.allowIllustrativeHip ?? true, isSchool: campusAssociation !== "none", buildingUse }) : null;
+        const eaveY = roof?.eaveY ?? top;
+        const provenance: GeographicRoof["provenance"] = roof?.provenance ?? {
+          classification: "flat", sourceRoofShape, reason: "complex-or-multipart-footprint-retains-flat",
+          ridge: "none", heightPolicy: "original-base-plus-height-is-maximum-roof-top" };
+        (roofRecords[feature.id] ??= []).push({ style: roof?.style ?? "flat", eaveY, topY: top, sourceId: feature.id,
+          provenance, campusAssociation, campusSourceIds });
+        if (roof && roof.style !== "flat") {
+          stats.pitchedRoofParts++;
+          if (provenance.classification === "illustrative") stats.illustrativeRoofParts++; else stats.taggedRoofParts++;
+          for (const [a, b, c] of roof.triangles) {
+            // The helper includes vertical gable caps. Classify faces once, not by a shader slope cutoff.
+            const gable = Math.abs((b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x)) < 1e-8;
+            const edge = gable ? rings[0]!.findIndex((p, i, ring) => {
+              const q = ring[(i + 1) % ring.length]!;
+              return [a, b, c].every((v) => Math.abs((q.x - p.x) * (v.z - p.z) - (q.z - p.z) * (v.x - p.x)) < 1e-7);
+            }) : -1;
+            const origin = edge >= 0 ? rings[0]![edge]! : rings[0]![0]!;
+            const end = edge >= 0 ? rings[0]![(edge + 1) % rings[0]!.length]! : origin;
+            const length = Math.hypot(end.x - origin.x, end.z - origin.z) || 1;
+            const roofPoint = (p: Point): Point => ({ ...p, roofMask: gable ? 0 : 1,
+              u: gable ? ((p.x - origin.x) * (end.x - origin.x) + (p.z - origin.z) * (end.z - origin.z)) / length : p.x - origin.x,
+              v: gable ? p.y - base : p.z - origin.z });
+            triangle("building", roofPoint(a), roofPoint(b), roofPoint(c), gable ? WALL_COLOR : color);
+          }
+        } else {
+          stats.flatRoofParts++;
+          const roofPoint = (p: Point): Point => ({ ...p, y: top, roofMask: 1, u: p.x - rings[0]![0]!.x, v: p.z - rings[0]![0]!.z });
+          for (const [a, b, c] of roofs) triangle("building", roofPoint(a), roofPoint(b), roofPoint(c), color);
+        }
         if (height!.meters > 0) {
           for (const ring of rings) for (let i = 0; i < ring.length; i++) {
             const a = ring[i]!, b = ring[(i + 1) % ring.length]!;
             // Anchor to original edge, BEFORE local-bounds and tile clipping. Metres, not normalized UV.
             const length = Math.hypot(b.x - a.x, b.z - a.z);
-            const ab = { ...a, y: base, u: 0, v: 0 }, bb = { ...b, y: base, u: length, v: 0 };
-            const at = { ...a, y: top, u: 0, v: height!.meters }, bt = { ...b, y: top, u: length, v: height!.meters };
+            const ab = { ...a, y: base, u: 0, v: 0, roofMask: 0 }, bb = { ...b, y: base, u: length, v: 0, roofMask: 0 };
+            const at = { ...a, y: eaveY, u: 0, v: eaveY - base, roofMask: 0 }, bt = { ...b, y: eaveY, u: length, v: eaveY - base, roofMask: 0 };
             triangle("building", ab, bb, bt, WALL_COLOR);
             triangle("building", ab, bt, at, WALL_COLOR);
           }

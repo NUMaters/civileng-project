@@ -3,7 +3,7 @@ import * as THREE from "three";
 export const BUILDING_DECORATION_PROVENANCE = {
   source: "illustrative-not-surveyed",
   details: "Roof colors, seams, window rows and facade-base shading are decorative; not observed materials, openings, floor counts or computed ambient occlusion.",
-  geometry: "Unchanged footprint, holes and LOD1 model height; no displacement or added geometry.",
+  geometry: "Source footprint, holes and maximum building height preserved; eligible pitched roofs have inferred pitch/ridge, never surveyed geometry. Shader performs no displacement.",
 } as const;
 
 /** One opaque, texture-free material for every building batch; standard lighting/shadows remain. */
@@ -11,16 +11,17 @@ export function createGeographicBuildingMaterial(): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide });
   material.name = "geographic-building-decoration";
   material.userData.decoration = BUILDING_DECORATION_PROVENANCE;
-  material.customProgramCacheKey = () => "geographic-building-decoration-v2";
+  material.customProgramCacheKey = () => "geographic-building-decoration-v3-roof-mask";
   material.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace("#include <common>", `#include <common>
 attribute vec2 facadeUv;
+attribute float roofMask;
 varying vec2 vFacadeUv;
 varying float vRoofMask;
 varying float vBuildingDistance;`)
       .replace("#include <begin_vertex>", `#include <begin_vertex>
 vFacadeUv = facadeUv;
-vRoofMask = step(0.8, abs(normal.y));`)
+vRoofMask = clamp(roofMask, 0.0, 1.0);`)
       .replace("#include <project_vertex>", `#include <project_vertex>
 vBuildingDistance = length(mvPosition.xyz);`);
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
