@@ -237,7 +237,7 @@ describe("source-connected inundation", () => {
     }
   }, 60_000);
 
-  it("seeds at the bank, shares its first wet edge with the connector and propagates from that inlet", () => {
+  it("seeds 4m subcells directly at the bank and propagates from the actual inlet", () => {
     const { adapter, geometry, state } = connectedSetup();
     adapter.update(state, 0, 0);
     adapter.update({ ...state, disasterElapsedSeconds: 0.1 }, 0.1, 0.1);
@@ -247,12 +247,13 @@ describe("source-connected inundation", () => {
     const n = Array.from({ length: firstCount }, (_, i) => i).find(i => Math.abs(p.getX(i)) < 1e-5)!;
     expect(p.getX(n)).toBeCloseTo(0, 5);
     expect(p.getX(n + 1)).toBeCloseTo(0, 5);
-    expect(p.getX(n + 2)).toBeCloseTo(8, 5); // half-cell inlet throat, anchored at x=0
-    expect(p.getY(n + 2)).toBeCloseTo(2, 5);
-    for (const k of [firstCount - 4, n + 5]) {
-      const shared = Array.from({ length: n }, (_, i) => i).some(i =>
-        Math.abs(p.getX(i) - p.getX(k)) < 1e-5 && Math.abs(p.getZ(i) - p.getZ(k)) < 1e-5 && p.getY(i) === p.getY(k));
-      expect(shared).toBe(true);
+    expect(p.getX(n + 2)).toBeCloseTo(4, 5); // actual first subcell, no detached 8m throat
+    expect(p.getY(n)).toBeCloseTo(2, 5);
+    expect(p.getY(n + 1)).toBeCloseTo(2, 5);
+    const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+    for (const x of [0.1, 1, 2, 3.9]) for (const z of [-7, -3, 1, 5]) {
+      ray.ray.origin.set(x, 10, z);
+      expect(ray.intersectObject(adapter.group.children[0]!, false).length).toBeGreaterThan(0);
     }
     // Moving the old site farther inland does not move injection to that remote point.
     const other = connectedSetup();
@@ -276,7 +277,7 @@ describe("source-connected inundation", () => {
 
   it("rejects missing or uphill throats before injecting, including obstructions between endpoints", () => {
     for (const sample of [(() => null), (() => NaN), ((x: number) => x > 2 && x < 6 ? null : 0),
-      ((x: number) => x > 2 && x < 6 ? 5 : 0), ((x: number) => x >= 8 ? 5 : 0)]) {
+      ((x: number) => x > 2 && x < 6 ? 5 : 0)]) {
       const { adapter, geometry, state } = connectedSetup(sample);
       run(adapter, state, 10);
       expect(geometry.drawRange.count).toBe(0);
@@ -285,6 +286,40 @@ describe("source-connected inundation", () => {
     const missingWater = connectedSetup(() => 0, () => null);
     run(missingWater.adapter, missingWater.state, 10);
     expect(missingWater.geometry.drawRange.count).toBe(0);
+  });
+
+  it("wets only the low portion of the former first 16m cell, preserving a high inland ridge", () => {
+    // Same old 8m-ridge fixture: it must no longer suppress wet shore at x=0..4,
+    // but it must still exclude the raised part and all land behind the ridge.
+    const { adapter, geometry, state } = connectedSetup(x => x >= 8 && x <= 12 ? 5 : 0);
+    run(adapter, state, 200);
+    expect(geometry.drawRange.count).toBeGreaterThan(0);
+    const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(0, -1, 0));
+    for (const x of [0.1, 1, 2, 3.9]) {
+      ray.ray.origin.set(x, 10, 1);
+      expect(ray.intersectObject(adapter.group.children[0]!, false).length).toBeGreaterThan(0);
+    }
+    const p = geometry.getAttribute("position");
+    for (let i = 0; i < geometry.drawRange.count; i++) expect(p.getX(i)).toBeLessThanOrEqual(4.00001);
+    for (const x of [8, 10, 12, 16, 24, 40]) {
+      ray.ray.origin.set(x, 10, 1);
+      expect(ray.intersectObject(adapter.group.children[0]!, false)).toHaveLength(0);
+    }
+  });
+
+  it("reuses bounded geometry buffers and keeps at most 24 source grids", () => {
+    const { adapter, geometry, state } = connectedSetup();
+    state.overflowSites = Array.from({ length: 30 }, (_, i) => ({ ...state.overflowSites[0]!, id: `site-${i}` }));
+    const p = geometry.getAttribute("position"), colors = geometry.getAttribute("color");
+    const pb = p.array, cb = colors.array;
+    run(adapter, state, 2);
+    expect(adapter.getRenderedPatches()).toHaveLength(24);
+    expect(adapter.group.children).toHaveLength(1);
+    expect(geometry.getAttribute("position").array).toBe(pb);
+    expect(geometry.getAttribute("color").array).toBe(cb);
+    expect(geometry.drawRange.count).toBeLessThanOrEqual(p.count);
+    expect(adapter.group.userData.floodGrid.geometryBufferBytes).toBeLessThan(11_000_000);
+    expect(adapter.group.userData.floodGrid.maxCellsPerSite).toBe(58 * 48);
   });
 
   it("does not propagate through a no-data barrier or higher-than-river cells", () => {
@@ -324,7 +359,9 @@ describe("source-connected inundation", () => {
     const control = connectedSetup();
     run(control.adapter, control.state, 20);
     adapter.update({ ...state, disasterElapsedSeconds: 1000 }, 1000, 104);
-    expectSameBuffer(p.array, control.geometry.getAttribute("position").array);
+    expect(geometry.drawRange.count).toBe(control.geometry.drawRange.count);
+    expectSameBuffer(p.array.slice(0, geometry.drawRange.count * 3),
+      control.geometry.getAttribute("position").array.slice(0, control.geometry.drawRange.count * 3));
     expect(p.count).toBe(capacity);
     expect(geometry.drawRange.count).toBeLessThanOrEqual(capacity);
     water = null;

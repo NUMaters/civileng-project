@@ -5,8 +5,8 @@ import {
   getCandidateBankElevationMeters,
   listOverflowCandidates,
 } from "../../features/disaster/services/overflowBankSites";
-import { geoToWorld, groundY, worldToGeo } from "./dioramaSpace";
-import type { BankSurfacePoint, RiverBoundary, RiverBoundaryResolver, SurfaceSampler } from "./riverBoundary";
+import { geoToWorld, groundY } from "./dioramaSpace";
+import type { RiverBoundary, RiverBoundaryResolver, SurfaceSampler } from "./riverBoundary";
 import { MAX_RIVER_EDGE_POINTS } from "./riverBoundary";
 
 export type FloodPoint = Readonly<{ x: number; y: number; z: number }>;
@@ -49,6 +49,29 @@ const MAX_SITES = 24;
 const LAT_METERS = 110_540;
 const INLET_COL = Math.floor(COLS / 2);
 const SURFACE_LIFT = 0.18;
+const SUBCELL = 4;
+const SUB_ROWS = 48;
+const SUB_COLS_MAX = 58; // 56 regular columns plus the two exact source-inlet edges.
+const SUB_VERTICES_MAX = SUB_COLS_MAX * SUB_ROWS * 6 + MAX_RIVER_EDGE_POINTS * 6;
+const BANK_SHALLOW = new THREE.Color("#65edfa");
+const BANK_DEEP = new THREE.Color("#009fc9");
+
+type BankGrid = {
+  columns: number;
+  lateral: Float64Array;
+  x: Float64Array;
+  z: Float64Array;
+  bed: Float32Array;
+  depth: Float32Array;
+  next: Float32Array;
+  neighbors: Int32Array;
+  connected: Uint8Array;
+  queue: Int32Array;
+  source: Uint8Array;
+  surface: Float32Array;
+  weights: Uint8Array;
+  flux: Float64Array;
+};
 
 type Grid = {
   seed: InundationSeed;
@@ -58,6 +81,7 @@ type Grid = {
   depth: Float32Array;
   next: Float32Array;
   boundary?: RiverBoundary;
+  bank?: BankGrid;
 };
 
 /**
@@ -65,7 +89,7 @@ type Grid = {
  * That module exposes only angle-sorted rings (which can bridge dry cells) and sparse
  * flow samples, and owns a global grid. Keeping the same 16 m grid/injection/flux
  * here avoids both invented wet polygons and resets affecting a Cesium viewer.
- * With a boundary resolver, the grid instead starts at a source-bank inlet and
+ * With a boundary resolver, a separate 4m subcell grid starts ON the source bank and
  * uses sampled ground plus a fixed-head river reservoir. Failed resolution never
  * falls back to an inland seed. Both modes illustrate propagation, not measured
  * discharge, building damage, surveyed levee failure or real flood forecasts.
@@ -76,7 +100,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
   group.visible = false;
   const grids = new Map<string, Grid>();
   // One reusable buffer/draw call, bounded independently of frame rate and site count.
-  const capacity = MAX_SITES * (COLS * ROWS * 12 + (MAX_RIVER_EDGE_POINTS - 1) * 6) * 3;
+  const capacity = MAX_SITES * (resolveBoundary ? SUB_VERTICES_MAX : COLS * ROWS * 12) * 3;
   const positions = new THREE.BufferAttribute(new Float32Array(capacity), 3);
   const colors = new THREE.BufferAttribute(new Float32Array(capacity), 3);
   positions.setUsage(THREE.DynamicDrawUsage);
@@ -97,6 +121,9 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
   // Fixed-size buffers contain unused vertices; do not use their bounds for culling.
   mesh.frustumCulled = false;
   group.add(mesh);
+  group.userData.floodGrid = { subcellMeters: resolveBoundary ? SUBCELL : CELL,
+    maxSites: MAX_SITES, maxCellsPerSite: resolveBoundary ? SUB_COLS_MAX * SUB_ROWS : COLS * ROWS,
+    vertexCapacity: capacity / 3, geometryBufferBytes: capacity * 4 * 2, drawCalls: 1 };
   const shallow = new THREE.Color("#65edfa");
   const deep = new THREE.Color("#009fc9");
   const color = new THREE.Color();
@@ -119,15 +146,25 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
 
   function rebuild(): void {
     let vertex = 0;
+    let simulationBufferBytes = 0;
     const patches: RenderedFloodPatch[] = [];
     for (const grid of grids.values()) {
-      if (grid.boundary && (!validConnection(grid, sampleGround) || grid.depth[INLET_COL]! < WET)) continue;
+      simulationBufferBytes += grid.ground.byteLength + grid.depth.byteLength + grid.next.byteLength;
       const vertexStart = vertex;
-      const connected = grid.boundary ? connectedWetCells(grid) : undefined;
+      if (grid.bank) {
+        const b = grid.bank;
+        simulationBufferBytes += b.lateral.byteLength + b.x.byteLength + b.z.byteLength + b.bed.byteLength +
+          b.depth.byteLength + b.next.byteLength + b.neighbors.byteLength + b.connected.byteLength + b.queue.byteLength +
+          b.source.byteLength + b.surface.byteLength + b.weights.byteLength + b.flux.byteLength;
+        vertex = emitBankGrid(grid, positions, colors, vertex);
+        const patch = renderedPatch(positions, vertexStart, vertex - vertexStart, grid.seed.id);
+        if (patch) patches.push(patch);
+        continue;
+      }
       for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
           const depth = grid.depth[row * COLS + col]!;
-          if (depth < WET || (connected && !connected[row * COLS + col])) continue;
+          if (depth < WET) continue;
           // Render cell footprints, never a hull enclosing unwetted neighbors.
           const samples = [
             { col, row, depth, surfaceY: grid.boundary ? grid.ground[row * COLS + col]! + depth : undefined },
@@ -156,14 +193,6 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
           }
         }
       }
-      if (grid.boundary) {
-        // Same inlet edge vertices/heights as row zero, not a separate visual gap patch.
-        for (const p of connectorTriangles(grid)) {
-          color.copy(shallow).lerp(deep, Math.min(1, grid.depth[INLET_COL]! / 1.5));
-          positions.setXYZ(vertex, p.x, p.y, p.z);
-          colors.setXYZ(vertex++, color.r, color.g, color.b);
-        }
-      }
       const patch = renderedPatch(positions, vertexStart, vertex - vertexStart, grid.seed.id);
       if (patch) patches.push(patch);
     }
@@ -178,6 +207,8 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
     }
     group.visible = vertex > 0;
     renderedPatches = Object.freeze(patches);
+    group.userData.floodGrid.simulationBufferBytes = simulationBufferBytes;
+    group.userData.floodGrid.cachedSites = grids.size;
   }
 
   return {
@@ -264,17 +295,24 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
               grid.boundary = boundary;
               // Terrain/source footprint are immutable for this grid frame;
               // cache bed/masks once, while checking the live throat each update.
-              sampleConnectedGround(grid, sampleGround);
+              grid.bank = createBankGrid(boundary, sampleGround);
             }
             grids.set(seed.id, grid);
           }
           grid.seed = seed;
           if (boundary) {
             grid.boundary = boundary;
-            if (!validConnection(grid, sampleGround)) { removed = grids.delete(seed.id) || removed; continue; }
+            // Recheck the small source footprint, not every cached terrain cell.
+            // No source connection means no retained remote puddle or stale geometry.
+            if (!refreshBankSource(grid, sampleGround)) {
+              if (grid.bank?.depth.some(value => value > 0)) removed = true;
+              grid.bank?.depth.fill(0);
+              continue;
+            }
           }
           for (let step = 0; step < steps; step++) {
-            advanceGrid(grid, Math.max(0, state.floodDepthMeters));
+            if (grid.bank) advanceBankGrid(grid);
+            else advanceGrid(grid, Math.max(0, state.floodDepthMeters));
           }
         }
         geometryDirty = true;
@@ -308,7 +346,9 @@ function renderedPatch(positions: THREE.BufferAttribute, vertexStart: number, ve
     const ax = positions.getX(i), ay = positions.getY(i), az = positions.getZ(i);
     const bx = positions.getX(i + 1), by = positions.getY(i + 1), bz = positions.getZ(i + 1);
     const cx = positions.getX(i + 2), cy = positions.getY(i + 2), cz = positions.getZ(i + 2);
-    if (![ax, ay, az, bx, by, bz, cx, cy, cz].every(Number.isFinite)) return null;
+    if (!Number.isFinite(ax) || !Number.isFinite(ay) || !Number.isFinite(az) ||
+        !Number.isFinite(bx) || !Number.isFinite(by) || !Number.isFinite(bz) ||
+        !Number.isFinite(cx) || !Number.isFinite(cy) || !Number.isFinite(cz)) return null;
     min.x = Math.min(min.x, ax, bx, cx); max.x = Math.max(max.x, ax, bx, cx);
     min.y = Math.min(min.y, ay, by, cy); max.y = Math.max(max.y, ay, by, cy);
     min.z = Math.min(min.z, az, bz, cz); max.z = Math.max(max.z, az, bz, cz);
@@ -391,10 +431,6 @@ function createGrid(seed: InundationSeed): Grid {
 }
 
 function point(grid: Grid, col: number, row: number) {
-  if (grid.boundary) {
-    const p = connectedPoint(grid, col, row);
-    return worldToGeo(p.x, p.z);
-  }
   const inland = (row - (ROWS - 1) * 0.2) * CELL;
   const lateral = (col - (COLS - 1) * 0.5) * CELL;
   const heading = (grid.seed.outflowHeadingDegrees * Math.PI) / 180;
@@ -480,69 +516,12 @@ function advanceGrid(grid: Grid, floodDepth: number): void {
 
 function riverHead(grid: Grid): number {
   const b = grid.boundary!;
-  return Math.min(b.left.y, b.right.y, ...(b.edge ?? []).map(p => p.y));
+  let head = Math.min(b.left.y, b.right.y);
+  if (b.edge) for (const p of b.edge) head = Math.min(head, p.y);
+  return head;
 }
 
-function connectedWetCells(grid: Grid): Uint8Array {
-  const connected = new Uint8Array(COLS * ROWS), queue = [INLET_COL];
-  if (grid.depth[INLET_COL]! < WET) return connected;
-  connected[INLET_COL] = 1;
-  for (let k = 0; k < queue.length; k++) {
-    const i = queue[k]!, col = i % COLS, row = Math.floor(i / COLS);
-    for (const [c, r] of [[col - 1, row], [col + 1, row], [col, row - 1], [col, row + 1]]) {
-      if (c! < 0 || c! >= COLS || r! < 0 || r! >= ROWS) continue;
-      const next = r! * COLS + c!;
-      if (!connected[next] && Number.isFinite(grid.ground[next]) && grid.depth[next]! >= WET) {
-        connected[next] = 1; queue.push(next);
-      }
-    }
-  }
-  return connected;
-}
-
-function connectedPoint(grid: Grid, col: number, row: number) {
-  const b = grid.boundary!;
-  const dx = b.right.x - b.left.x, dz = b.right.z - b.left.z, length = Math.hypot(dx, dz);
-  // The half-cell throat and receiving cell share the grid discretization; no
-  // centerline/shoreline offset is used to locate the source bank.
-  return { x: b.anchor.x + dx / length * (col - INLET_COL) * CELL + b.inland.x * (row + 1) * CELL,
-    z: b.anchor.z + dz / length * (col - INLET_COL) * CELL + b.inland.z * (row + 1) * CELL };
-}
-
-function sampleConnectedGround(grid: Grid, sample: SurfaceSampler): void {
-  for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
-    let bed = -Infinity;
-    for (const dr of [-0.5, 0, 0.5]) for (const dc of [-0.5, 0, 0.5]) {
-      const p = connectedPoint(grid, col + dc, row + dr), y = sample(p.x, p.z);
-      if (y === null || !Number.isFinite(y) || !grid.boundary!.isLand(p.x, p.z)) bed = Infinity;
-      else bed = Math.max(bed, y + SURFACE_LIFT);
-    }
-    grid.ground[row * COLS + col] = bed;
-  }
-}
-
-function connectorTriangles(grid: Grid): BankSurfacePoint[] {
-  const b = grid.boundary!, y = riverHead(grid);
-  const left = { ...connectedPoint(grid, INLET_COL - 0.5, -0.5), y };
-  const right = { ...connectedPoint(grid, INLET_COL + 0.5, -0.5), y };
-  const edge = b.edge ?? [b.left, b.right], triangles: BankSurfacePoint[] = [];
-  const dx = b.right.x - b.left.x, dz = b.right.z - b.left.z, length2 = dx * dx + dz * dz;
-  const target = (p: BankSurfacePoint) => {
-    const t = ((p.x - b.left.x) * dx + (p.z - b.left.z) * dz) / length2;
-    return { x: left.x + (right.x - left.x) * t, z: left.z + (right.z - left.z) * t, y };
-  };
-  for (let i = 1; i < edge.length; i++) {
-    const a = edge[i - 1]!, c = edge[i]!, d = target(c), e = target(a);
-    triangles.push(a, c, d, a, d, e);
-  }
-  return triangles;
-}
-
-/** Discrete 4m-or-finer triangle checks; not proof of unsampled terrain or a
- * surveyed levee crest. A missing/blocked throat rejects injection, not just paint.
- */
-function validConnection(grid: Grid, sample: SurfaceSampler): boolean {
-  const b = grid.boundary!;
+function validBank(b: RiverBoundary): boolean {
   if (b.edge && (b.edge.length < 2 || b.edge.length > MAX_RIVER_EDGE_POINTS ||
     b.edge.some(p => ![p.x, p.y, p.z].every(Number.isFinite) || Math.hypot(p.x - b.anchor.x, p.z - b.anchor.z) > CELL))) return false;
   if (![b.anchor.x, b.anchor.z, b.inland.x, b.inland.z, b.left.x, b.left.y, b.left.z,
@@ -550,20 +529,177 @@ function validConnection(grid: Grid, sample: SurfaceSampler): boolean {
     Math.hypot(b.right.x - b.left.x, b.right.z - b.left.z) < 1e-4 ||
     Math.hypot(b.left.x - b.anchor.x, b.left.z - b.anchor.z) > CELL ||
     Math.hypot(b.right.x - b.anchor.x, b.right.z - b.anchor.z) > CELL ||
-    Math.abs(Math.hypot(b.inland.x, b.inland.z) - 1) > 1e-6 ||
-    !Number.isFinite(grid.ground[INLET_COL]) || riverHead(grid) - grid.ground[INLET_COL]! < WET) return false;
-  const triangles = connectorTriangles(grid);
-  for (let i = 0; i < triangles.length; i += 3) {
-    const [a, c, d] = triangles.slice(i, i + 3) as [BankSurfacePoint, BankSurfacePoint, BankSurfacePoint];
-    const count = Math.ceil(Math.max(Math.hypot(a.x - c.x, a.z - c.z), Math.hypot(a.x - d.x, a.z - d.z),
-      Math.hypot(c.x - d.x, c.z - d.z)) / 4);
-    for (let u = 0; u <= count; u++) for (let v = 0; v <= count - u; v++) {
-      const s = u / count, t = v / count;
-      const x = a.x + (c.x - a.x) * s + (d.x - a.x) * t, z = a.z + (c.z - a.z) * s + (d.z - a.z) * t;
-      const y = a.y + (c.y - a.y) * s + (d.y - a.y) * t, ground = sample(x, z);
-      if (ground === null || !Number.isFinite(ground) || ground + SURFACE_LIFT + WET > y ||
-        ((x - b.anchor.x) * b.inland.x + (z - b.anchor.z) * b.inland.z > 1e-5 && !b.isLand(x, z))) return false;
+    Math.abs(Math.hypot(b.inland.x, b.inland.z) - 1) > 1e-6) return false;
+  return true;
+}
+
+/** Nine samples per 4m cell (2m spacing); a hole or source-water interior is
+ * impermeable. This is bounded educational discretization, not a surveyed crest.
+ * An exact polygon boundary is allowed, but never shifted inland for geometry.
+ */
+function bankCellBed(bank: BankGrid, b: RiverBoundary, col: number, row: number, sample: SurfaceSampler): number {
+  const stride = bank.columns + 1, p = row * stride + col;
+  let bed = -Infinity;
+  for (let v = 0; v <= 2; v++) for (let u = 0; u <= 2; u++) {
+    const x = bank.x[p]! + (bank.x[p + 1]! - bank.x[p]!) * u / 2 + b.inland.x * SUBCELL * v / 2;
+    const z = bank.z[p]! + (bank.z[p + 1]! - bank.z[p]!) * u / 2 + b.inland.z * SUBCELL * v / 2;
+    const y = sample(x, z);
+    if (y === null || !Number.isFinite(y)) return Infinity;
+    if (!b.isLand(x, z)) {
+      // The side probe classifies a boundary; it does not move its coordinates.
+      if (row !== 0 || v !== 0 || !b.isLand(x + b.inland.x * 1e-5, z + b.inland.z * 1e-5) ||
+          b.isLand(x - b.inland.x * 1e-5, z - b.inland.z * 1e-5)) return Infinity;
+    }
+    bed = Math.max(bed, y + SURFACE_LIFT);
+  }
+  return bed;
+}
+
+function createBankGrid(b: RiverBoundary, sample: SurfaceSampler): BankGrid | undefined {
+  if (!validBank(b)) return undefined;
+  const length = Math.hypot(b.right.x - b.left.x, b.right.z - b.left.z);
+  const tx = (b.right.x - b.left.x) / length, tz = (b.right.z - b.left.z) / length;
+  const left = (b.left.x - b.anchor.x) * tx + (b.left.z - b.anchor.z) * tz;
+  const right = (b.right.x - b.anchor.x) * tx + (b.right.z - b.anchor.z) * tz;
+  const edges = Array.from({ length: 57 }, (_, i) => (i - 28) * SUBCELL);
+  for (const p of [left, right]) if (!edges.some(x => Math.abs(x - p) < 1e-6)) edges.push(p);
+  edges.sort((a, c) => a - c);
+  const columns = edges.length - 1, cells = columns * SUB_ROWS, nodes = (columns + 1) * (SUB_ROWS + 1);
+  const bank: BankGrid = { columns, lateral: Float64Array.from(edges), x: new Float64Array(nodes), z: new Float64Array(nodes),
+    bed: new Float32Array(cells), depth: new Float32Array(cells), next: new Float32Array(cells),
+    neighbors: new Int32Array(cells * 4), connected: new Uint8Array(cells), queue: new Int32Array(cells),
+    source: new Uint8Array(cells), surface: new Float32Array(nodes), weights: new Uint8Array(nodes), flux: new Float64Array(4) };
+  for (let row = 0; row <= SUB_ROWS; row++) for (let col = 0; col <= columns; col++) {
+    const i = row * (columns + 1) + col;
+    bank.x[i] = b.anchor.x + tx * edges[col]! + b.inland.x * row * SUBCELL;
+    bank.z[i] = b.anchor.z + tz * edges[col]! + b.inland.z * row * SUBCELL;
+  }
+  for (let row = 0; row < SUB_ROWS; row++) for (let col = 0; col < columns; col++) {
+    const i = row * columns + col;
+    bank.bed[i] = bankCellBed(bank, b, col, row, sample);
+    bank.neighbors[i * 4] = col > 0 ? i - 1 : -1;
+    bank.neighbors[i * 4 + 1] = col + 1 < columns ? i + 1 : -1;
+    bank.neighbors[i * 4 + 2] = row > 0 ? i - columns : -1;
+    bank.neighbors[i * 4 + 3] = row + 1 < SUB_ROWS ? i + columns : -1;
+    if (row === 0 && edges[col]! >= left - 1e-6 && edges[col + 1]! <= right + 1e-6) bank.source[i] = 1;
+  }
+  return bank;
+}
+
+function refreshBankSource(grid: Grid, sample: SurfaceSampler): boolean {
+  const bank = grid.bank, b = grid.boundary!;
+  if (!bank || !validBank(b)) return false;
+  const head = riverHead(grid);
+  let active = false;
+  for (let col = 0; col < bank.columns; col++) if (bank.source[col]) {
+    bank.bed[col] = bankCellBed(bank, b, col, 0, sample);
+    if (head - bank.bed[col]! >= WET) active = true;
+  }
+  return active;
+}
+
+function advanceBankGrid(grid: Grid): void {
+  const b = grid.bank!, head = riverHead(grid), size = b.depth.length;
+  for (let i = 0; i < size; i++) b.depth[i] = b.source[i] ? Math.max(0, head - b.bed[i]!) : Math.min(b.depth[i]!, Math.max(0, head - b.bed[i]!));
+  b.next.set(b.depth);
+  // Cell-size-scaled diffusion, bounded to 85% outflow; no per-cell allocations.
+  const rate = 1.55 * STEP * grid.seed.intensity * (CELL / SUBCELL) ** 2;
+  for (let i = 0; i < size; i++) {
+    const depth = b.depth[i]!;
+    if (depth < WET * 0.5 || !Number.isFinite(b.bed[i])) continue;
+    let total = 0;
+    for (let k = 0; k < 4; k++) {
+      const n = b.neighbors[i * 4 + k]!;
+      const flux = n < 0 || !Number.isFinite(b.bed[n]) ? 0 : Math.max(0, Math.min(depth * 0.22, (b.bed[i]! + depth - b.bed[n]! - b.depth[n]!) * rate));
+      b.flux[k] = flux; total += flux;
+    }
+    const scale = total > depth * 0.85 ? depth * 0.85 / total : 1;
+    for (let k = 0; k < 4; k++) {
+      const n = b.neighbors[i * 4 + k]!;
+      if (n < 0) continue;
+      const flux = b.flux[k]! * scale;
+      b.next[i]! -= flux; b.next[n]! += flux;
     }
   }
-  return true;
+  const drain = 0.012 * STEP * (1.15 - grid.seed.intensity);
+  for (let i = 0; i < size; i++) b.depth[i] = b.source[i] ? Math.max(0, head - b.bed[i]!) : Math.min(Math.max(0, b.next[i]! - drain), Math.max(0, head - b.bed[i]!));
+}
+
+function edgeHeight(b: RiverBoundary, x: number, z: number): number {
+  const edge = b.edge;
+  if (!edge) {
+    const length2 = (b.right.x - b.left.x) ** 2 + (b.right.z - b.left.z) ** 2;
+    const t = ((x - b.left.x) * (b.right.x - b.left.x) + (z - b.left.z) * (b.right.z - b.left.z)) / length2;
+    return b.left.y + (b.right.y - b.left.y) * Math.max(0, Math.min(1, t));
+  }
+  let nearest = Infinity, y = b.left.y;
+  for (let i = 1; i < edge.length; i++) {
+    const a = edge[i - 1]!, c = edge[i]!, dx = c.x - a.x, dz = c.z - a.z;
+    const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz)));
+    const distance = (x - a.x - t * dx) ** 2 + (z - a.z - t * dz) ** 2;
+    if (distance < nearest) { nearest = distance; y = a.y + (c.y - a.y) * t; }
+  }
+  return y;
+}
+
+function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THREE.BufferAttribute, vertex: number): number {
+  const b = grid.bank!, boundary = grid.boundary!, columns = b.columns, stride = columns + 1;
+  b.connected.fill(0); b.surface.fill(0); b.weights.fill(0);
+  let tail = 0;
+  for (let i = 0; i < columns; i++) if (b.source[i] && b.depth[i]! >= WET) { b.connected[i] = 1; b.queue[tail++] = i; }
+  for (let cursor = 0; cursor < tail; cursor++) {
+    const i = b.queue[cursor]!;
+    for (let k = 0; k < 4; k++) {
+      const n = b.neighbors[i * 4 + k]!;
+      if (n >= 0 && !b.connected[n] && b.depth[n]! >= WET && Number.isFinite(b.bed[n])) { b.connected[n] = 1; b.queue[tail++] = n; }
+    }
+    const row = Math.floor(i / columns), col = i % columns, node = row * stride + col;
+    const y = b.bed[i]! + b.depth[i]!;
+    for (let k = 0; k < 4; k++) {
+      const n = node + (k % 2) + (k >= 2 ? stride : 0);
+      b.surface[n]! += y; b.weights[n]!++;
+    }
+  }
+  for (let i = 0; i < b.surface.length; i++) if (b.weights[i]) b.surface[i]! /= b.weights[i]!;
+  for (let col = 0; col < columns; col++) if (b.source[col] && b.connected[col]) {
+    b.surface[col] = edgeHeight(boundary, b.x[col]!, b.z[col]!);
+    b.surface[col + 1] = edgeHeight(boundary, b.x[col + 1]!, b.z[col + 1]!);
+  }
+  const emit = (x: number, y: number, z: number, depth: number) => {
+    positions.setXYZ(vertex, x, y, z);
+    const t = Math.min(1, depth / 1.5);
+    colors.setXYZ(vertex++, BANK_SHALLOW.r + (BANK_DEEP.r - BANK_SHALLOW.r) * t,
+      BANK_SHALLOW.g + (BANK_DEEP.g - BANK_SHALLOW.g) * t, BANK_SHALLOW.b + (BANK_DEEP.b - BANK_SHALLOW.b) * t);
+  };
+  const emitNode = (n: number, depth: number) => emit(b.x[n]!, b.surface[n]!, b.z[n]!, depth);
+  for (let cursor = 0; cursor < tail; cursor++) {
+    const i = b.queue[cursor]!, row = Math.floor(i / columns), col = i % columns;
+    const a = row * stride + col, c = a + 1, d = a + stride + 1, e = a + stride;
+    const depth = b.depth[i]!;
+    if (row === 0 && b.source[i]) {
+      // Subdivide ONLY this wet cell's source edge at actual river triangle breaks.
+      // There is no separate widened connector and no unsimulated 8m shore band.
+      let x = b.x[a]!, z = b.z[a]!, y = edgeHeight(boundary, x, z);
+      const dx = b.x[c]! - x, dz = b.z[c]! - z, length2 = dx * dx + dz * dz;
+      const edge = boundary.edge;
+      for (let k = 0; k <= (edge?.length ?? 0); k++) {
+        const p = edge?.[k];
+        const t = p ? ((p.x - b.x[a]!) * dx + (p.z - b.z[a]!) * dz) / length2 : 1;
+        if (p && (t <= 1e-6 || t >= 1 - 1e-6)) continue;
+        const nx = p?.x ?? b.x[c]!, nz = p?.z ?? b.z[c]!, ny = p?.y ?? edgeHeight(boundary, nx, nz);
+        const startT = ((x - b.x[a]!) * dx + (z - b.z[a]!) * dz) / length2;
+        const lx = b.x[e]! + (b.x[d]! - b.x[e]!) * startT, lz = b.z[e]! + (b.z[d]! - b.z[e]!) * startT;
+        const ly = b.surface[e]! + (b.surface[d]! - b.surface[e]!) * startT;
+        const rx = b.x[e]! + (b.x[d]! - b.x[e]!) * t, rz = b.z[e]! + (b.z[d]! - b.z[e]!) * t;
+        const ry = b.surface[e]! + (b.surface[d]! - b.surface[e]!) * t;
+        emit(x, y, z, depth); emit(nx, ny, nz, depth); emit(rx, ry, rz, depth);
+        emit(x, y, z, depth); emit(rx, ry, rz, depth); emit(lx, ly, lz, depth);
+        x = nx; z = nz; y = ny;
+      }
+    } else {
+      emitNode(a, depth); emitNode(c, depth); emitNode(d, depth);
+      emitNode(a, depth); emitNode(d, depth); emitNode(e, depth);
+    }
+  }
+  return vertex;
 }
