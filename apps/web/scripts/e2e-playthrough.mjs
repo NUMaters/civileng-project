@@ -297,6 +297,24 @@ async function main() {
       );
     }
     step("実ポインター操作で仮配置");
+    const pendingPanel = await evaluate(
+      client,
+      `(() => {
+        const panel = document.querySelector('[aria-label="仮配置操作"]');
+        const text = panel?.textContent ?? '';
+        return Boolean(
+          panel &&
+          text.includes('仮配置') &&
+          text.includes('戻す') &&
+          text.includes('配置する') &&
+          panel.querySelector('[aria-label="向きスライダー"]'),
+        );
+      })()`,
+    );
+    if (!pendingPanel) {
+      throw new Error("仮配置操作パネルの内容が不足しています");
+    }
+    step("仮配置操作パネル表示");
     const touchActionAfterDrag = await evaluate(
       client,
       `getComputedStyle(document.querySelector('.structure-card:not(:disabled)')).touchAction`,
