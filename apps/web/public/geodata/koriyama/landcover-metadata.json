@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "bounds": [
+    140.37,
+    37.351,
+    140.398,
+    37.379
+  ],
+  "origin": {
+    "longitude": 140.3837,
+    "latitude": 37.3655
+  },
+  "source": "OpenStreetMap",
+  "query": "[out:json][timeout:45];(way[landuse~\"^(grass|forest|meadow|recreation_ground|farmland|orchard|allotments)$\"](37.351,140.37,37.379,140.398);relation[type=multipolygon][landuse~\"^(grass|forest|meadow|recreation_ground|farmland|orchard|allotments)$\"](37.351,140.37,37.379,140.398);way[natural~\"^(wood|scrub|grassland)$\"](37.351,140.37,37.379,140.398);relation[type=multipolygon][natural~\"^(wood|scrub|grassland)$\"](37.351,140.37,37.379,140.398);way[leisure~\"^(park|garden|pitch|sports_centre)$\"](37.351,140.37,37.379,140.398);relation[type=multipolygon][leisure~\"^(park|garden|pitch|sports_centre)$\"](37.351,140.37,37.379,140.398);node[natural=tree](37.351,140.37,37.379,140.398););out meta geom;",
+  "endpoint": "https://overpass-api.de/api/interpreter",
+  "fetchedAt": "2026-09-20T14:29:57.904Z",
+  "osmTimestamp": "2026-09-20T14:28:31Z",
+  "license": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "conversion": "polygon-clipping 0.15.7; exact source coordinates except inserted bounding-box intersections; relation holes retained",
+  "privacy": "Contributor user/uid/changeset omitted; tags allowlisted; no contributor accounts in snapshot",
+  "counts": {
+    "tree": 234,
+    "leisure:pitch": 12,
+    "natural:grassland": 1,
+    "leisure:park": 20,
+    "landuse:grass": 14
+  },
+  "features": 281,
+  "polygonFeatures": 47,
+  "mappedTreePoints": 234,
+  "holes": 0,
+  "skipped": [],
+  "dataSha256": "0d75c91f2cc22289b3bcf4d1678dcdcfd9914276f6ff1bf9e9d672266affaffe",
+  "sourceSha256": "818e59ace324fd255fc89d9f5833c9f2040ac940d8f71171df84654bf87d9293",
+  "limitations": [
+    "OSM mapping completeness and survey dates unknown; no invented tree points",
+    "Park/sports_centre polygons are facility extents, not proof of continuous vegetation",
+    "Pitch surfaces may be artificial or bare; preserve surface/sport tags",
+    "No canopy geometry or verified tree height; tags unverified",
+    "Overlapping categories retained, not a mutually exclusive landcover partition",
+    "BBox selects ways with nodes and related members; enclosing polygons with no matching bbox nodes may be absent",
+    "No DEM or elevations"
+  ]
+}

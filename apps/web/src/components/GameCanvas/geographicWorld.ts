@@ -24,6 +24,8 @@ export type GeographicBuildingHeight = {
   method?: string;
 };
 export type GeographicWorldOptions = {
+  /** Decorative classification colors only; does not change source geometry. */
+  polygonSurfaceColor?: (feature: GeographicFeature) => string | undefined;
   plateau?: KoriyamaPlateauGeodata;
   /** Local metres, inclusive. Clip before any elevation sampling. */
   localBounds?: { minX: number; minZ: number; maxX: number; maxZ: number };
@@ -32,7 +34,7 @@ export type GeographicWorldOptions = {
   /** Building base sampler only; default groundY is synthetic, not surveyed elevation. */
   groundSampler?: (x: number, z: number) => number | null;
   /** Absolute surface Y at each polygon/ribbon vertex. Caller owns consistency with its terrain. */
-  surfaceSampler?: (x: number, z: number, layer: GeographicSurfaceLayer) => number | null;
+  surfaceSampler?: (x: number, z: number, layer: GeographicSurfaceLayer, feature: GeographicFeature) => number | null;
   tileSize?: number;
   maxBatchVertices?: number;
   buildingHeightProvider?: (feature: GeographicFeature) => GeographicBuildingHeight | null | undefined;
@@ -389,10 +391,10 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     }
   }
   const centroid = (a: Point, b: Point, c: Point): Point => ({ x: (a.x + b.x + c.x) / 3, y: 0, z: (a.z + b.z + c.z) / 3 });
-  function surfaceTriangle(layer: GeographicSurfaceLayer, a: Point, b: Point, c: Point, color: THREE.Color) {
+  function surfaceTriangle(layer: GeographicSurfaceLayer, a: Point, b: Point, c: Point, color: THREE.Color, feature: GeographicFeature) {
     planarTriangles(a, b, c, (a, b, c) => {
       const points = [a, b, c, centroid(a, b, c)];
-      const ys = points.map((p) => sampleSurface(p.x, p.z, layer));
+      const ys = points.map((p) => sampleSurface(p.x, p.z, layer, feature));
       if (ys.some((y) => !validElevation(y)) || (options.groundSampler && points.some((p) => !validElevation(sampleGround(p.x, p.z))))) {
         stats.skippedNoDataTriangles++; return;
       }
@@ -413,7 +415,8 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       const height = kind === "building" ? buildingHeight(feature, options) : null;
       let hash = 0;
       for (let i = 0; i < feature.id.length; i++) hash = (Math.imul(hash, 31) + feature.id.charCodeAt(i)) >>> 0;
-      const color = kind === "building" ? COLORS[hash % COLORS.length]! : SURFACE_COLORS[kind];
+      const overrideColor = kind !== "building" ? options.polygonSurfaceColor?.(feature) : undefined;
+      const color = kind === "building" ? COLORS[hash % COLORS.length]! : overrideColor ? new THREE.Color(overrideColor) : SURFACE_COLORS[kind];
       const prepared: { rings: Point[][]; roofs: [Point, Point, Point][]; base: number }[] = [];
       let noData = false;
       for (const polygon of feature.geometry.coordinates) {
@@ -430,7 +433,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
         const faces = THREE.ShapeUtils.triangulateShape(shapeRings[0]!, shapeRings.slice(1));
         for (const [ia, ib, ic] of faces) {
           const a = flat[ia!]!, b = flat[ib!]!, c = flat[ic!]!;
-          if (kind !== "building") surfaceTriangle(kind, a, b, c, color);
+          if (kind !== "building") surfaceTriangle(kind, a, b, c, color, feature);
           else planarTriangles(a, b, c, (a, b, c) => {
             roofs.push([a, b, c]);
             for (const p of [a, b, c, centroid(a, b, c)]) {
@@ -484,8 +487,8 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
           const surfacePoint = (x: number, z: number) => ({ x, y: 0, z });
           const al = surfacePoint(a.x + dx, a.z + dz), ar = surfacePoint(a.x - dx, a.z - dz);
           const bl = surfacePoint(b.x + dx, b.z + dz), br = surfacePoint(b.x - dx, b.z - dz);
-          surfaceTriangle(layer, al, bl, ar, SURFACE_COLORS[layer]);
-          surfaceTriangle(layer, ar, bl, br, SURFACE_COLORS[layer]);
+          surfaceTriangle(layer, al, bl, ar, SURFACE_COLORS[layer], feature);
+          surfaceTriangle(layer, ar, bl, br, SURFACE_COLORS[layer], feature);
         }
       }
     }
