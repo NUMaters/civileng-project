@@ -17,6 +17,8 @@ import { createGeographicBridges } from "./geographicBridges";
 import { createGeographicTrain } from "./geographicTrain";
 import { followGeographicShadows } from "./geographicShadows";
 import { createGeographicLandcover } from "./geographicLandcover";
+import { createGeographicImageryVegetation } from "./geographicImageryVegetation";
+import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
@@ -164,6 +166,11 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const landcover = createGeographicLandcover(geography.landcover, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
       });
+      const imageryVegetation = createGeographicImageryVegetation(geography.imageryTrees, {
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
+        exclusions: createImageryVegetationExclusions(geography.osm, geography.plateau, geography.landcover),
+        exclusionMode: "centre", illustrativeHeightM: 7,
+      });
       const world = createGeographicWorld({ ...geography.osm,
         features: geography.osm.features.filter(feature => !bridges.sourceIds.has(feature.id)),
       }, {
@@ -194,6 +201,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         disposeObject(bridges.group);
         disposeObject(train.group);
         disposeObject(landcover.group);
+        disposeObject(imageryVegetation.group);
         setError("3D描画を開始できません。ブラウザーを再読み込みしてください。");
         return;
       }
@@ -256,7 +264,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls.update();
       };
       reset();
-      scene.add(terrain.group, world, bridges.group, train.group, landcover.group);
+      scene.add(terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group);
       const waterMaterial = createGeographicWaterMaterial();
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {
@@ -763,6 +771,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         ) : !ready ? <p role="status" className="diorama-error">阿武隈川の地形と街を読み込み中…</p> : null}
         <details className="diorama-attribution">
           <summary>地図出典</summary>
+          <p>一部の樹冠位置・半径は地理院タイル（画面表示の撮影期間：2022年7〜9月）から目視推定しています。各木の撮影日は未検証で、幹位置・樹高の実測ではありません。高さ・樹形は仮表現です。</p>
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
           <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
           <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル（国土地理院）標高タイルを加工</a>
