@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "status": "visually-interpreted-canopy-envelopes-awaiting-rendering-validation",
+  "source": {
+    "provider": "Geospatial Information Authority of Japan",
+    "layer": "seamlessphoto",
+    "attribution": "地理院タイル（全国最新写真）を判読・加工して作成",
+    "catalogUrl": "https://maps.gsi.go.jp/development/ichiran.html",
+    "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+    "displayedCapturePeriod": "2022-07/2022-09",
+    "observedDate": "2026-09-21",
+    "referenceTile": { "z": 18, "x": 233294, "y": 101705, "sizePixels": 256 },
+    "tileUrlTemplate": "https://maps.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+    "pixelCoordinates": "Offsets from the reference tile top-left; negative and >255 offsets address adjacent tiles.",
+    "positionMethod": "visual-canopy-envelope-inference",
+    "limitations": [
+      "These are envelopes of visibly wooded patches, not surveyed canopy edges or continuous leaf coverage.",
+      "Individual tree positions, counts, species and heights inside each envelope are unknown.",
+      "Any generated internal tree placement is an illustrative reconstruction, not individually observed trees.",
+      "Building, water, road, rail and existing-tree exclusions must be applied without moving their source geometry.",
+      "Small initial campus sample; not complete woodland coverage of the university or river corridor.",
+      "Capture period is the GSI map display, not independently verified per-patch acquisition metadata."
+    ]
+  },
+  "patches": [
+    {
+      "id": "campus-north-grove-core",
+      "rings": [[[211,-227],[243,-239],[272,-223],[278,-187],[259,-155],[223,-155],[205,-184],[211,-227]]]
+    },
+    {
+      "id": "campus-west-grove-core",
+      "rings": [[[106,-130],[137,-140],[172,-116],[207,-70],[182,-40],[125,-45],[105,-85],[106,-130]]]
+    },
+    {
+      "id": "campus-central-grove-core",
+      "rings": [[[203,-63],[235,-83],[270,-73],[283,-39],[270,21],[233,35],[196,12],[188,-22],[203,-63]]]
+    },
+    {
+      "id": "campus-south-building-grove",
+      "rings": [[[416,313],[458,285],[495,288],[527,297],[562,295],[592,279],[616,301],[629,330],[598,348],[543,352],[476,353],[442,341],[416,313]]]
+    }
+  ]
+}
