@@ -5,6 +5,14 @@ import { distanceToVegetationSegment, insideVegetationRing, intersectsVegetation
 import { createVegetationStyleResources, vegetationColor, vegetationHashUnit, VEGETATION_STYLE_PROVENANCE } from "./geographicVegetationStyle";
 
 export const IMAGERY_CANOPY_URL = "/geodata/koriyama/imagery-canopy-observations.json";
+type IllustrativeCanopyProfile = "riverbank-detail-v1";
+const RIVERBANK_DETAIL_IDS = new Set(["riverbank-south-canopy-core", "riverbank-middle-canopy-core", "riverbank-north-canopy-core"]);
+/** Artistic sampling profile, NOT a density/size measurement from the source photograph. */
+const RIVERBANK_DETAIL = { spacingM: 4.5, radiusRangeM: [1.8, 2.6] as const };
+function validateProfile(patch: { id: string; illustrativeProfile?: IllustrativeCanopyProfile }) {
+  if (patch.illustrativeProfile !== undefined &&
+      (patch.illustrativeProfile !== "riverbank-detail-v1" || !RIVERBANK_DETAIL_IDS.has(patch.id))) throw new RangeError("Invalid/out-of-scope canopy profile");
+}
 export type ImageryCanopyObservationView = {
   mapUrl: string;
   layer: string;
@@ -17,20 +25,22 @@ export type ImageryCanopyObservationView = {
 export type ImageryCanopyObservations = {
   schemaVersion: 1;
   source: ImageryTreeObservations["source"];
-  patches: { id: string; rings: [number, number][][]; observationView?: ImageryCanopyObservationView }[];
+  patches: { id: string; rings: [number, number][][]; observationView?: ImageryCanopyObservationView; illustrativeProfile?: IllustrativeCanopyProfile }[];
 };
 export type CanopyPatch = {
   id: string;
   rings: VegetationPoint[][];
   source: ImageryCanopyObservations["source"];
   observationView?: ImageryCanopyObservationView;
+  illustrativeProfile?: IllustrativeCanopyProfile;
 };
 export function convertImageryCanopyObservations(data: ImageryCanopyObservations): CanopyPatch[] {
   const ref = data.source?.referenceTile;
   if (data.schemaVersion !== 1 || !ref || ref.sizePixels !== 256 || !data.source.attribution || !data.source.mapUrl ||
       !Array.isArray(data.patches) || !/^\d{4}-\d{2}\/\d{4}-\d{2}$/.test(data.source.displayedCapturePeriod)) throw new RangeError("Invalid canopy source metadata");
   imageryPixelToGeo(ref, { x: 0, y: 0 });
-  return data.patches.map(patch => ({ id: patch.id, source: data.source, observationView: patch.observationView, rings: patch.rings.map(ring => ring.map(([east, south]) => {
+  data.patches.forEach(validateProfile);
+  return data.patches.map(patch => ({ id: patch.id, source: data.source, observationView: patch.observationView, illustrativeProfile: patch.illustrativeProfile, rings: patch.rings.map(ring => ring.map(([east, south]) => {
     if (![east, south].every(Number.isFinite)) throw new RangeError("Invalid canopy pixel");
     const dx = Math.floor(east / 256), dy = Math.floor(south / 256);
     return koriyamaGeoToLocal(imageryPixelToGeo({ z: ref.z, x: ref.x + dx, y: ref.y + dy }, { x: east - dx * 256, y: south - dy * 256 }));
@@ -62,6 +72,7 @@ export type CanopyOptions = {
   exclusions: readonly VegetationExclusion[];
   /** ALL explicitly observed candidates, including the ones withheld by the individual renderer. */
   observedCrowns: readonly ImageryTreeCandidate[];
+  /** Explicit options override patch profiles (useful for controlled baseline comparisons). */
   spacingM?: number;
   radiusRangeM?: readonly [number, number];
   heightRangeM?: readonly [number, number];
@@ -94,6 +105,7 @@ export function createGeographicCanopy(patches: readonly CanopyPatch[], options:
       ![...radii, ...heights].every(v => Number.isFinite(v) && v > 0 && v <= 30) || radii[0] > radii[1] || heights[0] > heights[1]) throw new RangeError("Invalid canopy limits");
   const seen = new Set<string>();
   for (const patch of patches) {
+    validateProfile(patch);
     if (!patch.id || seen.has(patch.id) || !patch.rings.length || patch.rings.some(r => r.length < 3 || r.length > 512)) throw new RangeError("Invalid/duplicate canopy patch");
     boundsOf(patch.rings); seen.add(patch.id);
   }
@@ -112,19 +124,22 @@ export function createGeographicCanopy(patches: readonly CanopyPatch[], options:
   const skippedPatches: { id: string; reason: "outside-bounds" | "cell-budget" }[] = [];
   let evaluatedCells = 0;
   for (const patch of [...patches].sort((a, c) => a.id < c.id ? -1 : a.id > c.id ? 1 : 0)) {
+    const profile = patch.illustrativeProfile === "riverbank-detail-v1" ? RIVERBANK_DETAIL : undefined;
+    const patchSpacing = options.spacingM ?? profile?.spacingM ?? spacing;
+    const patchRadii = options.radiusRangeM ?? profile?.radiusRangeM ?? radii;
     const pb = boundsOf(patch.rings);
     if (!overlaps(pb, b)) { skippedPatches.push({ id: patch.id, reason: "outside-bounds" }); continue; }
-    const x0 = Math.floor(Math.max(pb.minX, b.minX) / spacing), x1 = Math.ceil(Math.min(pb.maxX, b.maxX) / spacing);
-    const z0 = Math.floor(Math.max(pb.minZ, b.minZ) / spacing), z1 = Math.ceil(Math.min(pb.maxZ, b.maxZ) / spacing);
+    const x0 = Math.floor(Math.max(pb.minX, b.minX) / patchSpacing), x1 = Math.ceil(Math.min(pb.maxX, b.maxX) / patchSpacing);
+    const z0 = Math.floor(Math.max(pb.minZ, b.minZ) / patchSpacing), z1 = Math.ceil(Math.min(pb.maxZ, b.maxZ) / patchSpacing);
     const cells = (x1 - x0) * (z1 - z0);
     if (!Number.isSafeInteger(cells) || cells > maxCells - evaluatedCells) { skippedPatches.push({ id: patch.id, reason: "cell-budget" }); continue; }
     const obstacles = indexed.filter(entry => overlaps(pb, entry.bounds));
     for (let iz = z0; iz < z1; iz++) for (let ix = x0; ix < x1; ix++) {
       evaluatedCells++;
       const id = `${patch.id}/${ix}/${iz}`;
-      const x = (ix + .5 + (vegetationHashUnit(`${id}/x`) - .5) * .3) * spacing;
-      const z = (iz + .5 + (vegetationHashUnit(`${id}/z`) - .5) * .3) * spacing;
-      const radius = radii[0] + (radii[1] - radii[0]) * vegetationHashUnit(`${id}/radius`);
+      const x = (ix + .5 + (vegetationHashUnit(`${id}/x`) - .5) * .3) * patchSpacing;
+      const z = (iz + .5 + (vegetationHashUnit(`${id}/z`) - .5) * .3) * patchSpacing;
+      const radius = patchRadii[0] + (patchRadii[1] - patchRadii[0]) * vegetationHashUnit(`${id}/radius`);
       const height = heights[0] + (heights[1] - heights[0]) * vegetationHashUnit(`${id}/height`);
       const r: CanopyRecord = { id, patchId: patch.id, x, z, radiusM: radius, heightM: height, reason: "rendered", exclusionIds: [], positionSource: "illustrative-within-imagery-envelope" };
       records.push(r);
@@ -180,7 +195,9 @@ export function createGeographicCanopy(patches: readonly CanopyPatch[], options:
   const stats = { patches: patches.length, evaluatedCells, counts, skippedPatches, tiles: tiles.size, meshes: group.children.length };
   group.userData = { records, stats, patches, style: VEGETATION_STYLE_PROVENANCE,
     positionSource: "illustrative-within-imagery-envelope", dimensionsSource: "illustrative-not-measured",
-    policy: { spacingM: spacing, radiusRangeM: radii, heightRangeM: heights, maxCells, maxTrees, seed: "patch-id-world-grid-fnv1a-v1" },
+    policy: { spacingM: spacing, radiusRangeM: radii, heightRangeM: heights, maxCells, maxTrees, seed: "patch-id-world-grid-fnv1a-v1",
+      patchProfiles: patches.filter(p => p.illustrativeProfile).map(p => ({ id: p.id, profile: p.illustrativeProfile,
+        spacingM: options.spacingM ?? RIVERBANK_DETAIL.spacingM, radiusRangeM: options.radiusRangeM ?? RIVERBANK_DETAIL.radiusRangeM })) },
     attributions: [...new Set(patches.map(p => p.source.attribution))],
     limitations: "Only envelopes observed in imagery; internal centres/counts/density/radii/heights reconstructed, not individual observations. Capture period is a view label, not verified per-patch acquisition metadata. No placement beyond supplied envelopes." };
   return { group, records, stats };
