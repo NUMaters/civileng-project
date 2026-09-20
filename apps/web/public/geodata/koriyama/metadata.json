@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "bounds": [
+    140.356,
+    37.346,
+    140.407,
+    37.387
+  ],
+  "origin": {
+    "longitude": 140.3837,
+    "latitude": 37.3655
+  },
+  "source": "OpenStreetMap",
+  "endpoint": "https://overpass-api.de/api/interpreter",
+  "query": "[out:json][timeout:55];(way[building](37.346,140.356,37.387,140.407);way[highway](37.346,140.356,37.387,140.407);way[railway](37.346,140.356,37.387,140.407);way[waterway](37.346,140.356,37.387,140.407);way[natural=water](37.346,140.356,37.387,140.407);relation[type=multipolygon][natural=water](37.346,140.356,37.387,140.407);relation[type=multipolygon][building](37.346,140.356,37.387,140.407);way[amenity=university](37.346,140.356,37.387,140.407););out meta geom;",
+  "fetchedAt": "2026-09-20T13:23:29.902Z",
+  "osmTimestamp": "2026-09-20T13:19:21Z",
+  "license": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "counts": {
+    "building": 22769,
+    "road": 2222,
+    "rail": 158,
+    "waterway": 38,
+    "water": 5,
+    "campus": 1
+  },
+  "bridgeSegments": 62,
+  "elevation": "none; all coordinates are 2D; no DEM or measured terrain",
+  "skipped": [],
+  "dataSha256": "13e871bec7ed71d9867f6a85b442f74bc1f97461e311b6b733270fcc9c3396d9",
+  "sourceSha256": "d484ffea468dd090485d939cbef9d8f3c58a22cb4665f57658ce0a8be8637aa0"
+}
