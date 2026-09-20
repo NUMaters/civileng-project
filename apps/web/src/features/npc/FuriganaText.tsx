@@ -421,7 +421,8 @@ const KANJI_READINGS: Record<string, string> = {
 };
 
 const words = GLOSSARY.map(([word]) => word).sort((a, b) => b.length - a.length);
-const pattern = new RegExp(`(${words.join("|")}|[\\u3400-\\u9fff])`, "g");
+// 未登録語へ推測の読みを付けない。誤読より、漢字のまま表示する方を優先する。
+const pattern = new RegExp(`(${words.join("|")})`, "g");
 const readings = new Map([...GLOSSARY, ...Object.entries(KANJI_READINGS)]);
 
 export function FuriganaText({ text, enabled }: { text: string; enabled: boolean }) {

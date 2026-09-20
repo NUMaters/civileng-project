@@ -418,6 +418,8 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
           onClose={npc.close}
           onAsk={npc.ask}
           onRefer={npc.refer}
+          furigana={npc.furigana}
+          onFuriganaChange={npc.setFurigana}
         />
       ) : null}
 

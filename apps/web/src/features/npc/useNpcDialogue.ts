@@ -2,6 +2,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { canTalk, initialDialogue, reduceDialogue } from "./dialogue";
 import { npcCatalog, npcs } from "./catalog";
 import { NpcConversationClient } from "./conversationClient";
+import { loadFuriganaEnabled, saveFuriganaEnabled } from "./readingLevelStorage";
 import type { HintLevel, NpcPhase } from "./types";
 import type { FloodSimulationState } from "../disaster/services/floodSimulation";
 
@@ -20,6 +21,7 @@ export function useNpcDialogue(
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [childMode, setChildMode] = useState(false);
+  const [furigana, setFurigana] = useState(loadFuriganaEnabled);
   const current = useRef({ state, phase, enabled, getGameState, childMode });
   current.current = { state, phase, enabled, getGameState, childMode };
   const client = useRef<NpcConversationClient | null>(null);
@@ -137,6 +139,11 @@ export function useNpcDialogue(
     ask,
     refer,
     childMode,
+    furigana,
+    setFurigana: (value: boolean) => {
+      setFurigana(value);
+      saveFuriganaEnabled(value);
+    },
     setChildMode: (value: boolean) => {
       const npcId = current.current.state.npcId;
       stop();

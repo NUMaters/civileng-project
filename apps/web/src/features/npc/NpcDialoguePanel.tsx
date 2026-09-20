@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { FuriganaText } from "./FuriganaText";
 import { NpcIcon } from "./NpcIcon";
 import type { DialogueEntry, NpcDefinition, NpcPhase } from "./types";
@@ -14,6 +14,8 @@ type Props = {
   onClose: () => void;
   onAsk: (questionId: string, deeper?: boolean) => void;
   onRefer: () => void;
+  furigana: boolean;
+  onFuriganaChange: (enabled: boolean) => void;
 };
 
 export function NpcDialoguePanel({
@@ -27,8 +29,9 @@ export function NpcDialoguePanel({
   onClose,
   onAsk,
   onRefer,
+  furigana,
+  onFuriganaChange,
 }: Props) {
-  const [furigana, setFurigana] = useState(false);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
@@ -93,11 +96,7 @@ export function NpcDialoguePanel({
         />
       </p>
       <div className="npc-dialog__audience" aria-label="ふりがな表示">
-        <button
-          type="button"
-          aria-pressed={furigana}
-          onClick={() => setFurigana((value) => !value)}
-        >
+        <button type="button" aria-pressed={furigana} onClick={() => onFuriganaChange(!furigana)}>
           <FuriganaText text={`ふりがな ${furigana ? "あり" : "なし"}`} enabled={furigana} />
         </button>
       </div>
