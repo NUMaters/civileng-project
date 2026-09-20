@@ -115,6 +115,45 @@
   border-style: solid;
   border-color: #fffffff2 transparent transparent;
 }
+/* Facility labels only: guidance keeps its existing layout and behavior. */
+.diorama-label[data-heading] {
+  box-sizing: border-box;
+  width: max-content;
+  min-width: min(80px, calc(100% - 16px));
+  max-width: min(240px, calc(100% - 16px));
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  visibility: hidden; /* Revealed once its border-box size has been observed. */
+  pointer-events: none;
+}
+.diorama-label[data-heading] strong,
+.diorama-label[data-heading] small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.diorama-label[data-heading]:after {
+  /* Offset the 1px border so the tip uses the measured border-box coordinates. */
+  left: calc(var(--facility-pointer-left) - 1px);
+  top: calc(100% + 1px);
+  bottom: auto;
+  width: var(--facility-pointer-width);
+  height: var(--facility-pointer-height, 7px);
+  border: 0;
+  background: #fffffff2;
+  clip-path: polygon(calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) - 6px) 0,
+    calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) + 6px) 0,
+    calc(var(--facility-pointer-tip-x) - var(--facility-pointer-left)) 100%);
+}
+.diorama-label[data-heading][data-pointer-side="top"]:after {
+  top: auto;
+  bottom: calc(100% + 1px);
+  clip-path: polygon(calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) - 6px) 100%,
+    calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) + 6px) 100%,
+    calc(var(--facility-pointer-tip-x) - var(--facility-pointer-left)) 0);
+}
 .diorama-placement-actions {
   position: absolute;
   top: 0;
