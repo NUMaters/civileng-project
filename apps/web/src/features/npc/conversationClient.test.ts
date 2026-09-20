@@ -63,6 +63,35 @@ describe("NPC API client", () => {
     client.close();
   });
 
+  it("uses a valid UUID when randomUUID is unavailable", async () => {
+    vi.stubGlobal("crypto", undefined);
+    const hint = resident.questions[0]?.hints[0];
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(response(session, 201))
+      .mockImplementationOnce(async (_url, options) => {
+        const body = JSON.parse(String(options?.body));
+        expect(body.requestId).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+        );
+        return response({
+          requestId: body.requestId,
+          npcId: resident.id,
+          questionId: "past",
+          hintLevel: 1,
+          answerText: hint?.answers[0],
+          factIds: hint?.factIds,
+          sourceIds: sourceIdsForFacts(hint?.factIds ?? []),
+          mode: "ai",
+        });
+      })
+      .mockResolvedValue(response({}));
+    vi.stubGlobal("fetch", fetchMock);
+    const client = new NpcConversationClient(resident, 60);
+    await expect(client.answer("past", false, 1)).resolves.toMatchObject({ mode: "ai" });
+    client.close();
+  });
+
   it("does not turn a rejected request into a fallback answer", async () => {
     const fetchMock = vi
       .fn<typeof fetch>()

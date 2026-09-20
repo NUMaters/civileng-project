@@ -23,7 +23,7 @@ func TestHTTPConversationContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
-	Register(mux, application.NewService(catalog, nil, 60))
+	Register(mux, application.NewService(catalog, nil, 60), nil)
 	request := func(method, path, body, token string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, bytes.NewBufferString(body))
 		r.Header.Set("Content-Type", "application/json")

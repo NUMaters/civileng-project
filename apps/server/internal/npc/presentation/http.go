@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 	"time"
@@ -14,9 +15,9 @@ import (
 
 const maxRequestBytes = 2048
 
-func Register(mux *http.ServeMux, service *application.Service) {
-	conversationLimiter := newIPRateLimiter(30, time.Minute)
-	answerLimiter := newIPRateLimiter(120, time.Minute)
+func Register(mux *http.ServeMux, service *application.Service, trustedProxies []netip.Prefix) {
+	conversationLimiter := newIPRateLimiter(30, time.Minute, trustedProxies)
+	answerLimiter := newIPRateLimiter(120, time.Minute, trustedProxies)
 	mux.HandleFunc("POST /api/npc/conversations", func(w http.ResponseWriter, r *http.Request) {
 		if !sameOrigin(w, r) {
 			return

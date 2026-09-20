@@ -1,8 +1,11 @@
 package presentation
 
 import (
+	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
+	"strings"
 	"sync"
 	"time"
 )
@@ -20,17 +23,33 @@ type ipRateLimiter struct {
 	limit   int
 	window  time.Duration
 	now     func() time.Time
+	trusted []netip.Prefix
 }
 
-func newIPRateLimiter(limit int, window time.Duration) *ipRateLimiter {
-	return &ipRateLimiter{entries: make(map[string]rateWindow), limit: limit, window: window, now: time.Now}
+// ParseTrustedProxyCIDRs parses the proxy networks allowed to supply
+// X-Forwarded-For. An empty value means request headers are never trusted.
+func ParseTrustedProxyCIDRs(value string) ([]netip.Prefix, error) {
+	if strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	values := strings.Split(value, ",")
+	prefixes := make([]netip.Prefix, 0, len(values))
+	for _, candidate := range values {
+		prefix, err := netip.ParsePrefix(strings.TrimSpace(candidate))
+		if err != nil {
+			return nil, fmt.Errorf("invalid NPC_TRUSTED_PROXY_CIDRS value %q: %w", candidate, err)
+		}
+		prefixes = append(prefixes, prefix.Masked())
+	}
+	return prefixes, nil
+}
+
+func newIPRateLimiter(limit int, window time.Duration, trusted []netip.Prefix) *ipRateLimiter {
+	return &ipRateLimiter{entries: make(map[string]rateWindow), limit: limit, window: window, now: time.Now, trusted: trusted}
 }
 
 func (l *ipRateLimiter) allow(r *http.Request) bool {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || host == "" {
-		host = r.RemoteAddr
-	}
+	host := l.clientIP(r)
 	current := l.now()
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -54,4 +73,35 @@ func (l *ipRateLimiter) allow(r *http.Request) bool {
 		}
 	}
 	return true
+}
+
+func (l *ipRateLimiter) clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || host == "" {
+		host = r.RemoteAddr
+	}
+	remote, err := netip.ParseAddr(host)
+	if err != nil || !l.isTrusted(remote) {
+		return host
+	}
+	forwarded := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
+	for index := len(forwarded) - 1; index >= 0; index-- {
+		candidate, err := netip.ParseAddr(strings.TrimSpace(forwarded[index]))
+		if err != nil {
+			continue
+		}
+		if !l.isTrusted(candidate) {
+			return candidate.String()
+		}
+	}
+	return host
+}
+
+func (l *ipRateLimiter) isTrusted(address netip.Addr) bool {
+	for _, prefix := range l.trusted {
+		if prefix.Contains(address) {
+			return true
+		}
+	}
+	return false
 }

@@ -34,7 +34,11 @@ func Register(mux *http.ServeMux) error {
 	if err != nil {
 		return err
 	}
-	presentation.Register(mux, application.NewServiceWithMode(catalog, backend.Generate, float64(rules.Rules.Timing.Phases.PreparationSeconds), "ai"))
+	trustedProxies, err := presentation.ParseTrustedProxyCIDRs(os.Getenv("NPC_TRUSTED_PROXY_CIDRS"))
+	if err != nil {
+		return err
+	}
+	presentation.Register(mux, application.NewServiceWithMode(catalog, backend.Generate, float64(rules.Rules.Timing.Phases.PreparationSeconds), "ai"), trustedProxies)
 	return nil
 }
 

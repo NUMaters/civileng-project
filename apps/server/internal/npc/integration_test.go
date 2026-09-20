@@ -40,7 +40,7 @@ func TestMainBackendToNPCBackendContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	publicMux := http.NewServeMux()
-	presentation.Register(publicMux, application.NewServiceWithMode(catalog, backendClient.Generate, 60, "ai"))
+	presentation.Register(publicMux, application.NewServiceWithMode(catalog, backendClient.Generate, 60, "ai"), nil)
 	publicServer := httptest.NewServer(publicMux)
 	defer publicServer.Close()
 
