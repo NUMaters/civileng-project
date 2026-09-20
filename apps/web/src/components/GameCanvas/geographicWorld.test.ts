@@ -55,6 +55,40 @@ afterEach(() => {
 });
 
 describe("actual geographic world", () => {
+  it("keeps facade UVs anchored to original edges through bounds/tile clipping with one shared building material", () => {
+    const building = polygon("styled", "building", [ring(101, 201, 90)]);
+    building.properties.height = "12";
+    const w = world([building, polygon("campus", "campus", [ring(101, 201, 90)])], {
+      tileSize: 32, localBounds: { minX: 110, minZ: 190, maxX: 180, maxZ: 300 }, groundSampler: () => 0,
+    });
+    const buildingMeshes = meshes(w, "building");
+    const materials = new Set(buildingMeshes.map((mesh) => mesh.material));
+    expect(materials.size).toBe(1);
+    expect(buildingMeshes.length).toBeGreaterThan(1);
+    expect(buildingMeshes[0]!.material).not.toBe(meshes(w, "campus")[0]!.material);
+    expect(w.userData.buildingDecoration.source).toBe("illustrative-not-surveyed");
+    const observedTiles = new Set<string>();
+    let wallVertices = 0;
+    for (const mesh of buildingMeshes) {
+      const p = mesh.geometry.getAttribute("position"), n = mesh.geometry.getAttribute("normal"), uv = mesh.geometry.getAttribute("facadeUv");
+      expect(uv.count).toBe(p.count);
+      expect(Array.from(uv.array).every(Number.isFinite)).toBe(true);
+      expect(mesh.geometry.groups).toHaveLength(0);
+      for (let i = 0; i < p.count; i++) {
+        if (Math.abs(n.getY(i)) < 0.1 && Math.abs(p.getZ(i) - 201) < 0.001) {
+          expect(uv.getX(i)).toBeCloseTo(p.getX(i) - 101, 3);
+          expect(uv.getY(i)).toBeCloseTo(p.getY(i) - 0.08, 3);
+          observedTiles.add(mesh.userData.tile.join("/")); wallVertices++;
+        }
+      }
+    }
+    expect(wallVertices).toBeGreaterThan(6);
+    expect(observedTiles.size).toBeGreaterThan(1);
+    expect(area(w, "building")).toBeCloseTo(70 * 90, 2);
+    expect(new THREE.Box3().setFromObject(buildingMeshes[0]!).max.y).toBeCloseTo(12.08, 3);
+    expect(meshes(w, "campus")[0]!.geometry.getAttribute("facadeUv")).toBeUndefined();
+  });
+
   it("integrates the actual nullable DEM sampler and excludes out-of-coverage source features", () => {
     const read = (file: string) => readFileSync(new URL(`../../../public/geodata/koriyama/${file}`, import.meta.url));
     const osm = JSON.parse(read("features.geojson").toString()) as KoriyamaGeodata;

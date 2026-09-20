@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createGeographicBuildingMaterial, BUILDING_DECORATION_PROVENANCE } from "./geographicBuildingMaterial";
 import { groundY } from "./dioramaSpace";
 import {
   koriyamaGeoToLocal,
@@ -62,9 +63,10 @@ export type GeographicWorld = THREE.Group & {
 };
 type Layer = "building" | "campus" | "water" | "waterway" | "road" | "rail" | "bridge-road" | "bridge-rail";
 export type GeographicSurfaceLayer = Exclude<Layer, "building">;
-type Buffer = { layer: Layer; tx: number; tz: number; positions: number[]; normals: number[]; colors: number[] };
-type Point = LocalPoint;
-const COLORS = ["#ffe4b5", "#efada0", "#98c9cf", "#c7d69a", "#b5b8df"].map((c) => new THREE.Color(c));
+type Buffer = { layer: Layer; tx: number; tz: number; positions: number[]; normals: number[]; colors: number[]; uvs: number[] };
+type Point = LocalPoint & { u?: number; v?: number };
+const COLORS = ["#528dce", "#718da9", "#cf7857", "#68a7cf", "#df9369"].map((c) => new THREE.Color(c));
+const WALL_COLOR = new THREE.Color("#f6e8c9");
 const SURFACE_COLORS: Record<Exclude<Layer, "building">, THREE.Color> = {
   campus: new THREE.Color("#9bd675"), water: new THREE.Color("#4dbada"),
   waterway: new THREE.Color("#4dbada"), road: new THREE.Color("#ded0af"),
@@ -214,7 +216,9 @@ function clip(points: Point[], axis: "x" | "z", boundary: number, keepAbove: boo
     const insideB = keepAbove ? b[axis] >= boundary : b[axis] <= boundary;
     if (insideA !== insideB) {
       const t = (boundary - a[axis]) / (b[axis] - a[axis]);
-      const point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+      const point: Point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+      if (a.u !== undefined && b.u !== undefined) point.u = a.u + (b.u - a.u) * t;
+      if (a.v !== undefined && b.v !== undefined) point.v = a.v + (b.v - a.v) * t;
       point[axis] = boundary;
       result.push(point);
     }
@@ -270,6 +274,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
   const sampleGround = options.groundSampler ?? groundY;
   const sampleSurface = options.surfaceSampler ?? ((_x: number, _z: number, layer: GeographicSurfaceLayer) => SURFACE_Y[layer]);
   group.userData = {
+    buildingDecoration: BUILDING_DECORATION_PROVENANCE,
     attributions: [KORIYAMA_ATTRIBUTION, KORIYAMA_PLATEAU_ATTRIBUTION],
     suppressedOsmBuildingIds: combined.suppressed,
     buildingDeduplication: "OSM footprint intersects or touches PLATEAU footprint; PLATEAU preferred; not an identity match",
@@ -286,6 +291,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     buildingHeights: heightRecords, bridges: bridgeRecords, stats, tileSize, maxBatchVertices: maxVertices,
   };
   const material = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.86, side: THREE.DoubleSide });
+  const buildingMaterial = createGeographicBuildingMaterial();
   const waterMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, side: THREE.DoubleSide });
   const buffers = new Map<string, Buffer>();
   const tiles = new Set<string>();
@@ -297,9 +303,10 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(buffer.positions, 3));
     geometry.setAttribute("normal", new THREE.Float32BufferAttribute(buffer.normals, 3));
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(buffer.colors, 3));
+    if (buffer.layer === "building") geometry.setAttribute("facadeUv", new THREE.Float32BufferAttribute(buffer.uvs, 2));
     geometry.computeBoundingBox(); geometry.computeBoundingSphere();
     const water = buffer.layer === "water" || buffer.layer === "waterway";
-    const mesh = new THREE.Mesh(geometry, water ? waterMaterial : material);
+    const mesh = new THREE.Mesh(geometry, water ? waterMaterial : buffer.layer === "building" ? buildingMaterial : material);
     mesh.name = `geographic-${buffer.layer}/${buffer.tx}/${buffer.tz}/${stats.batches}`;
     mesh.userData = { layer: buffer.layer, tile: [buffer.tx, buffer.tz], tileSize,
       bridge: buffer.layer.startsWith("bridge-"), elevationSource: buffer.layer === "building" ? group.userData.groundSource : group.userData.surfaceSource };
@@ -308,7 +315,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     group.add(mesh);
     if (water) { group.waterGeometries.push(geometry); group.waterMeshes.push(mesh); }
     stats.batches++; stats.vertices += count; buffered -= count;
-    buffer.positions = []; buffer.normals = []; buffer.colors = [];
+    buffer.positions = []; buffer.normals = []; buffer.colors = []; buffer.uvs = [];
   }
   function emit(buffer: Buffer, a: Point, b: Point, c: Point, color: THREE.Color) {
     const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
@@ -326,6 +333,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       buffer.positions.push(p.x, p.y, p.z);
       buffer.normals.push(nx / length, ny / length, nz / length);
       buffer.colors.push(color.r, color.g, color.b);
+      if (buffer.layer === "building") buffer.uvs.push(p.u ?? 0, p.v ?? 0);
     }
     buffered += 3; stats.peakBufferedVertices = Math.max(stats.peakBufferedVertices, buffered);
   }
@@ -351,7 +359,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       const key = `${layer}/${tx}/${tz}`;
       let buffer = buffers.get(key);
       if (!buffer) {
-        buffer = { layer, tx, tz, positions: [], normals: [], colors: [] };
+        buffer = { layer, tx, tz, positions: [], normals: [], colors: [], uvs: [] };
         buffers.set(key, buffer); tiles.add(`${tx}/${tz}`);
       }
       for (let i = 1; i < polygon.length - 1; i++) emit(buffer, polygon[0]!, polygon[i]!, polygon[i + 1]!, color);
@@ -446,13 +454,17 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       }
       for (const { rings, roofs, base } of prepared) {
         const top = base + height!.meters;
-        for (const [a, b, c] of roofs) triangle("building", { ...a, y: top }, { ...b, y: top }, { ...c, y: top }, color);
+        const roofPoint = (p: Point): Point => ({ ...p, y: top, u: p.x - rings[0]![0]!.x, v: p.z - rings[0]![0]!.z });
+        for (const [a, b, c] of roofs) triangle("building", roofPoint(a), roofPoint(b), roofPoint(c), color);
         if (height!.meters > 0) {
-          const wallColor = color.clone().multiplyScalar(0.82);
           for (const ring of rings) for (let i = 0; i < ring.length; i++) {
             const a = ring[i]!, b = ring[(i + 1) % ring.length]!;
-            triangle("building", { ...a, y: base }, { ...b, y: base }, { ...b, y: top }, wallColor);
-            triangle("building", { ...a, y: base }, { ...b, y: top }, { ...a, y: top }, wallColor);
+            // Anchor to original edge, BEFORE local-bounds and tile clipping. Metres, not normalized UV.
+            const length = Math.hypot(b.x - a.x, b.z - a.z);
+            const ab = { ...a, y: base, u: 0, v: 0 }, bb = { ...b, y: base, u: length, v: 0 };
+            const at = { ...a, y: top, u: 0, v: height!.meters }, bt = { ...b, y: top, u: length, v: height!.meters };
+            triangle("building", ab, bb, bt, WALL_COLOR);
+            triangle("building", ab, bt, at, WALL_COLOR);
           }
         }
       }
@@ -482,6 +494,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
   stats.tiles = tiles.size;
   // Empty inputs still have no unattached disposable resources.
   if (!group.children.some((m) => (m as THREE.Mesh).material === material)) material.dispose();
+  if (!group.children.some((m) => (m as THREE.Mesh).material === buildingMaterial)) buildingMaterial.dispose();
   if (!group.waterMeshes.length) waterMaterial.dispose();
   return group;
 }

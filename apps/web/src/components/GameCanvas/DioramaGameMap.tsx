@@ -9,6 +9,7 @@ import { resolvePlaceablePosition } from "./riverPlacement";
 import { geoToWorld, riverX, worldToGeo } from "./dioramaSpace";
 import { createGeographicWorld } from "./geographicWorld";
 import { createGeographicTerrain } from "./geographicTerrain";
+import { createGeographicWaterMaterial, riverFlowCoordinates } from "./geographicWater";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
@@ -29,53 +30,6 @@ function disposeObject(root: T.Object3D) {
   });
   geometries.forEach((g) => g.dispose());
   materials.forEach((m) => m.dispose());
-}
-
-function riverGeometry(width = 44, y = 0.4) {
-  const vertices: number[] = [],
-    uvs: number[] = [],
-    indices: number[] = [];
-  for (let i = 0; i <= 320; i++) {
-    const z = -2400 + i * 15;
-    vertices.push(riverX(z) - width, y, z, riverX(z) + width, y, z);
-    uvs.push(0, z, 1, z);
-    if (i < 320) {
-      const n = i * 2;
-      indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
-    }
-  }
-  const geometry = new T.BufferGeometry();
-  geometry.setAttribute("position", new T.Float32BufferAttribute(vertices, 3));
-  geometry.setAttribute("uv", new T.Float32BufferAttribute(uvs, 2));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
-function createWater() {
-  const material = new T.ShaderMaterial({
-    uniforms: { time: { value: 0 }, storm: { value: 0 } },
-    vertexShader: `varying vec3 p; varying vec2 riverUv; uniform float time; void main(){p=position; riverUv=uv; vec3 v=position; v.y+=sin(v.z*.035-time)*.13; gl_Position=projectionMatrix*modelViewMatrix*vec4(v,1.);}`,
-    fragmentShader: `varying vec3 p; varying vec2 riverUv; uniform float time; uniform float storm;
-    void main(){
-      // Local +Z is downstream (south). Negative time advects crests downstream.
-      float flow=p.z-time*18.;
-      float a=sin(flow*.12+sin(riverUv.x*13.+flow*.017)*1.6);
-      float b=sin(flow*.047-riverUv.x*9.);
-      float edge=pow(abs(riverUv.x*2.-1.),5.);
-      float foam=smoothstep(.94,.995,a)*smoothstep(.35,.85,sin(riverUv.x*29.+flow*.021));
-      float shore=smoothstep(.94,1.,abs(riverUv.x*2.-1.))*(.4+.25*sin(flow*.2));
-      vec3 deep=mix(vec3(.005,.29,.61),vec3(.07,.25,.29),storm*.75);
-      vec3 shallow=mix(vec3(.025,.72,.84),vec3(.14,.40,.38),storm*.65);
-      vec3 color=mix(deep,shallow,.15+.7*edge+.09*b);
-      color+=vec3(.03,.07,.09)*pow(max(0.,b),8.);
-      color=mix(color,vec3(.83,.98,1.),clamp(foam*.48+shore*.65,0.,.8));
-      gl_FragColor=vec4(color,1.);
-      #include <tonemapping_fragment>
-      #include <colorspace_fragment>
-    }`,
-  });
-  return new T.Mesh(riverGeometry(), material);
 }
 
 type Runtime = {
@@ -211,7 +165,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       }
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.65));
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = T.PCFSoftShadowMap;
+      renderer.shadowMap.type = T.PCFShadowMap;
       renderer.shadowMap.autoUpdate = false;
       renderer.shadowMap.needsUpdate = true;
       renderer.toneMapping = T.ACESFilmicToneMapping;
@@ -264,19 +218,19 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       };
       reset();
       scene.add(terrain.group, world);
-      const water = createWater();
-      water.geometry.dispose();
+      const waterMaterial = createGeographicWaterMaterial();
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {
         for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) oldWaterMaterials.add(material);
         const positions = mesh.geometry.getAttribute("position");
         const uv = new Float32Array(positions.count * 2);
         for (let i = 0; i < positions.count; i++) {
-          uv[i * 2] = T.MathUtils.clamp((positions.getX(i) - riverX(positions.getZ(i))) / 100 + 0.5, 0, 1);
-          uv[i * 2 + 1] = positions.getZ(i);
+          const flow = riverFlowCoordinates(positions.getX(i), positions.getZ(i));
+          uv[i * 2] = flow.lateral;
+          uv[i * 2 + 1] = flow.along;
         }
         mesh.geometry.setAttribute("uv", new T.BufferAttribute(uv, 2));
-        mesh.material = water.material;
+        mesh.material = waterMaterial;
       }
       oldWaterMaterials.forEach(material => material.dispose());
       const inundation = createDioramaInundation(terrain.sampleGround);
@@ -419,8 +373,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           }
         }
         const state = latest.current.getLatestFloodState?.();
-        water.material.uniforms.time!.value = time;
-        water.material.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
+        waterMaterial.uniforms.time!.value = time;
+        waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
         if (state) inundation.update(state, dt, time);
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
@@ -519,7 +473,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         scene.remove(inundation.group);
         inundation.dispose();
         disposeObject(scene);
-        if (!world.waterMeshes.length) water.material.dispose();
+        if (!world.waterMeshes.length) waterMaterial.dispose();
         renderer.dispose();
         renderer.domElement.remove();
         runtime.current = null;
