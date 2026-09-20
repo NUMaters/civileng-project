@@ -1230,7 +1230,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       if (changed) {
         viewer.scene.requestRender();
       }
-    }, [placements, selectedPlacementId, structures]);
+    }, [isMapReady, placements, selectedPlacementId, structures]);
 
     useEffect(() => {
       const viewer = viewerRef.current;
