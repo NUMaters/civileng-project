@@ -90,6 +90,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     resetSession();
     startFreshGame();
     setPaused(false);
+    mapRef.current?.resetCamera();
   }, [sessionId, resetSession, startFreshGame]);
 
   useEffect(() => {

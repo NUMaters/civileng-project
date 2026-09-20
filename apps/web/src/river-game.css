@@ -307,6 +307,9 @@
 .game-shell .cesium-map-label.is-good .cesium-map-label__effect {
   color: #176e60;
 }
+.game-shell .cesium-map-label.is-warn .cesium-map-label__effect {
+  color: #795b28;
+}
 .game-shell .cesium-map-label.is-bad .cesium-map-label__effect {
   color: #b43d2c;
 }

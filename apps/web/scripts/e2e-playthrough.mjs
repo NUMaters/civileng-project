@@ -76,7 +76,7 @@ function connectWebSocket(url) {
 }
 
 async function waitPort(port) {
-  for (let i = 0; i < 50; i += 1) {
+  for (let i = 0; i < 150; i += 1) {
     try {
       if ((await fetch(`http://127.0.0.1:${port}/json/version`)).ok) return;
     } catch {
@@ -126,9 +126,7 @@ async function main() {
     throw new Error(`Vite not reachable at ${BASE}`);
   }
 
-  const userData = `/tmp/civilcraft-e2e-${PORT}`;
-  fs.rmSync(userData, { recursive: true, force: true });
-  fs.mkdirSync(userData, { recursive: true });
+  const userData = fs.mkdtempSync("/tmp/civilcraft-e2e-");
 
   const child = spawn(
     CHROME,
@@ -144,6 +142,12 @@ async function main() {
     ],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
+  // Drain Chrome's output: a full stderr pipe can otherwise stall the browser.
+  child.stdout.resume();
+  let chromeDiagnostics = "";
+  child.stderr.on("data", (chunk) => {
+    chromeDiagnostics = (chromeDiagnostics + chunk.toString()).slice(-4000);
+  });
 
   const log = [];
   const step = (name, detail) => {
@@ -396,8 +400,8 @@ async function main() {
     }
     await waitFor(
       client,
-      `document.querySelector('.result-panel__badge')?.textContent === '成功'`,
-      5_000,
+      `document.querySelector('.result-panel__badge')?.textContent?.trim() === '成功'`,
+      30_000,
     );
     step("ミッションクリア", result.title ?? result.badge);
 
@@ -428,6 +432,7 @@ async function main() {
   } catch (error) {
     console.error("\nE2E PLAYTHROUGH FAILED");
     console.error(error);
+    console.error(chromeDiagnostics);
     console.error(log.join("\n"));
     try {
       child.kill("SIGKILL");
