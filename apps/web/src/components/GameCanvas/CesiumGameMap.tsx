@@ -63,7 +63,7 @@ import {
   clearProtectionVisualization,
 } from "./protectionVisualization";
 import { nearestPointOnPolyline, resolvePlaceablePosition } from "./riverPlacement";
-import { getRiverPlacementContext } from "../../features/disaster/services/hydraulicPlacement";
+import { suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
 import { createRiverWaterSurface, type RiverWaterSurfaceController } from "./riverWaterSurface";
 import { createStructureMaterial } from "./structureMaterials";
 import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
@@ -149,18 +149,6 @@ const NUDGE_METERS = 2.5;
 const FALLBACK_GROUND_HEIGHT_M = 18;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
 const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 30;
-
-/** Align the long crest with the local river tangent instead of the camera heading. */
-function suggestedStructureHeading(structureId: string, position: GeoPosition): number {
-  const { channelHeadingDegrees } = getRiverPlacementContext(
-    position.longitude,
-    position.latitude,
-    0,
-  );
-  const alongChannel =
-    structureId === "levee" || structureId === "revetment" || structureId === "channel-dredging";
-  return (channelHeadingDegrees + (alongChannel ? 270 : 0)) % 360;
-}
 
 function applyInitialCamera(viewer: Viewer): void {
   // ゲーム画面への切り替え直後はコンテナのサイズが確定していないことがある。
