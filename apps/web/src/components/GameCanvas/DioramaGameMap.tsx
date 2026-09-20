@@ -148,7 +148,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       });
       const train = createGeographicTrain(geography.osm, terrain.sampleGround);
       const landcover = createGeographicLandcover(geography.landcover, {
-        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround, renderedTerrainSurface: terrain.renderedSurface,
       });
       const imageryVegetation = createGeographicImageryVegetation(geography.imageryTrees, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
@@ -161,11 +161,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         plateau: geography.plateau,
         localBounds: terrain.bounds,
         groundSampler: terrain.sampleGround,
+        renderedTerrainSurface: terrain.renderedSurface,
         surfaceGridSpacing: 12,
         // Missing building heights remain explicitly provisional in source metadata.
         provisionalBuildingHeight: 6,
         surfaceSampler: (x, z, layer) => {
-          const ground = terrain.sampleGround(x, z);
+          const usesRenderedGround = layer === "road" || layer === "rail" || layer === "campus";
+          const ground = usesRenderedGround ? terrain.sampleRenderedGround(x, z) : terrain.sampleGround(x, z);
           if (ground === null) return null;
           // DEM is ground, not water bathymetry or surveyed bridge decks.
           // Small surface offsets avoid z-fighting; bridge clearance is provisional.
