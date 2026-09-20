@@ -221,7 +221,7 @@ async function main() {
     step("一時停止で時間・予算を保持し、再開");
     await waitFor(
       client,
-      `document.querySelector('.cesium-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
+      `document.querySelector('.diorama-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
       60_000,
     );
     // 建物タイルのready直後は初期カメラと地形ピックの最初の描画がまだ収束していないため、
@@ -243,7 +243,7 @@ async function main() {
       client,
       `(() => {
         const card = document.querySelector('.structure-card:not(:disabled)');
-        const canvas = document.querySelector('.cesium-widget canvas');
+        const canvas = document.querySelector('.diorama-game-map canvas');
         if (!(card instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return null;
         const cardRect = card.getBoundingClientRect();
         const canvasRect = canvas.getBoundingClientRect();
@@ -288,7 +288,7 @@ async function main() {
           pending: !!document.querySelector('[aria-label="仮配置の確定"]'),
           dragging: !!document.querySelector('.game-shell.is-dock-dragging'),
           ghost: !!document.querySelector('.dock-drag-ghost'),
-          canvas: !!document.querySelector('.cesium-widget canvas')
+          canvas: !!document.querySelector('.diorama-game-map canvas')
         })`,
       );
       dragAttempts.push({ xRatio, yRatio, ...draggedToMap });

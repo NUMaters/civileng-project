@@ -1,4 +1,5 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getDioramaThumbnails } from "../../../components/GameCanvas/dioramaThumbnails";
 import { resolveDockPointerIntent } from "../dockGesture";
 import { formatBudget } from "../services/constructionService";
 import { getStructureVisual } from "../structureVisuals";
@@ -46,6 +47,19 @@ export function StructureCard({
   onDragStart,
 }: StructureCardProps) {
   const visual = getStructureVisual(structure.id);
+  const [thumbnails, setThumbnails] = useState<Record<string, string>>({});
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const thumbnail = thumbnails[structure.id];
+  useEffect(() => {
+    let active = true;
+    // The helper memoizes a single render promise shared by all five cards.
+    void getDioramaThumbnails().then((images) => {
+      if (active) setThumbnails(images);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
   const gestureRef = useRef<{
     pointerId: number;
     startX: number;
@@ -141,20 +155,30 @@ export function StructureCard({
       aria-label={`${structure.displayName}、${TOOL_PURPOSES[structure.id] ?? "川を守る"}、${formatBudget(structure.constructionCost)}${disabled ? "、予算不足" : ""}`}
     >
       <span className="structure-card__thumb" aria-hidden="true">
-        <svg
-          className="structure-card__image"
-          viewBox="0 0 44 44"
-          width={36}
-          height={36}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          focusable="false"
-        >
-          <path d={TOOL_SILHOUETTES[structure.id] ?? TOOL_SILHOUETTES.levee} />
-        </svg>
+        {thumbnail && failedImage !== thumbnail ? (
+          <img
+            className="structure-card__model"
+            src={thumbnail}
+            alt=""
+            draggable={false}
+            onError={() => setFailedImage(thumbnail)}
+          />
+        ) : (
+          <svg
+            className="structure-card__image"
+            viewBox="0 0 44 44"
+            width={36}
+            height={36}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            focusable="false"
+          >
+            <path d={TOOL_SILHOUETTES[structure.id] ?? TOOL_SILHOUETTES.levee} />
+          </svg>
+        )}
       </span>
       <span className="structure-card__body">
         <strong>{structure.displayName}</strong>

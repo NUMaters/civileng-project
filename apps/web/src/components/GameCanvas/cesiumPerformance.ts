@@ -54,14 +54,14 @@ const MOBILE_PROFILE: CesiumRenderProfile = {
   usePlateauTerrain: false,
   // Allow close-up photo detail; tile selection still follows the camera's visible area.
   imageryMaximumLevel: 18,
-  dynamicFrameIntervalMs: 1000 / 18,
+  dynamicFrameIntervalMs: 1000 / 30,
   // 施設ラベルはHTMLオーバーレイなので、低コストでカメラ移動への追従を改善できる。
-  overlayFrameIntervalMs: 1000 / 24,
+  overlayFrameIntervalMs: 1000 / 60,
   skyAtmosphere: false,
   stormEffects: false,
-  waterFlowStreakCount: 2,
-  waterFrameIntervalMs: 1000 / 12,
-  waterUseNormalMap: false,
+  waterFlowStreakCount: 0,
+  waterFrameIntervalMs: 1000 / 30,
+  waterUseNormalMap: true,
   rainMaxDrops: 22,
   rainFrameIntervalMs: 1000 / 12,
   rainCanvasDprCap: 1,
@@ -76,7 +76,7 @@ const MOBILE_SAFE_PROFILE: CesiumRenderProfile = {
   globeMaximumScreenSpaceError: 12,
   buildingMaximumScreenSpaceError: 26,
   imageryMaximumLevel: 17,
-  overlayFrameIntervalMs: 1000 / 20,
+  overlayFrameIntervalMs: 1000 / 60,
 };
 
 let cachedProfile: CesiumRenderProfile | null = null;

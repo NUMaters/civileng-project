@@ -29,6 +29,9 @@ describe("cesiumPerformance", () => {
     expect(profile.buildingMaximumScreenSpaceError).toBeLessThanOrEqual(20);
     expect(profile.resolutionScaleFloor).toBeGreaterThanOrEqual(0.5);
     expect(profile.overlayFrameIntervalMs).toBeLessThanOrEqual(1000 / 24);
+    expect(profile.waterUseNormalMap).toBe(true);
+    expect(profile.waterFrameIntervalMs).toBeLessThanOrEqual(1000 / 30);
+    expect(profile.dynamicFrameIntervalMs).toBeLessThanOrEqual(1000 / 30);
   });
 
   it("uses a safe middle profile when mobile memory is not exposed", () => {

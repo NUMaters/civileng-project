@@ -1,0 +1,71 @@
+.diorama-game-map,
+.diorama-game-map__canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  background: #87d6f5;
+}
+.diorama-game-map canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.diorama-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.diorama-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 8px 12px;
+  background: #fffffff2;
+  color: #11476a;
+  border-radius: 13px;
+  box-shadow: 0 4px 12px #13465b20;
+  font-size: 12px;
+  will-change: transform;
+  min-width: 80px;
+  border: 1px solid #ffffff;
+}
+.diorama-label small {
+  display: block;
+  color: #19896f;
+  font-size: 10px;
+  margin-top: 3px;
+}
+.diorama-label:after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  border-width: 7px 6px 0;
+  border-style: solid;
+  border-color: #fffffff2 transparent transparent;
+}
+.diorama-rotation {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  color: #215b76;
+  font-size: 12px;
+  font-weight: 700;
+}
+.diorama-rotation input {
+  grid-column: 1/-1;
+  width: 100%;
+  min-height: 44px;
+  accent-color: #0aadc6;
+}
+.diorama-error {
+  position: absolute;
+  inset: 40% 8% auto;
+  background: white;
+  padding: 20px;
+  border-radius: 20px;
+  color: #853924;
+}

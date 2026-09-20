@@ -6,6 +6,8 @@ import { GameToast } from "./components/GameToast";
 import { ConstructionMenu, useConstruction } from "./features/construction";
 import type { GeoPosition } from "./features/construction/types/construction";
 import { RiverMissionHud } from "./features/hud/RiverMissionHud";
+import { getPlacementFeedback } from "./features/hud/riverMissionFeedback";
+import { calculateStructureInfluences } from "./features/disaster/services/floodSimulation";
 import { TutorialCoachmark } from "./features/hud/TutorialCoachmark";
 import { hasSeenTutorial, markTutorialDone } from "./features/hud/tutorialStorage";
 import "./command-hud.css";
@@ -22,8 +24,8 @@ import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
 /** タイトル／メニューでは Cesium（約 10MB+）を読まず、真っ白待ちを防ぐ。 */
 const CesiumGameMap = lazy(async () => {
-  const mod = await import("./components/GameCanvas/CesiumGameMap");
-  return { default: mod.CesiumGameMap };
+  const mod = await import("./components/GameCanvas/DioramaGameMap");
+  return { default: mod.DioramaGameMap };
 });
 
 type DockDragState = {
@@ -184,6 +186,11 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     if (placement === null) {
       return;
     }
+    const influence = calculateStructureInfluences([placement])[0];
+    if (influence) {
+      const feedback = getPlacementFeedback(influence);
+      setMessage(feedback.message, feedback.tone);
+    }
     markTutorialDone();
     setShowTutorial(false);
     socket.sendPlaceStructure({
@@ -192,7 +199,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
       headingDegrees: placement.headingDegrees,
       clientPlacementId: placement.id,
     });
-  }, [confirmPendingPlacement, socket]);
+  }, [confirmPendingPlacement, setMessage, socket]);
 
   useEffect(() => {
     if (!inGame || paused || pendingPlacement === null) {
@@ -267,11 +274,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         dragGhostRef.current.style.left = `${event.clientX}px`;
         dragGhostRef.current.style.top = `${event.clientY}px`;
       }
-      if (
-        current.overMap !== next.overMap ||
-        current.placeable !== next.placeable ||
-        !next.overMap
-      ) {
+      if (current.overMap !== next.overMap || current.placeable !== next.placeable) {
         setDrag(next);
       }
     };
@@ -294,13 +297,22 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
       mapRef.current?.tryDropStructure(current.structureId, event.clientX, event.clientY);
     };
 
+    const onCancel = (event: PointerEvent) => {
+      if (dragRef.current !== null && event.pointerId !== dragRef.current.pointerId) {
+        return;
+      }
+      dragRef.current = null;
+      setDrag(null);
+      mapRef.current?.clearDragGhost();
+    };
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointercancel", onCancel);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointercancel", onCancel);
       map?.clearDragGhost();
     };
   }, [inGame, isDockDragging]);

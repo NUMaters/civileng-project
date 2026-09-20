@@ -48,11 +48,10 @@ export function GameMenuScreen({
     const load = async () => {
       try {
         await Promise.all([
-          fetch("/cesiumStatic/Widgets/widgets.css", { cache: "force-cache" }),
           fetch("/manifest.webmanifest", { cache: "force-cache" }),
           import("@civilcraft/game-data/load"),
-          // スタート押下前に Cesium チャンクを温めてゲーム入場の白画面を短縮する。
-          import("../../components/GameCanvas/CesiumGameMap"),
+          // Warm the local diorama; no satellite tiles or terrain download is needed.
+          import("../../components/GameCanvas/DioramaGameMap"),
         ]);
         if (cancelled) {
           return;

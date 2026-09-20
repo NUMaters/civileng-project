@@ -23,6 +23,8 @@ import {
   LightingModel,
   Math as CesiumMath,
   Matrix4,
+  ModelGraphics,
+  JulianDate,
   sampleTerrainMostDetailed,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
@@ -57,13 +59,13 @@ import {
   destroyOverflowVisualization,
   syncOverflowVisualization,
 } from "./overflowVisualization";
-import { createPlaceableZone } from "./placeableZone";
 import {
   syncProtectionVisualization,
   clearProtectionVisualization,
 } from "./protectionVisualization";
 import { nearestPointOnPolyline, resolvePlaceablePosition } from "./riverPlacement";
 import { suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
+import { structureMeshUri } from "./structureMesh";
 import { createRiverWaterSurface, type RiverWaterSurfaceController } from "./riverWaterSurface";
 import { createStructureMaterial } from "./structureMaterials";
 import { getStructureFootprintMeters, getStructureModelParts } from "./structureModels";
@@ -111,7 +113,7 @@ const INITIAL_VIEW = {
   latitude: 37.3655,
   headingDegrees: 8,
   pitchDegrees: -40,
-  range: 1_100,
+  range: 850,
 } as const;
 
 const GSI_DEM_MAX_LEVEL = 14;
@@ -189,7 +191,7 @@ export type CesiumGameMapHandle = {
   clearDragGhost: () => void;
 };
 
-type CesiumGameMapProps = {
+export type CesiumGameMapProps = {
   onReadyChange?: (ready: boolean) => void;
   placements: PlacedStructure[];
   structures: StructureDefinition[];
@@ -278,7 +280,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const viewerRef = useRef<Viewer | null>(null);
     const buildingTilesetRef = useRef<Cesium3DTileset | null>(null);
     const riverWaterRef = useRef<RiverWaterSurfaceController | null>(null);
-    const placeableZoneRef = useRef<{ destroy: () => void } | null>(null);
     const floodStateRef = useRef(floodState);
     const getLatestFloodStateRef = useRef(getLatestFloodState);
     const freeCameraLookRef = useRef(freeCameraLook);
@@ -782,6 +783,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         // 水面の Water マテリアル／流向ストリークは毎フレーム更新が必要なので描画を継続する。
         // 最新水位もここで渡し、React の間引き更新だけでは増水が階段状に見えないようにする。
         let lastVisualKey = "";
+        let lastFloodGeometryAt = 0;
         let lastStormKey = "";
         const clearSky = Color.fromCssColorString("#9ec6e0");
         const stormSky = Color.fromCssColorString("#4a6170");
@@ -870,7 +872,9 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                     .map((site) => `${site.id}:${site.intensity.toFixed(2)}`)
                     .join(","),
                 ].join("|");
-                if (visualKey !== lastVisualKey) {
+                // Water shading is cheap; flood polygons are not. Rebuild them at most 10Hz.
+                if (visualKey !== lastVisualKey && now - lastFloodGeometryAt >= 100) {
+                  lastFloodGeometryAt = now;
                   lastVisualKey = visualKey;
                   syncNearOverflowFloodplain(mapViewer, {
                     active,
@@ -908,16 +912,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         };
         startWaterAnimatingRef.current = startWaterAnimating;
         startWaterAnimating();
-
-        // 配置帯は準備／災害中かつ mapActive のときだけ出す（初期化時点では作らない）。
-        placeableZoneRef.current?.destroy();
-        placeableZoneRef.current = null;
-        syncPlaceableZoneForPhase(
-          mapViewer,
-          placeableZoneRef,
-          floodStateRef.current,
-          mapActiveRef.current,
-        );
 
         void createRiverWaterSurface(mapViewer)
           .then((controller) => {
@@ -1184,8 +1178,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         removeInitialInputListener?.();
         riverWaterRef.current?.destroy();
         riverWaterRef.current = null;
-        placeableZoneRef.current?.destroy();
-        placeableZoneRef.current = null;
         if (dragGhostRafRef.current !== 0) {
           window.cancelAnimationFrame(dragGhostRafRef.current);
           dragGhostRafRef.current = 0;
@@ -1287,35 +1279,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           riverLevelMeters: 2.2,
           overflowMeters: 0,
         });
-        placeableZoneRef.current?.destroy();
-        placeableZoneRef.current = null;
         clearLegacyFloodZones(viewer);
         viewer.scene.requestRender();
         return;
       }
 
-      syncPlaceableZoneForPhase(viewer, placeableZoneRef, floodState, mapActive);
-
-      const sites = floodState.active === true ? (floodState.overflowSites ?? []) : [];
       refreshProtectionWithDragGhost(viewer, floodState, dragGhostInfluenceRef.current, mapActive);
-      syncNearOverflowFloodplain(viewer, {
-        active: floodState.active === true,
-        riverLevelMeters: floodState.riverLevelMeters ?? 2.2,
-        overflowMeters: floodState.overflowMeters ?? 0,
-        overflowLevelMeters: floodState.overflowLevelMeters,
-      });
-      syncOverflowVisualization(
-        viewer,
-        sites,
-        floodState.floodDepthMeters ?? 0,
-        floodState.floodedAreaPercent ?? 0,
-      );
-      syncInundationVisualization(
-        viewer,
-        sites,
-        floodState.floodDepthMeters ?? 0,
-        floodState.active === true,
-      );
+      // Flood geometry has one owner: the throttled animation loop above.
       // 旧・無関係な固定浸水ゾーンは使わない（決壊地点からの浸水のみ）。
       clearLegacyFloodZones(viewer);
       viewer.scene.requestRender();
@@ -1584,6 +1554,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                     ? "位置を調整すると効果が上がります"
                     : "川沿いで効果のある場所を探そう"}
               </strong>
+              {pendingInfluence ? (
+                <span>
+                  配置有効率 {Math.round(pendingInfluence.effectiveness * 100)}% ·{" "}
+                  {pendingInfluence.coveredSiteIds.length}地点に届く
+                  {pendingInfluence.adverseSiteIds.length > 0 ? " · 相性に注意" : ""}
+                </span>
+              ) : null}
               <span>
                 {placementGuidance[orientationTarget.structureId] ??
                   "施設の位置と向きを調整してください"}
@@ -2344,29 +2321,6 @@ function refreshProtectionWithDragGhost(
   });
 }
 
-function syncPlaceableZoneForPhase(
-  viewer: Viewer,
-  placeableZoneRef: { current: { destroy: () => void } | null },
-  floodState:
-    | {
-        phase?: "idle" | "preparation" | "disaster" | "result" | "review";
-      }
-    | null
-    | undefined,
-  mapActive: boolean,
-): void {
-  const phase = floodState?.phase ?? "idle";
-  const shouldShow = mapActive && (phase === "preparation" || phase === "disaster");
-  if (!shouldShow) {
-    placeableZoneRef.current?.destroy();
-    placeableZoneRef.current = null;
-    return;
-  }
-  if (placeableZoneRef.current === null) {
-    placeableZoneRef.current = createPlaceableZone(viewer);
-  }
-}
-
 function clearDragGhostEntities(viewer: Viewer | null): void {
   if (viewer === null || viewer.isDestroyed()) {
     return;
@@ -2709,6 +2663,21 @@ function addCivilEngineeringModel(
       : `${prefix}-${placement.id}-part-${part.id}`;
 
     try {
+      if (part.kind === "mesh" && part.mesh !== undefined) {
+        const color =
+          (material as ColorMaterialProperty).color?.getValue(JulianDate.now()) ?? Color.WHITE;
+        viewer.entities.add({
+          id: entityId,
+          position,
+          orientation,
+          model: new ModelGraphics({
+            uri: structureMeshUri(part, [color.red, color.green, color.blue, color.alpha]),
+            shadows: ShadowMode.DISABLED,
+            enableVerticalExaggeration: false,
+          }),
+        });
+        continue;
+      }
       if (isCylinder) {
         viewer.entities.add({
           id: entityId,
@@ -2760,6 +2729,7 @@ function addCivilEngineeringModel(
   ).withAlpha(preview || invalid ? 0.72 : 0.88);
   viewer.entities.add({
     id: `${prefix}-${placement.id}-beacon`,
+    show: false,
     position: Cartesian3.fromDegrees(
       placement.position.longitude,
       placement.position.latitude,
