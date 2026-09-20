@@ -73,6 +73,10 @@ export type StructureInfluence = {
   coveredSiteIds: string[];
   /** 影響圏内で相性が悪く、流入増などの干渉につながる弱点 ID。 */
   adverseSiteIds: string[];
+  /** View-only attribution from this placement's actual local evaluator, not combined protection.
+   * Optional for older snapshots; absence must not be replaced with another facility's effect.
+   */
+  positiveSiteContributions?: ReadonlyArray<{ siteId: string; strength: number }>;
   /** 位置・向き・標高から見た配置有効率 0〜1。 */
   effectiveness: number;
   /** 仮配置のプレビュー影響圏。 */
@@ -577,6 +581,17 @@ export function getStructureInfluenceRadiusMeters(structureId: string): number {
 
 export { getStructureEffectLabel, getStructureZoneMeaning, getRiverPlacementContext };
 
+/** Pure display projection. Preserve the original placement height/heading; an influence
+ * zone's heading is not necessarily the stored facility heading. No simulation state is changed.
+ */
+export function calculatePositiveSiteContributions(placement: PlacedStructure) {
+  if (placement.preview) return [];
+  return listOverflowCandidates().flatMap(candidate => {
+    const strength = evaluateLocalContribution(placement, candidate);
+    return Number.isFinite(strength) && strength > 0 ? [{ siteId: candidate.id, strength }] : [];
+  });
+}
+
 export function calculateStructureInfluences(placements: PlacedStructure[]): StructureInfluence[] {
   // 仮配置も含める（向き調整中に影響圏が追従して見えるようにする）。
   // 治水効果の数値計算側は preview を除外する。
@@ -598,6 +613,7 @@ export function calculateStructureInfluences(placements: PlacedStructure[]): Str
       coverageHint: coverage.hint,
       coveredSiteIds: coverage.coveredSiteIds,
       adverseSiteIds: coverage.adverseSiteIds,
+      positiveSiteContributions: calculatePositiveSiteContributions(placement),
       effectiveness,
       preview: placement.preview === true,
     };

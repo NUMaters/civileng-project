@@ -13,6 +13,7 @@ import {
   type LocalPoint,
 } from "./koriyamaGeodata";
 import { KORIYAMA_PLATEAU_ATTRIBUTION, type KoriyamaPlateauGeodata, type PlateauBuilding } from "./koriyamaPlateauGeodata";
+import type { RenderedTerrainSurface } from "./geographicTerrain";
 
 export type GeographicFeature = GeodataFeature | PlateauBuilding;
 
@@ -34,6 +35,8 @@ export type GeographicWorldOptions = {
   localBounds?: { minX: number; minZ: number; maxX: number; maxZ: number };
   /** Optional global X/Z grid spacing in metres, for draping and detecting interior DEM gaps. */
   surfaceGridSpacing?: number;
+  /** The actual rendered terrain grid used to drape ground layers. Water and bridge decks do not use it. */
+  renderedTerrainSurface?: RenderedTerrainSurface;
   /** Building base sampler only; default groundY is synthetic, not surveyed elevation. */
   groundSampler?: (x: number, z: number) => number | null;
   /** Absolute surface Y at each polygon/ribbon vertex. Caller owns consistency with its terrain. */
@@ -239,6 +242,44 @@ function clip(points: Point[], axis: "x" | "z", boundary: number, keepAbove: boo
   return result;
 }
 
+function interpolatePoint(a: Point, b: Point, t: number): Point {
+  const point: Point = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
+  if (a.u !== undefined && b.u !== undefined) point.u = a.u + (b.u - a.u) * t;
+  if (a.v !== undefined && b.v !== undefined) point.v = a.v + (b.v - a.v) * t;
+  if (a.roofMask !== undefined && b.roofMask !== undefined) point.roofMask = a.roofMask + (b.roofMask - a.roofMask) * t;
+  return point;
+}
+
+/** Clips a source triangle to one actual terrain triangle, preserving source X/Z and interpolated attributes. */
+function clipToTriangle(points: Point[], triangle: readonly Point[]): Point[] {
+  let result = points;
+  const orientation = (triangle[1]!.x - triangle[0]!.x) * (triangle[2]!.z - triangle[0]!.z) -
+    (triangle[1]!.z - triangle[0]!.z) * (triangle[2]!.x - triangle[0]!.x);
+  for (let edge = 0; edge < 3 && result.length; edge++) {
+    const a = triangle[edge]!, b = triangle[(edge + 1) % 3]!;
+    const inside = (p: Point) => {
+      const cross = (b.x - a.x) * (p.z - a.z) - (b.z - a.z) * (p.x - a.x);
+      return orientation >= 0 ? cross >= -1e-7 : cross <= 1e-7;
+    };
+    const clipped: Point[] = [];
+    let previous = result.at(-1)!;
+    let previousInside = inside(previous);
+    for (const current of result) {
+      const currentInside = inside(current);
+      if (previousInside !== currentInside) {
+        const previousCross = (b.x - a.x) * (previous.z - a.z) - (b.z - a.z) * (previous.x - a.x);
+        const currentCross = (b.x - a.x) * (current.z - a.z) - (b.z - a.z) * (current.x - a.x);
+        clipped.push(interpolatePoint(previous, current, previousCross / (previousCross - currentCross)));
+      }
+      if (currentInside) clipped.push(current);
+      previous = current;
+      previousInside = currentInside;
+    }
+    result = clipped;
+  }
+  return result;
+}
+
 /**
  * Rendering only: source X/Z, polygon holes and line vertices are never procedurally relocated.
  * Returns a Group directly, with waterMeshes/waterGeometries for the caller's river material.
@@ -392,7 +433,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     const points = boundedPolygon([a, b, c]);
     for (let i = 1; i < points.length - 1; i++) tileTriangle(layer, points[0]!, points[i]!, points[i + 1]!, color);
   }
-  function planarTriangles(a: Point, b: Point, c: Point, visit: (a: Point, b: Point, c: Point) => void) {
+  function planarTriangles(a: Point, b: Point, c: Point, visit: (a: Point, b: Point, c: Point) => void, renderedSurface?: RenderedTerrainSurface) {
     const polygon = boundedPolygon([a, b, c]);
     if (polygon.length < 3) return;
     function fan(points: Point[]) {
@@ -400,6 +441,34 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
         const a = points[0]!, b = points[i]!, c = points[i + 1]!;
         if (Math.abs((b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x)) > 1e-10) visit(a, b, c);
       }
+    }
+    if (renderedSurface) {
+      const { xCoordinates, zCoordinates } = renderedSurface;
+      const upperBound = (values: Float32Array, value: number) => {
+        let low = 0, high = values.length;
+        while (low < high) {
+          const middle = Math.floor((low + high) / 2);
+          if (values[middle]! <= value) low = middle + 1;
+          else high = middle;
+        }
+        return low;
+      };
+      const minX = Math.min(...polygon.map((p) => p.x)), maxX = Math.max(...polygon.map((p) => p.x));
+      const minZ = Math.min(...polygon.map((p) => p.z)), maxZ = Math.max(...polygon.map((p) => p.z));
+      const minColumn = Math.max(0, Math.min(renderedSurface.columns - 1, upperBound(xCoordinates, minX) - 1));
+      const maxColumn = Math.max(0, Math.min(renderedSurface.columns - 1, upperBound(xCoordinates, maxX) - 1));
+      const minRow = Math.max(0, Math.min(renderedSurface.rows - 1, upperBound(zCoordinates, minZ) - 1));
+      const maxRow = Math.max(0, Math.min(renderedSurface.rows - 1, upperBound(zCoordinates, maxZ) - 1));
+      if (maxColumn < minColumn || maxRow < minRow) return;
+      for (let column = minColumn; column <= maxColumn; column++) for (let row = minRow; row <= maxRow; row++) {
+        const x0 = xCoordinates[column]!, x1 = xCoordinates[column + 1]!;
+        const z0 = zCoordinates[row]!, z1 = zCoordinates[row + 1]!;
+        for (const cellTriangle of [
+          [{ x: x0, y: 0, z: z0 }, { x: x0, y: 0, z: z1 }, { x: x1, y: 0, z: z0 }],
+          [{ x: x1, y: 0, z: z0 }, { x: x0, y: 0, z: z1 }, { x: x1, y: 0, z: z1 }],
+        ] as const) fan(clipToTriangle(polygon, cellTriangle));
+      }
+      return;
     }
     if (!spacing) { fan(polygon); return; }
     const minX = Math.floor(Math.min(...polygon.map((p) => p.x)) / spacing), maxX = Math.floor(Math.max(...polygon.map((p) => p.x)) / spacing);
@@ -413,6 +482,8 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
   }
   const centroid = (a: Point, b: Point, c: Point): Point => ({ x: (a.x + b.x + c.x) / 3, y: 0, z: (a.z + b.z + c.z) / 3 });
   function surfaceTriangle(layer: GeographicSurfaceLayer, a: Point, b: Point, c: Point, color: THREE.Color, feature: GeographicFeature) {
+    const renderedDrape = options.renderedTerrainSurface && ["road", "rail", "campus"].includes(layer)
+      ? options.renderedTerrainSurface : undefined;
     planarTriangles(a, b, c, (a, b, c) => {
       const points = [a, b, c, centroid(a, b, c)];
       const ys = points.map((p) => sampleSurface(p.x, p.z, layer, feature));
@@ -420,7 +491,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
         stats.skippedNoDataTriangles++; return;
       }
       tileTriangle(layer, { ...a, y: ys[0] as number }, { ...b, y: ys[1] as number }, { ...c, y: ys[2] as number }, color);
-    });
+    }, renderedDrape);
   }
   // Order references only, never clone all geographic coordinates or allocate a mesh per feature.
   // Spatial locality avoids repeatedly flushing small batches when source IDs are geographically mixed.
