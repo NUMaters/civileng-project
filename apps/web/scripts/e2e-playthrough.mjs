@@ -209,6 +209,9 @@ async function main() {
       `document.querySelector('.cesium-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
       60_000,
     );
+    // 建物タイルのready直後は初期カメラと地形ピックの最初の描画がまだ収束していないため、
+    // 実ユーザーの操作開始に近い状態まで1フレーム以上待ってからドラッグを検証する。
+    await sleep(750);
     step("スマホ幅で街の3Dモデル表示");
 
     const dragOnlyDock = await evaluate(
@@ -244,20 +247,9 @@ async function main() {
     }
     let draggedToMap = false;
     const dragAttempts = [];
-    const dropCandidates = [
-      [0.35, 0.3],
-      [0.5, 0.3],
-      [0.65, 0.3],
-      [0.35, 0.45],
-      [0.5, 0.45],
-      [0.65, 0.45],
-      [0.35, 0.6],
-      [0.5, 0.6],
-      [0.65, 0.6],
-      [0.35, 0.75],
-      [0.5, 0.75],
-      [0.65, 0.75],
-    ];
+    const dropCandidates = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9].flatMap((xRatio) =>
+      [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8].map((yRatio) => [xRatio, yRatio]),
+    );
     for (const [xRatio, yRatio] of dropCandidates) {
       const targetX = dragPoints.canvasLeft + dragPoints.canvasWidth * xRatio;
       const targetY = dragPoints.canvasTop + dragPoints.canvasHeight * yRatio;

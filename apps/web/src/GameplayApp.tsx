@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import type { CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
 import { MapBootFallback } from "./components/GameCanvas/MapBootFallback";
@@ -313,6 +313,45 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     };
   }, [inGame, isDockDragging]);
 
+  const cesiumFloodState = useMemo(
+    () => ({
+      active: flood.phase === "disaster" || flood.phase === "result" || flood.phase === "review",
+      phase: flood.phase,
+      rainfallIntensity: flood.rainfallIntensity,
+      riverLevelMeters: flood.riverLevelMeters,
+      overflowMeters: flood.overflowMeters,
+      floodDepthMeters: flood.floodDepthMeters,
+      floodedAreaPercent: flood.floodedAreaPercent,
+      floodplainFillRatio: flood.floodplainFillRatio,
+      floodplainHalfWidthMeters: flood.floodplainHalfWidthMeters,
+      overflowLevelMeters: flood.overflowLevelMeters,
+      overflowSites: flood.overflowSites,
+      protectedBankSites: flood.protectedBankSites,
+      structureInfluences: flood.structureInfluences,
+      mitigationCalm: Math.min(
+        1,
+        flood.mitigation.overflowPrevention * 0.65 +
+          flood.mitigation.waterLevelReduction * 0.5 +
+          flood.mitigation.channelCapacityIncrease * 0.2,
+      ),
+    }),
+    [
+      flood.floodDepthMeters,
+      flood.floodedAreaPercent,
+      flood.floodplainFillRatio,
+      flood.floodplainHalfWidthMeters,
+      flood.mitigation,
+      flood.overflowLevelMeters,
+      flood.overflowMeters,
+      flood.overflowSites,
+      flood.phase,
+      flood.protectedBankSites,
+      flood.rainfallIntensity,
+      flood.riverLevelMeters,
+      flood.structureInfluences,
+    ],
+  );
+
   return (
     <main
       className={`game-shell${drag !== null ? " is-dock-dragging" : ""}${hasPendingPlacement ? " is-pending-placement" : ""}${isReviewing ? " is-reviewing" : ""}${inGame ? "" : " is-dormant"}`}
@@ -345,28 +384,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
           onCancelPendingPlacement={construction.cancelPendingPlacement}
           onCameraFocusChange={handleCameraFocusChange}
           freeCameraLook={isReviewing}
-          floodState={{
-            active:
-              flood.phase === "disaster" || flood.phase === "result" || flood.phase === "review",
-            phase: flood.phase,
-            rainfallIntensity: flood.rainfallIntensity,
-            riverLevelMeters: flood.riverLevelMeters,
-            overflowMeters: flood.overflowMeters,
-            floodDepthMeters: flood.floodDepthMeters,
-            floodedAreaPercent: flood.floodedAreaPercent,
-            floodplainFillRatio: flood.floodplainFillRatio,
-            floodplainHalfWidthMeters: flood.floodplainHalfWidthMeters,
-            overflowLevelMeters: flood.overflowLevelMeters,
-            overflowSites: flood.overflowSites,
-            protectedBankSites: flood.protectedBankSites,
-            structureInfluences: flood.structureInfluences,
-            mitigationCalm: Math.min(
-              1,
-              flood.mitigation.overflowPrevention * 0.65 +
-                flood.mitigation.waterLevelReduction * 0.5 +
-                flood.mitigation.channelCapacityIncrease * 0.2,
-            ),
-          }}
+          floodState={cesiumFloodState}
           getLatestFloodState={flood.getLatestState}
         />
       </Suspense>

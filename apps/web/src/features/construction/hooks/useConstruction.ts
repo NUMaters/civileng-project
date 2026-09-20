@@ -40,6 +40,8 @@ const MESSAGE_INFO_HIDE_MS = 2_200;
 const MESSAGE_WARN_HIDE_MS = 2_800;
 /** 同じ文言の連投を抑える間隔（ms）。 */
 const MESSAGE_THROTTLE_MS = 1_400;
+/** 経済計算は毎フレーム続けるが、HUDへの反映は入力を邪魔しない頻度に抑える。 */
+const ECONOMY_UI_UPDATE_INTERVAL_MS = 100;
 
 export type ToastTone = "info" | "warn" | "success";
 
@@ -159,6 +161,7 @@ export function useConstruction() {
     }
     let frameId = 0;
     let lastAt = performance.now();
+    let lastUiUpdateAt = lastAt - ECONOMY_UI_UPDATE_INTERVAL_MS;
     const tick = (now: number) => {
       const deltaSeconds = Math.min(0.5, Math.max(0, (now - lastAt) / 1000));
       lastAt = now;
@@ -171,9 +174,12 @@ export function useConstruction() {
         });
         if (Math.abs(result.budget - budgetRef.current) >= 0.05) {
           budgetRef.current = result.budget;
-          setBudget(result.budget);
         }
-        setNetIncomePerSecond(result.netIncomePerSecond);
+        if (now - lastUiUpdateAt >= ECONOMY_UI_UPDATE_INTERVAL_MS) {
+          lastUiUpdateAt = now;
+          setBudget(budgetRef.current);
+          setNetIncomePerSecond(result.netIncomePerSecond);
+        }
       }
       frameId = window.requestAnimationFrame(tick);
     };
