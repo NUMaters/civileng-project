@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { GEOGRAPHIC_MATERIAL_PALETTE } from "./geographicMaterialPalette";
 import { createVegetationStyleResources, vegetationColor, VEGETATION_STYLE_PROVENANCE } from "./geographicVegetationStyle";
 import { createGeographicWorld } from "./geographicWorld";
 import type { RenderedTerrainSurface } from "./geographicTerrain";
@@ -21,7 +22,7 @@ export function landcoverDisplayColor(feature: LandcoverFeature) {
     if (surface === "asphalt" || surface === "concrete") return "#96a6a6";
     return "#d5bc8c";
   }
-  if (category === "landuse:grass" || category === "natural:grassland") return "#80b95b";
+  if (category === "landuse:grass" || category === "natural:grassland") return GEOGRAPHIC_MATERIAL_PALETTE.mappedGrass;
   if (category === "natural:wood" || category === "landuse:forest") return "#578653";
   // Park boundaries include paving/buildings: this is a subtle classification tint,
   // not a claim that the entire polygon is grass or observed canopy.
