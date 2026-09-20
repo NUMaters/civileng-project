@@ -6,7 +6,13 @@
 - 対象：地域情報提供型・住民 NPC の会話、RAG、LLM、知識データ、グロッサリー、フォールバック、安全性、匿名分析の専門設計
 - 位置づけ：RAG・LLM 固有の設計の正本。機能要件・受け入れ条件は [`requirements.md`](./requirements.md)、統合構成・型・API設計Issueへの引き継ぎ条件は [`detailed-design.md`](./detailed-design.md) を正本とし、本書では重複記載しない
 - **API・通信方式（WebSocketイベント名、ペイロード、TypeScript型、`status`・`reasonCode`の列挙値等）は、本書では確定しない。別のAPI設計Issueで決定する（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）**
-- 初期 LLM：Ollama
+
+## 現在のMVP決定
+
+現在の実装は、登録済みの選択式質問だけを受け付ける。自由入力、実行時のURL取得、ベクトル検索、LLMOpsは今回の範囲外である。選択質問から該当Factを直接取得し、NPCペルソナとFactだけをOpenAIへ渡して回答文を生成する。
+
+モデルの回答は事前登録文との完全一致を求めない。ただし、出典IDはモデルに選ばせず、NPC BackendがFactから確定する。文字数・文数・URL/HTML・安全性を断定する表現を検証し、失敗時は承認済み固定回答へフォールバックする。具体的な接続契約は[`main-npc-backend-api.md`](./main-npc-backend-api.md)を正本とする。
+- 初期 LLM：OpenAI API
 - 初期利用規模：1〜4 人
 - 将来利用規模の検討：5〜50 人（MVPの同時利用対象は1〜4人）
 
@@ -22,7 +28,7 @@
 4. NPC・地域・シナリオ・担当テーマを越えた情報漏れを防ぐ
 5. LLM や検索基盤が停止しても、ゲーム本体と基本 NPC 会話を継続する
 6. 質問文・回答文・個人情報を保存せず、匿名の利用指標だけを収集する
-7. 初回は Ollama で費用を抑え、将来はクラウド LLM へ移行可能にする
+7. OpenAI APIを利用し、接続先・モデル名・認証情報はNPC Backendだけが保持する
 
 ---
 
@@ -62,10 +68,10 @@ Go ゲームサーバー（サーバー権威型）
            ↓
   承認済み知識データ／検索基盤
            ↓
-  Ollama（同一 GPU 搭載 PC）
+  OpenAI API
 ```
 
-ブラウザから Ollama や外部 LLM API へ直接接続しない。接続先、モデル名、認証情報はバックエンドだけが保持する。
+ブラウザから OpenAI API へ直接接続しない。接続先、モデル名、認証情報はNPC Backendだけが保持する。
 
 具体的な通信イベント・フィールド・ペイロードの型定義は、別のAPI設計Issueで決定する（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）。本書では、RAG・LLM に固有の設計のみを扱う。
 
@@ -143,7 +149,7 @@ LLM は知識を補完する役割ではなく、承認済み事実の**言語�
 - 禁止事項
 - 最大 120 文字・1〜2 文という出力制約
 
-LLM へは「よみやすさ設定（readingLevel）」を渡さない。かな中心／ふりがな／標準の 3 段階は語彙・言い回しを共通にしたまま表記のみを変える設計（[`requirements.md`](./requirements.md#15-よみやすさ設定)）であるため、LLM は常に「標準相当」のプレーン文を 1 種類だけ生成する。ふりがな付与はLLMの役割ではなく、LLM出力をサーバーが受け取った後の後処理として行う。正本は[`detailed-design.md`](./detailed-design.md#25-ふりがな生成検証)とする。
+LLM へは「よみやすさ設定（readingLevel）」を渡さない。ふりがなあり／標準の 2 段階は語彙・言い回しを共通にしたままふりがなの表示だけを変える設計（[`requirements.md`](./requirements.md#14-よみやすさ設定)）であるため、LLM は常に「標準相当」のプレーン文を 1 種類だけ生成する。ふりがな付与はLLMの役割ではなく、LLM出力をサーバーが受け取った後の後処理として行う。正本は[`detailed-design.md`](./detailed-design.md#25-ふりがな生成検証)とする。
 
 ### LLM が行ってよいこと
 
@@ -388,8 +394,8 @@ Claude Code は実リポジトリ、DB マイグレーション、既存依存�
 
 ### 初期構成
 
-- プロバイダー：Ollama
-- 実行場所：ゲームサーバーと同じ GPU 搭載 PC
+- プロバイダー：OpenAI API
+- 実行場所：NPC Backend
 - 初期同時利用：1〜4 人
 - タイムアウト：5 秒
 - 自動クラウドフェイルオーバー：なし
@@ -400,9 +406,10 @@ Claude Code は実リポジトリ、DB マイグレーション、既存依存�
 実際の命名はリポジトリの設定規則へ合わせる。
 
 ```text
-NPC_LLM_PROVIDER=ollama
-NPC_LLM_MODEL=<model-name>
-NPC_LLM_BASE_URL=<ollama-url>
+NPC_LLM_PROVIDER=openai
+OPENAI_API_KEY=<secret>
+OPENAI_MODEL=gpt-4o-mini
+OPENAI_BASE_URL=https://api.openai.com
 NPC_LLM_TIMEOUT_MS=5000
 NPC_DIALOGUE_ENABLED=true
 ```
@@ -413,10 +420,8 @@ APIキー、`.env`、秘密情報はリポジトリへコミットしない。
 
 5〜50 人規模では、次を再評価する。
 
-- Ollama の同時リクエスト処理性能
-- GPU メモリとモデルサイズ
+- OpenAI API の利用上限・応答時間・費用
 - 95 パーセンタイル応答時間
-- OpenAI、Anthropic、AWS Bedrock 等のクラウド利用
 - 費用上限、レート制限、利用規約
 
 初回実装で複数プロバイダーのアダプターや自動切り替えを先行実装しない。既存の KISS・YAGNI 方針を優先する。
@@ -492,7 +497,7 @@ APIキー、`.env`、秘密情報はリポジトリへコミットしない。
 
 `fallbackResponseIds.llmFailure`を使用する処理失敗には、次を含む。
 
-- Ollama接続失敗
+- OpenAI API接続失敗
 - 5秒タイムアウト
 - LLM内部生成結果の解析失敗
 - `generationResult`の検証失敗
@@ -609,14 +614,14 @@ APIキー、`.env`、秘密情報はリポジトリへコミットしない。
 - 許可されていないヒントレベルを拒否できる
 - 不正 JSON、空回答、長文をフォールバックできる
 
-実 Ollama を使うテストは、ローカルの任意実行または専用 Integration Test とし、通常の Unit Test を不安定にしない。
+実OpenAI APIを使う確認は、Secretを設定した任意の結合確認とし、通常のUnit TestではHTTPモックを使用してAPIキーや費用に依存しない。
 
 ### 初期性能確認
 
 - 1〜4 人の同時利用
 - 5 秒以内に回答、または基本回答へ切り替わる
 - 会話中もゲーム Tick・通信の同期が継続する
-- GPU メモリ不足時にゲームサーバーが停止しない
+- OpenAI APIの障害時にもゲームサーバーが停止せず、基本回答へ切り替わる
 
 5〜50 人の負荷試験は将来拡張時に行う。
 
@@ -624,6 +629,6 @@ APIキー、`.env`、秘密情報はリポジトリへコミットしない。
 
 ## 実装前の決定ゲート
 
-NPC バックエンド・フロントエンドのモジュール配置は [`detailed-design.md`](./detailed-design.md) で確定済みである。**通信イベント名・ペイロード・API設計は本書・detailed-design.mdでは確定せず、別のAPI設計Issueで決定する**（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）。本書のスコープ（RAG・LLM・知識データ）に残る未決定事項、および全体の未決定事項一覧は [`requirements.md`](./requirements.md#23-未決定事項実装前確認事項) を正本とする。RAG 検索基盤（PostgreSQL＋pgvector／簡易検索／外部ベクトル DB）、知識作成・監修担当、Ollama モデル、分析データ保存期間は同章に記載のとおり未決定である。
+NPC バックエンド・フロントエンドのモジュール配置は [`detailed-design.md`](./detailed-design.md) で確定済みである。**通信イベント名・ペイロード・API設計は本書・detailed-design.mdでは確定せず、別のAPI設計Issueで決定する**（[`detailed-design.md`](./detailed-design.md#19-api設計issueへの引き継ぎ条件)）。本書のスコープ（RAG・LLM・知識データ）に残る未決定事項、および全体の未決定事項一覧は [`requirements.md`](./requirements.md#23-未決定事項実装前確認事項) を正本とする。RAG 検索基盤（PostgreSQL＋pgvector／簡易検索／外部ベクトル DB）、知識作成・監修担当、OpenAIモデル、分析データ保存期間は同章に記載のとおり未決定である。
 
 Issue 番号が作成されるまでは、番号なしの `TODO` コメントをコードへ追加しない。

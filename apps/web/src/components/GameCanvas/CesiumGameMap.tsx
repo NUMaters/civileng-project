@@ -76,6 +76,8 @@ import {
   type StructureInfluence,
 } from "../../features/disaster/services/floodSimulation";
 import { resolveRainDrama } from "../../features/disaster/services/rainDrama";
+import { NpcMapMarkers } from "../../features/npc/NpcMapMarkers";
+import type { NpcDefinition } from "../../features/npc/types";
 import { getCesiumRenderProfile, resolveCesiumResolutionScale } from "./cesiumPerformance";
 
 const DRAG_GHOST_ENTITY_PREFIX = "drag-ghost";
@@ -183,6 +185,7 @@ export type DragGhostStatus = {
 type MapLoadStage = "loading" | "terrain" | "buildings" | "ready" | "degraded";
 
 export type CesiumGameMapHandle = {
+  focusNpc: (position: GeoPosition) => void;
   resetCamera: () => void;
   tryDropStructure: (structureId: string, clientX: number, clientY: number) => boolean;
   /** ドラッグ中に設置予定モデルをカーソル下の地表へ追従表示する。 */
@@ -192,6 +195,10 @@ export type CesiumGameMapHandle = {
 };
 
 export type CesiumGameMapProps = {
+  npcMarkers?: NpcDefinition[];
+  highlightedNpcId?: string | null;
+  onSelectNpc?: (id: string) => void;
+  interactionLocked?: boolean;
   onReadyChange?: (ready: boolean) => void;
   placements: PlacedStructure[];
   structures: StructureDefinition[];
@@ -276,6 +283,10 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       getLatestFloodState,
       freeCameraLook = false,
       mapActive = true,
+      npcMarkers,
+      highlightedNpcId = null,
+      onSelectNpc,
+      interactionLocked = false,
     },
     ref,
   ) {
@@ -287,6 +298,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     const getLatestFloodStateRef = useRef(getLatestFloodState);
     const freeCameraLookRef = useRef(freeCameraLook);
     const mapActiveRef = useRef(mapActive);
+    const interactionLockedRef = useRef(interactionLocked);
+    interactionLockedRef.current = interactionLocked;
     const startWaterAnimatingRef = useRef<(() => void) | null>(null);
     const labelElementRefs = useRef(new Map<string, HTMLDivElement>());
     const orientationHudRef = useRef<HTMLDivElement | null>(null);
@@ -429,12 +442,36 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       };
     }, [mapActive]);
 
+    useEffect(() => {
+      const viewer = viewerRef.current;
+      if (!viewer || viewer.isDestroyed()) return;
+      viewer.scene.screenSpaceCameraController.enableInputs = !interactionLocked;
+    }, [interactionLocked, isMapReady]);
+
     useImperativeHandle(ref, () => ({
+      focusNpc: (position: GeoPosition) => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed() || interactionLockedRef.current) return;
+        const terrainHeight = viewer.scene.globe.getHeight(
+          Cartographic.fromDegrees(position.longitude, position.latitude),
+        );
+        viewer.camera.lookAt(
+          Cartesian3.fromDegrees(position.longitude, position.latitude, terrainHeight ?? position.height),
+          new HeadingPitchRange(
+            CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
+            CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
+            INITIAL_VIEW.range,
+          ),
+        );
+        viewer.camera.lookAtTransform(Matrix4.IDENTITY);
+        viewer.scene.requestRender();
+      },
       resetCamera: () => {
         const viewer = viewerRef.current;
         if (viewer !== null && !viewer.isDestroyed()) applyInitialCamera(viewer);
       },
       tryDropStructure: (structureId: string, clientX: number, clientY: number) => {
+        if (interactionLockedRef.current) return false;
         const viewer = viewerRef.current;
         clearDragGhostEntities(viewer);
         if (viewer === null || viewer.isDestroyed()) {
@@ -468,6 +505,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return true;
       },
       updateDragGhost: (structureId: string, clientX: number, clientY: number) => {
+        if (interactionLockedRef.current) return { overMap: false, placeable: false };
         const viewer = viewerRef.current;
         if (viewer === null || viewer.isDestroyed()) {
           return { overMap: false, placeable: false };
@@ -1397,6 +1435,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         return;
       }
       const onKeyDown = (event: KeyboardEvent) => {
+        if (interactionLockedRef.current) return;
         if (
           event.key !== "ArrowUp" &&
           event.key !== "ArrowDown" &&
@@ -1477,6 +1516,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     return (
       <div className="cesium-game-map" data-3d-buildings={buildingsLoadState}>
         <div className="cesium-game-map__canvas" ref={containerRef} />
+        {isMapReady && viewerRef.current && !viewerRef.current.isDestroyed() && npcMarkers && onSelectNpc ? (
+          <NpcMapMarkers
+            viewer={viewerRef.current}
+            npcs={npcMarkers}
+            highlightedId={highlightedNpcId}
+            onSelect={onSelectNpc}
+          />
+        ) : null}
         <div className="cesium-game-map__labels" aria-hidden="true">
           {mapLabels.map((label) => (
             <div

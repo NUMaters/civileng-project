@@ -2,11 +2,12 @@
 
 ## 文書の状態
 
-- 状態：暫定設計 v0.1
+- 状態：暫定設計 v0.2
 - 対象：NPC の回答生成における Main Backend / AI Backend 間の責務境界、情報要件、および LLMOps / RAGOps との連携
 - 位置づけ：正式な API 仕様ではなく、Offline LLMOps / RAGOps の設計前でも Main Backend 側が先行して実装を進められるようにするための暫定契約
 - 正式な通信方式、エンドポイント、イベント名、DTO、エラーコード等は本書では確定しない。最終仕様は API 設計時に決定する
 - 既存文書と競合する場合は、[`requirements.md`](./requirements.md) および既存ゲーム本体の仕様を優先する
+- 選択式質問を使う現在のMVPで実装した具体的な通信契約は、[`main-npc-backend-api.md`](./main-npc-backend-api.md)を参照する
 
 NPC 機能全体の要件は [`requirements.md`](./requirements.md)、ゲーム本体との統合設計は [`detailed-design.md`](./detailed-design.md)、RAG・LLM・LLMOps の専門設計は [`dialogue-ai-design.md`](./dialogue-ai-design.md) を参照する。通信方式の基本方針は [`docs/architecture/communication.md`](../architecture/communication.md) に従う。
 
@@ -170,7 +171,7 @@ Game-level Evaluation
 | フェーズ管理                 | 担当         | 担当しない                       |
 | NPC 会話可能距離判定         | 担当         | 担当しない                       |
 | `hintLevel` の状態管理       | 担当         | 受け取った値を生成条件として使用 |
-| 質問種別の管理               | 担当         | 受け取った種別に応じて処理       |
+| 選択質問の管理               | 担当         | 受け取った質問IDに応じて処理     |
 | 承認済み Knowledge の検索    | 担当しない   | 担当                             |
 | RAG                          | 担当しない   | 担当                             |
 | Prompt 構築                  | 担当しない   | 担当                             |
@@ -183,7 +184,7 @@ Game-level Evaluation
 
 ---
 
-## 5. Main Backend → AI Backend 暫定入力 v0.1
+## 5. Main Backend → AI Backend 暫定入力 v0.2
 
 本章では、正式な API フィールドではなく、Main Backend から AI Backend へ渡す必要がある**意味上の情報要件**を定義する。
 
@@ -193,9 +194,7 @@ Game-level Evaluation
 | `gameSessionId`       | 必須         | ゲーム単位で Trace / Telemetry を後から関連付けるための不透明なセッション ID。個人を直接識別する情報を含めない |
 | `npcId`               | 必須         | 質問対象 NPC の識別子                                                                                          |
 | `scenarioId`          | 必須         | 対象シナリオの識別子                                                                                           |
-| `question.type`       | 必須         | 登録質問または自由入力を識別する値。概念上 `preset` / `freeText` を想定                                        |
-| `question.questionId` | 条件付き必須 | 登録質問の場合の質問候補 ID                                                                                    |
-| `question.text`       | 条件付き必須 | 自由入力の場合の質問本文。生成処理にのみ利用し、永続保存しない                                                 |
+| `questionId`          | 必須         | NPCカタログに登録された選択式質問候補 ID                                                                        |
 | `hintLevel`           | 必須         | Main Backend が管理する現在のヒントレベル                                                                      |
 
 概念例：
@@ -206,10 +205,7 @@ Game-level Evaluation
   "gameSessionId": "opaque-game-session-id",
   "npcId": "npc-example-resident",
   "scenarioId": "scenario-example",
-  "question": {
-    "type": "freeText",
-    "text": "この辺は水がたまりやすいの？"
-  },
+  "questionId": "past",
   "hintLevel": 1
 }
 ```
@@ -234,15 +230,11 @@ Game-level Evaluation
 
 ### 5.2 `areaId`・`themeId` の扱い
 
-自由入力の RAG 検索では、地域・担当テーマによる検索範囲の制限が必要である。
-
-ただし、`areaId` や `themeId` を Main Backend から毎回送るか、`npcId` / `scenarioId` をもとに AI Backend 側の承認済み設定から解決するかは、Offline RAG 設計と責務境界を確認した後に決定する。
-
-手戻りを防ぐため、v0.1 の必須項目には含めない。
+現在のMVPは自由入力を受け付けない。地域・担当テーマは`npcId`と`scenarioId`を使って、AI Backend側の承認済みNPCカタログから解決する。そのため`areaId`・`themeId`はMain Backendから送らない。
 
 ---
 
-## 6. AI Backend → Main Backend 暫定出力 v0.1
+## 6. AI Backend → Main Backend 暫定出力 v0.2
 
 | 項目            | 必須     | 内容                                                                       |
 | --------------- | -------- | -------------------------------------------------------------------------- |
@@ -361,7 +353,6 @@ Main Backend Interface へ新しい項目を追加するのは、**AI Backend �
 
 既存要件に従い、次の情報は永続保存しない。
 
-- プレイヤーが自由入力した質問本文
 - NPC が生成または表示した回答本文
 - プレイヤー名
 - 入力された個人情報

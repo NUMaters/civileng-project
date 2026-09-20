@@ -10,6 +10,8 @@
     "build": "pnpm -r build",
     "dev:web": "pnpm --filter @civilcraft/web dev:ensure",
     "dev:web:fg": "pnpm --filter @civilcraft/web dev",
+    "dev:game-backend": "go -C apps/server run ./cmd/game",
+    "dev:npc-backend": "go -C apps/server run ./cmd/npc",
     "stop:web": "pnpm --filter @civilcraft/web stop:dev",
     "deploy:web": "pnpm --filter @civilcraft/web pages:deploy"
   },

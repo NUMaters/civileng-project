@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./npc/*": "./npc/*",
     "./structures/*": "./structures/*",
     "./rules/*": "./rules/*",
     "./disasters/*": "./disasters/*",
