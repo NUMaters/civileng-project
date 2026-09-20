@@ -52,7 +52,7 @@ func (c *BackendClient) Generate(ctx context.Context, request domain.GenerationR
 	if err != nil {
 		return domain.GenerationResponse{}, fmt.Errorf("NPC Backend request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxBackendResponseBytes+1))
 	if err != nil {
 		return domain.GenerationResponse{}, fmt.Errorf("read NPC Backend response: %w", err)

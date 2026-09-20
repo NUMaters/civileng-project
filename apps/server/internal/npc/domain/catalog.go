@@ -133,7 +133,7 @@ func (c *Catalog) Validate() error {
 	sources := map[string]bool{}
 	for _, source := range c.Sources {
 		u, err := url.Parse(source.URL)
-		if err != nil || u.Scheme != "https" || !(strings.HasSuffix(u.Hostname(), ".go.jp") || strings.HasSuffix(u.Hostname(), ".lg.jp")) || u.User != nil || source.ID == "" || sources[source.ID] {
+		if err != nil || u.Scheme != "https" || (!strings.HasSuffix(u.Hostname(), ".go.jp") && !strings.HasSuffix(u.Hostname(), ".lg.jp")) || u.User != nil || source.ID == "" || sources[source.ID] {
 			return fmt.Errorf("invalid NPC source %q", source.ID)
 		}
 		sources[source.ID] = true

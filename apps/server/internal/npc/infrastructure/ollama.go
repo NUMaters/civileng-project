@@ -78,7 +78,7 @@ func (o *Ollama) Select(ctx context.Context, npc domain.NPC, question domain.Que
 	if err != nil {
 		return "", fmt.Errorf("Ollama request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("Ollama HTTP %d", response.StatusCode)
 	}

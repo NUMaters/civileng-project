@@ -100,7 +100,7 @@ func (o *OpenAI) Select(ctx context.Context, npc domain.NPC, question domain.Que
 	if err != nil {
 		return "", fmt.Errorf("OpenAI request: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	data, err := io.ReadAll(io.LimitReader(response.Body, maxLLMResponseBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("read OpenAI response: %w", err)

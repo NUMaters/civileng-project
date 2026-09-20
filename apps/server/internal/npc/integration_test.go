@@ -52,7 +52,7 @@ func TestMainBackendToNPCBackendContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer createResponse.Body.Close()
+	defer func() { _ = createResponse.Body.Close() }()
 	if createResponse.StatusCode != http.StatusCreated {
 		t.Fatalf("create status: %d", createResponse.StatusCode)
 	}
@@ -69,7 +69,7 @@ func TestMainBackendToNPCBackendContract(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer answerResponse.Body.Close()
+	defer func() { _ = answerResponse.Body.Close() }()
 	if answerResponse.StatusCode != http.StatusOK {
 		t.Fatalf("answer status: %d", answerResponse.StatusCode)
 	}
