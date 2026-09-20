@@ -98,11 +98,30 @@
   color: #b43b2f;
 }
 .diorama-guidance {
+  --label-pointer-border-left: 3px;
+  box-sizing: border-box;
   border-left: 3px solid #16b2c2;
-  max-width: 210px;
+  width: min(210px, calc(100% - 16px));
+  min-width: 0;
+  max-width: calc(100% - 16px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  visibility: hidden;
   background: #fffffff0;
 }
+.diorama-guidance strong {
+  display: block;
+  min-height: 1.35em;
+  line-height: 1.35;
+}
 .diorama-guidance small {
+  /* Reserve two advice lines even before selection; text changes do not invalidate
+     the observed size and cause a hidden/measure/choose feedback loop. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: 3em;
   color: #426779;
   line-height: 1.5;
 }
@@ -115,7 +134,7 @@
   border-style: solid;
   border-color: #fffffff2 transparent transparent;
 }
-/* Facility labels only: guidance keeps its existing layout and behavior. */
+/* Facility label sizing; guidance has its own compact measured size above. */
 .diorama-label[data-heading] {
   box-sizing: border-box;
   width: max-content;
@@ -134,9 +153,10 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.diorama-label[data-heading]:after {
+.diorama-label[data-heading]:after,
+.diorama-guidance:after {
   /* Offset the 1px border so the tip uses the measured border-box coordinates. */
-  left: calc(var(--facility-pointer-left) - 1px);
+  left: calc(var(--facility-pointer-left) - var(--label-pointer-border-left, 1px));
   top: calc(100% + 1px);
   bottom: auto;
   width: var(--facility-pointer-width);
@@ -147,7 +167,8 @@
     calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) + 6px) 0,
     calc(var(--facility-pointer-tip-x) - var(--facility-pointer-left)) 100%);
 }
-.diorama-label[data-heading][data-pointer-side="top"]:after {
+.diorama-label[data-heading][data-pointer-side="top"]:after,
+.diorama-guidance[data-pointer-side="top"]:after {
   top: auto;
   bottom: calc(100% + 1px);
   clip-path: polygon(calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) - 6px) 100%,

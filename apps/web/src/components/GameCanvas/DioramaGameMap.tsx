@@ -31,6 +31,19 @@ import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
 import { FACILITY_LABEL_MARGIN, layoutFacilityLabel, type FacilityLabelLayout } from "./facilityLabelLayout";
+import { scoreGuidanceAnchor } from "./guidanceLabelLayout";
+import { createRiverStageController } from "./riverStage";
+import { createRiverSurfaceSampler } from "./riverSurface";
+import { createRiverBoundaryResolver } from "./riverBoundary";
+import { frameRenderedFloodPatch, selectRenderedFloodPatch } from "./floodCameraFocus";
+
+export type DioramaGameMapHandle = CesiumGameMapHandle & {
+  focusRenderedFlood: () => void;
+  returnFromFlood: () => void;
+};
+type DioramaGameMapProps = CesiumGameMapProps & {
+  onFloodFocusChange?: (state: { available: boolean; viewing: boolean }) => void;
+};
 
 type Runtime = {
   renderer: T.WebGLRenderer;
@@ -44,10 +57,12 @@ type Runtime = {
   pick: (x: number, y: number) => { x: number; z: number } | null;
   reset: () => void;
   ground: (x: number, z: number) => number | null;
+  focusFlood: () => void;
+  returnFromFlood: () => void;
 };
 
 /** Local, meter-scaled Abukuma diorama. Game rules remain in geographic coordinates. */
-export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>(
+export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapProps>(
   function DioramaGameMap(props, ref) {
     const host = useRef<HTMLDivElement>(null);
     const runtime = useRef<Runtime | null>(null);
@@ -85,6 +100,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       ref,
       () => ({
         resetCamera: () => runtime.current?.reset(),
+        focusRenderedFlood: () => runtime.current?.focusFlood(),
+        returnFromFlood: () => runtime.current?.returnFromFlood(),
         focusNpc: (position) => {
           const r = runtime.current;
           if (!r) return;
@@ -240,7 +257,10 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       controls.mouseButtons.LEFT = T.MOUSE.PAN;
       controls.touches.ONE = T.TOUCH.PAN;
       controls.touches.TWO = T.TOUCH.DOLLY_ROTATE;
+      let floodReturnPose: { position: T.Vector3; target: T.Vector3 } | null = null;
       const reset = () => {
+        floodReturnPose = null;
+        controls.maxDistance = 1500;
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
         controls.target.set(riverX(focus.z), terrain.sampleGround(riverX(focus.z), focus.z) ?? 0, focus.z);
@@ -274,8 +294,46 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         mesh.material = waterMaterial;
       }
       oldWaterMaterials.forEach(material => material.dispose());
-      const inundation = createDioramaInundation(terrain.sampleGround);
+      const riverStage = createRiverStageController(world.waterMeshes);
+      const sampleRiverSurface = createRiverSurfaceSampler(world.waterMeshes);
+      const riverBoundary = createRiverBoundaryResolver(geography.osm, sampleRiverSurface);
+      const inundation = createDioramaInundation(terrain.sampleGround, riverBoundary);
       scene.add(inundation.group);
+      let lastFloodFocusKey = "";
+      let cachedPatches: ReturnType<typeof inundation.getRenderedPatches> | null = null;
+      let cachedViewport = "";
+      let cachedFraming: ReturnType<typeof frameRenderedFloodPatch> = null;
+      const floodFraming = () => {
+        const patches = inundation.getRenderedPatches();
+        const review = latest.current.getLatestFloodState?.().phase === "review";
+        const key = `${camera.aspect}/${viewportHeight}/${review}`;
+        if (patches !== cachedPatches || key !== cachedViewport) {
+          cachedPatches = patches;
+          cachedViewport = key;
+          const ratio = Math.max(0.1, 1 - 2 * Math.max(140, review ? 110 : 170) / Math.max(1, viewportHeight));
+          const patch = selectRenderedFloodPatch(patches.filter(p => frameRenderedFloodPatch(p, camera.fov, camera.aspect, ratio)));
+          cachedFraming = patch ? frameRenderedFloodPatch(patch, camera.fov, camera.aspect, ratio) : null;
+        }
+        return cachedFraming;
+      };
+      const focusFlood = () => {
+        const framing = floodFraming();
+        if (!framing) return;
+        floodReturnPose ??= { position: camera.position.clone(), target: controls.target.clone() };
+        // Only a user tap moves the camera. Preserve its azimuth/pitch and a return pose.
+        const direction = camera.position.clone().sub(controls.target).normalize();
+        controls.target.set(framing.target.x, framing.target.y, framing.target.z);
+        camera.position.copy(controls.target).addScaledVector(direction, framing.distance);
+        controls.update();
+      };
+      const returnFromFlood = () => {
+        if (!floodReturnPose) return;
+        camera.position.copy(floodReturnPose.position);
+        controls.target.copy(floodReturnPose.target);
+        floodReturnPose = null;
+        controls.maxDistance = 1500;
+        controls.update();
+      };
       const raycaster = new T.Raycaster(),
         cursor = new T.Vector2();
       const pick = (x: number, y: number) => {
@@ -298,6 +356,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         pick,
         reset,
         ground: terrain.sampleGround,
+        focusFlood,
+        returnFromFlood,
       };
       runtime.current = r;
       let moving: {
@@ -435,10 +495,15 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       });
       labelSizeObserver.current = sizeObserver;
       for (const element of labels.current.values()) sizeObserver.observe(element);
+      // Keep guidance measurable even when phase/preview gates hide it.
+      if (guidanceLabel.current) sizeObserver.observe(guidanceLabel.current);
+      const guidanceTitle = guidanceLabel.current?.querySelector("strong");
+      const guidanceAdvice = guidanceLabel.current?.querySelector("small");
       const labelLayout: FacilityLabelLayout = {
         x: 0, y: 0, pointerSide: "bottom", pointerHeight: 7, pointerBaseX: 0, pointerTipX: 0,
         pointerLeft: 0, pointerWidth: 0,
       };
+      const candidateHintLayout = { ...labelLayout };
       let frame = 0,
         last = performance.now(),
         time = 0;
@@ -457,14 +522,16 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         time += dt;
         train.update(time);
         controls.update();
-        const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + 150, terrain.bounds.maxZ - 150);
-        const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + 150, terrain.bounds.maxX - 150);
+        const margin = floodReturnPose ? 0 : 150;
+        const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + margin, terrain.bounds.maxZ - margin);
+        const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + margin, terrain.bounds.maxX - margin);
         cameraCorrection.set(x - controls.target.x, 0, z - controls.target.z);
         controls.target.add(cameraCorrection);
         camera.position.add(cameraCorrection);
         notifyCameraFocus(controls.target.x, controls.target.z, now);
         if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
         const state = latest.current.getLatestFloodState?.();
+        riverStage.update(state?.riverLevelMeters ?? 2.2);
         for (const [id, model] of r.models) {
           const influence = state?.structureInfluences.find(item => item.placementId === id);
           const operation = resolveFacilityActivity(influence, state);
@@ -491,6 +558,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         waterMaterial.uniforms.time!.value = time;
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
         if (state) inundation.update(state, dt, time);
+        const available = floodFraming() !== null;
+        const viewing = floodReturnPose !== null;
+        const focusKey = `${available}/${viewing}`;
+        if (lastFloodFocusKey !== focusKey) {
+          lastFloodFocusKey = focusKey;
+          latest.current.onFloodFocusChange?.({ available, viewing });
+        }
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
           if (!model) {
@@ -564,48 +638,44 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         }
         const hint = guidanceLabel.current;
         if (hint) {
-          let chosen: {
-            site: (typeof guidanceSites.current)[number];
-            x: number;
-            y: number;
-            score: number;
-          } | null = null;
+          let chosen: (typeof guidanceSites.current)[number] | undefined;
+          let bestScore = Infinity;
+          const size = labelSizes.current.get(hint);
           const preparing = !state || state.phase === "preparation" || state.phase === "idle";
-          if (preparing && !latest.current.placements.some((placement) => placement.preview)) {
+          if (size && preparing && !latest.current.placements.some((placement) => placement.preview)) {
             for (const site of guidanceSites.current) {
               const position = geoToWorld(site.longitude, site.latitude);
+              const ground = terrain.sampleGround(position.x, position.z);
+              if (ground === null) continue;
               const projected = projectedPoint.set(
                 position.x,
-                (terrain.sampleGround(position.x, position.z) ?? 0) + 12,
+                ground + 12,
                 position.z,
               ).project(camera);
               const px = (projected.x * 0.5 + 0.5) * viewportWidth;
               const py = (-projected.y * 0.5 + 0.5) * viewportHeight;
-              // Keep a single hint in the playable area, clear of the HUD and construction dock.
-              if (
-                projected.z < -1 ||
-                projected.z > 1 ||
-                px < 90 ||
-                px > viewportWidth - 90 ||
-                py < 290 ||
-                py > viewportHeight - 240
-              )
-                continue;
-              const score =
-                Math.abs(py - viewportHeight * 0.48) +
-                Math.abs(px - viewportWidth * 0.5) * 0.4;
-              if (!chosen || score < chosen.score) chosen = { site, x: px, y: py, score };
+              const score = scoreGuidanceAnchor(px, py, projected.z, viewportWidth, viewportHeight,
+                size.width, size.height, labelBounds, candidateHintLayout);
+              if (score < bestScore) {
+                chosen = site;
+                bestScore = score;
+                Object.assign(labelLayout, candidateHintLayout);
+              }
             }
           }
-          hint.style.display = chosen ? "" : "none";
+          hint.style.visibility = chosen ? "visible" : "hidden";
           if (chosen) {
-            hint.style.transform = `translate(${chosen.x}px,${chosen.y}px) translate(-50%,-100%)`;
-            const title = hint.querySelector("strong");
-            const advice = hint.querySelector("small");
-            if (title && title.textContent !== chosen.site.title)
-              title.textContent = chosen.site.title;
-            if (advice && advice.textContent !== chosen.site.advice)
-              advice.textContent = chosen.site.advice;
+            hint.style.transform = `translate(${labelLayout.x}px,${labelLayout.y}px)`;
+            hint.dataset.pointerSide = labelLayout.pointerSide;
+            hint.style.setProperty("--facility-pointer-height", `${labelLayout.pointerHeight}px`);
+            hint.style.setProperty("--facility-pointer-base-x", `${labelLayout.pointerBaseX}px`);
+            hint.style.setProperty("--facility-pointer-tip-x", `${labelLayout.pointerTipX}px`);
+            hint.style.setProperty("--facility-pointer-left", `${labelLayout.pointerLeft}px`);
+            hint.style.setProperty("--facility-pointer-width", `${labelLayout.pointerWidth}px`);
+            if (guidanceTitle && guidanceTitle.textContent !== chosen.title)
+              guidanceTitle.textContent = chosen.title;
+            if (guidanceAdvice && guidanceAdvice.textContent !== chosen.advice)
+              guidanceAdvice.textContent = chosen.advice;
           }
         }
         renderer.render(scene, camera);
@@ -633,6 +703,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         renderer.dispose();
         renderer.domElement.remove();
         runtime.current = null;
+        latest.current.onFloodFocusChange?.({ available: false, viewing: false });
         latest.current.onReadyChange?.(false);
       };
     }, [geography]);
@@ -701,7 +772,6 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           <div
             className="diorama-label diorama-guidance"
             ref={guidanceLabel}
-            style={{ display: "none" }}
           >
             <strong />
             <small />
