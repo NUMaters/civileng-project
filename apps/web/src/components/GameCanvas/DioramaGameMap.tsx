@@ -18,6 +18,7 @@ import { createGeographicTrain } from "./geographicTrain";
 import { followGeographicShadows } from "./geographicShadows";
 import { createGeographicLandcover } from "./geographicLandcover";
 import { createGeographicImageryVegetation } from "./geographicImageryVegetation";
+import { createGeographicCanopy } from "./geographicCanopy";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
@@ -150,10 +151,15 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       const landcover = createGeographicLandcover(geography.landcover, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
       });
+      const vegetationExclusions = createImageryVegetationExclusions(geography.osm, geography.plateau, geography.landcover);
       const imageryVegetation = createGeographicImageryVegetation(geography.imageryTrees, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
-        exclusions: createImageryVegetationExclusions(geography.osm, geography.plateau, geography.landcover),
+        exclusions: vegetationExclusions,
         exclusionMode: "centre", illustrativeHeightM: 7,
+      });
+      const canopy = createGeographicCanopy(geography.canopyPatches, {
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
+        exclusions: vegetationExclusions, observedCrowns: geography.imageryTrees,
       });
       const world = createGeographicWorld({ ...geography.osm,
         features: geography.osm.features.filter(feature => !bridges.sourceIds.has(feature.id)),
@@ -186,6 +192,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         disposeObject(train.group);
         disposeObject(landcover.group);
         disposeObject(imageryVegetation.group);
+        disposeObject(canopy.group);
         setError("3D描画を開始できません。ブラウザーを再読み込みしてください。");
         return;
       }
@@ -245,7 +252,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         controls.update();
       };
       reset();
-      scene.add(terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group);
+      scene.add(terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group, canopy.group);
       const waterMaterial = createGeographicWaterMaterial();
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {
@@ -702,6 +709,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         ) : !ready ? <p role="status" className="diorama-error">阿武隈川の地形と街を読み込み中…</p> : null}
         <details className="diorama-attribution">
           <summary>地図出典</summary>
+          <p>航空写真で判読した4つの樹林範囲内は、個々の木の位置・本数・密度・大きさを仮に再構成しています。実測や個別樹木の観測ではありません。</p>
           <p>一部の樹冠位置・半径は地理院タイル（画面表示の撮影期間：2022年7〜9月）から目視推定しています。各木の撮影日は未検証で、幹位置・樹高の実測ではありません。高さ・樹形は仮表現です。</p>
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
           <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
