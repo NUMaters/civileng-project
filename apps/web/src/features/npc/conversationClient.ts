@@ -26,6 +26,53 @@ function requestUUID(): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+type RequestDeadline = {
+  signal: AbortSignal;
+  release: () => void;
+};
+
+function requestDeadline(parent: AbortSignal | null, timeoutMs: number): RequestDeadline {
+  const nativeAny = globalThis.AbortSignal?.any;
+  const nativeTimeout = globalThis.AbortSignal?.timeout;
+  if (parent && typeof nativeAny === "function" && typeof nativeTimeout === "function") {
+    return { signal: nativeAny([parent, nativeTimeout(timeoutMs)]), release: () => {} };
+  }
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (parent?.aborted) abort();
+  else parent?.addEventListener("abort", abort, { once: true });
+  const timer = globalThis.setTimeout(abort, timeoutMs);
+  return {
+    signal: controller.signal,
+    release: () => {
+      globalThis.clearTimeout(timer);
+      parent?.removeEventListener("abort", abort);
+    },
+  };
+}
+
+async function fetchWithDeadline(
+  input: RequestInfo | URL,
+  init: RequestInit,
+  parent: AbortSignal | null,
+  timeoutMs: number,
+): Promise<Response> {
+  const deadline = requestDeadline(parent, timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: deadline.signal });
+  } finally {
+    deadline.release();
+  }
+}
+
+function throwIfAborted(signal: AbortSignal): void {
+  if (typeof signal.throwIfAborted === "function") {
+    signal.throwIfAborted();
+    return;
+  }
+  if (signal.aborted) throw new Error("NPC conversation closed");
+}
+
 export class NpcRequestRejected extends Error {}
 type JsonObject = Record<string, unknown>;
 function object(value: unknown): value is JsonObject {
@@ -71,17 +118,21 @@ export class NpcConversationClient {
     try {
       if (this.offline) return fixed;
       if (!this.session) await this.open();
-      this.lifetime.signal.throwIfAborted();
+      throwIfAborted(this.lifetime.signal);
       if (!this.session) throw new Error("Missing NPC session");
-      const response = await fetch(`${API_BASE}/${this.session.conversationId}/answers`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${this.session.token}`,
+      const response = await fetchWithDeadline(
+        `${API_BASE}/${this.session.conversationId}/answers`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.session.token}`,
+          },
+          body: JSON.stringify({ requestId, questionId, deeper }),
         },
-        body: JSON.stringify({ requestId, questionId, deeper }),
-        signal: AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(ANSWER_TIMEOUT_MS)]),
-      });
+        this.lifetime.signal,
+        ANSWER_TIMEOUT_MS,
+      );
       this.checkStatus(response);
       const result: unknown = await response.json();
       if (
@@ -105,7 +156,7 @@ export class NpcConversationClient {
           typeof result.fallbackReason === "string" ? result.fallbackReason : undefined,
       };
     } catch (error) {
-      this.lifetime.signal.throwIfAborted();
+      throwIfAborted(this.lifetime.signal);
       if (error instanceof NpcRequestRejected) throw error;
       // Avoid diverging server/client hint state after an ambiguous network failure.
       this.offline = true;
@@ -128,12 +179,16 @@ export class NpcConversationClient {
       remainingSeconds: Math.max(0.001, this.remainingSeconds - (Date.now() - this.started) / 1000),
       audience: this.childMode ? "child" : "adult",
     };
-    const response = await fetch(API_BASE, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.any([this.lifetime.signal, AbortSignal.timeout(OPEN_TIMEOUT_MS)]),
-    });
+    const response = await fetchWithDeadline(
+      API_BASE,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      this.lifetime.signal,
+      OPEN_TIMEOUT_MS,
+    );
     this.checkStatus(response);
     const value: unknown = await response.json();
     if (
@@ -152,7 +207,7 @@ export class NpcConversationClient {
     };
     if (this.lifetime.signal.aborted) {
       this.release();
-      this.lifetime.signal.throwIfAborted();
+      throwIfAborted(this.lifetime.signal);
     }
   }
   private checkStatus(response: Response): void {
@@ -168,11 +223,15 @@ export class NpcConversationClient {
     const session = this.session;
     this.session = null;
     if (session)
-      void fetch(`${API_BASE}/${session.conversationId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session.token}` },
-        keepalive: true,
-        signal: AbortSignal.timeout(CLOSE_TIMEOUT_MS),
-      }).catch(() => {});
+      void fetchWithDeadline(
+        `${API_BASE}/${session.conversationId}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.token}` },
+          keepalive: true,
+        },
+        null,
+        CLOSE_TIMEOUT_MS,
+      ).catch(() => {});
   }
 }

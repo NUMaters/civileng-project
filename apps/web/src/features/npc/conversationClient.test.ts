@@ -63,8 +63,15 @@ describe("NPC API client", () => {
     client.close();
   });
 
-  it("uses a valid UUID when randomUUID is unavailable", async () => {
+  it("uses compatible UUID and abort APIs when modern browser APIs are unavailable", async () => {
+    const nativeAbortSignal = globalThis.AbortSignal;
+    const nativeThrowIfAborted = nativeAbortSignal.prototype.throwIfAborted;
     vi.stubGlobal("crypto", undefined);
+    vi.stubGlobal("AbortSignal", { any: undefined, timeout: undefined });
+    Object.defineProperty(nativeAbortSignal.prototype, "throwIfAborted", {
+      configurable: true,
+      value: undefined,
+    });
     const hint = resident.questions[0]?.hints[0];
     const fetchMock = vi
       .fn<typeof fetch>()
@@ -87,9 +94,16 @@ describe("NPC API client", () => {
       })
       .mockResolvedValue(response({}));
     vi.stubGlobal("fetch", fetchMock);
-    const client = new NpcConversationClient(resident, 60);
-    await expect(client.answer("past", false, 1)).resolves.toMatchObject({ mode: "ai" });
-    client.close();
+    try {
+      const client = new NpcConversationClient(resident, 60);
+      await expect(client.answer("past", false, 1)).resolves.toMatchObject({ mode: "ai" });
+      client.close();
+    } finally {
+      Object.defineProperty(nativeAbortSignal.prototype, "throwIfAborted", {
+        configurable: true,
+        value: nativeThrowIfAborted,
+      });
+    }
   });
 
   it("does not turn a rejected request into a fallback answer", async () => {
