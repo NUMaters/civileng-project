@@ -35,8 +35,7 @@ export function getRiverMissionFeedback(
     (influence) =>
       influence.effectiveness > 0 &&
       influence.coverageTone === "good" &&
-      influence.coveredSiteIds.length > 0 &&
-      influence.adverseSiteIds.length === 0,
+      influence.coveredSiteIds.length > 0,
   );
   const roles = new Set(
     effective.flatMap((influence) => {
@@ -45,6 +44,7 @@ export function getRiverMissionFeedback(
     }),
   );
   const coveredSites = new Set(confirmed.flatMap((influence) => influence.coveredSiteIds)).size;
+  const adverseSites = new Set(confirmed.flatMap((influence) => influence.adverseSiteIds)).size;
   // This array also contains overflowing, unprotected sites. Do not count those as protected.
   const protectedSites = flood.protectedBankSites.filter(
     (site) => site.protectionStrength > 0 && !site.overflowing,
@@ -67,8 +67,12 @@ export function getRiverMissionFeedback(
     : stage === 1
       ? "相性のよい弱点へ、まず1基"
       : stage === 2
-        ? "次は別の役割で弱点をカバー"
-        : `${roles.size}種の役割・${coveredSites}地点をカバー。大雨で確認`;
+        ? adverseSites > 0
+          ? `${coveredSites}地点をカバー。相性注意の弱点にも備えよう`
+          : "次は別の役割で弱点をカバー"
+        : adverseSites > 0
+          ? `${roles.size}種の役割・相性注意 ${adverseSites}地点を見直そう`
+          : `${roles.size}種の役割・${coveredSites}地点をカバー。大雨で確認`;
   return {
     stage,
     label,

@@ -9,6 +9,7 @@ import { resolvePlaceablePosition } from "./riverPlacement";
 import { geoToWorld, groundY, intersectDioramaSurface, riverX, worldToGeo } from "./dioramaSpace";
 import { createDioramaWorld } from "./dioramaWorld";
 import { createDioramaFacility } from "./dioramaFacilities";
+import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
 import "./diorama.css";
 
 function disposeObject(root: T.Object3D) {
@@ -28,10 +29,12 @@ function disposeObject(root: T.Object3D) {
 
 function riverGeometry(width = 44, y = 0.4) {
   const vertices: number[] = [],
+    uvs: number[] = [],
     indices: number[] = [];
   for (let i = 0; i <= 320; i++) {
     const z = -2400 + i * 15;
     vertices.push(riverX(z) - width, y, z, riverX(z) + width, y, z);
+    uvs.push(0, z, 1, z);
     if (i < 320) {
       const n = i * 2;
       indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
@@ -39,6 +42,7 @@ function riverGeometry(width = 44, y = 0.4) {
   }
   const geometry = new T.BufferGeometry();
   geometry.setAttribute("position", new T.Float32BufferAttribute(vertices, 3));
+  geometry.setAttribute("uv", new T.Float32BufferAttribute(uvs, 2));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
   return geometry;
@@ -47,16 +51,21 @@ function riverGeometry(width = 44, y = 0.4) {
 function createWater() {
   const material = new T.ShaderMaterial({
     uniforms: { time: { value: 0 }, storm: { value: 0 } },
-    vertexShader: `varying vec3 p; uniform float time; void main(){p=position; vec3 v=position; v.y+=sin(v.z*.035-time)*.13; gl_Position=projectionMatrix*modelViewMatrix*vec4(v,1.);}`,
-    fragmentShader: `varying vec3 p; uniform float time; uniform float storm;
+    vertexShader: `varying vec3 p; varying vec2 riverUv; uniform float time; void main(){p=position; riverUv=uv; vec3 v=position; v.y+=sin(v.z*.035-time)*.13; gl_Position=projectionMatrix*modelViewMatrix*vec4(v,1.);}`,
+    fragmentShader: `varying vec3 p; varying vec2 riverUv; uniform float time; uniform float storm;
     void main(){
-      float a=sin(p.z*.17+sin(p.x*.08)*2.8+time*1.5);
-      float b=sin(p.z*.06-p.x*.045+time*.8);
-      float foam=smoothstep(.92,.99,a)*smoothstep(.3,.8,sin(p.x*.32+p.z*.016));
-      vec3 deep=mix(vec3(.003,.20,.50),vec3(.07,.25,.29),storm);
-      vec3 shallow=vec3(.015,.53,.85);
-      vec3 color=mix(deep,shallow,.37+.15*b);
-      color=mix(color,vec3(.83,.98,1.),foam*.43);
+      // Local +Z is downstream (south). Negative time advects crests downstream.
+      float flow=p.z-time*18.;
+      float a=sin(flow*.12+sin(riverUv.x*13.+flow*.017)*1.6);
+      float b=sin(flow*.047-riverUv.x*9.);
+      float edge=pow(abs(riverUv.x*2.-1.),5.);
+      float foam=smoothstep(.94,.995,a)*smoothstep(.35,.85,sin(riverUv.x*29.+flow*.021));
+      float shore=smoothstep(.94,1.,abs(riverUv.x*2.-1.))*(.4+.25*sin(flow*.2));
+      vec3 deep=mix(vec3(.005,.29,.61),vec3(.07,.25,.29),storm*.75);
+      vec3 shallow=mix(vec3(.025,.72,.84),vec3(.14,.40,.38),storm*.65);
+      vec3 color=mix(deep,shallow,.15+.7*edge+.09*b);
+      color+=vec3(.03,.07,.09)*pow(max(0.,b),8.);
+      color=mix(color,vec3(.83,.98,1.),clamp(foam*.48+shore*.65,0.,.8));
       gl_FragColor=vec4(color,1.);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -105,12 +114,17 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
     const [ready, setReady] = useState(false);
     const [error, setError] = useState("");
     const labels = useRef(new Map<string, HTMLDivElement>());
+    const guidanceLabel = useRef<HTMLDivElement>(null);
     const pending = props.placements.find((p) => p.preview);
     const influences = useMemo(
       () => calculateStructureInfluences(props.placements),
       [props.placements],
     );
     const influence = pending ? influences[props.placements.indexOf(pending)] : undefined;
+    const guidanceSites = useRef(getDioramaGuidance(influences));
+    useEffect(() => {
+      guidanceSites.current = getDioramaGuidance(influences);
+    }, [influences]);
 
     useImperativeHandle(
       ref,
@@ -217,8 +231,18 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       controls.touches.ONE = T.TOUCH.PAN;
       controls.touches.TWO = T.TOUCH.DOLLY_ROTATE;
       const reset = () => {
-        controls.target.set(riverX(0), 0, -80);
-        camera.position.set(riverX(0) + 160, 510, 650);
+        const site = initialDioramaFocus();
+        const focus = geoToWorld(site.longitude, site.latitude);
+        controls.target.set(riverX(focus.z), 0, focus.z);
+        const downstream = new T.Vector3(
+          riverX(focus.z + 80) - riverX(focus.z - 80),
+          0,
+          160,
+        ).normalize();
+        camera.position
+          .copy(controls.target)
+          .addScaledVector(downstream, 730)
+          .add(new T.Vector3(downstream.z * 160, 510, -downstream.x * 160));
         controls.update();
       };
       reset();
@@ -388,6 +412,52 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           if (visible)
             element.style.transform = `translate(${(point.x * 0.5 + 0.5) * container.clientWidth}px,${(-point.y * 0.5 + 0.5) * container.clientHeight}px) translate(-50%,-100%)`;
         }
+        const hint = guidanceLabel.current;
+        if (hint) {
+          let chosen: {
+            site: (typeof guidanceSites.current)[number];
+            x: number;
+            y: number;
+            score: number;
+          } | null = null;
+          const preparing = !state || state.phase === "preparation" || state.phase === "idle";
+          if (preparing && !latest.current.placements.some((placement) => placement.preview)) {
+            for (const site of guidanceSites.current) {
+              const position = geoToWorld(site.longitude, site.latitude);
+              const projected = new T.Vector3(
+                position.x,
+                groundY(position.x, position.z) + 12,
+                position.z,
+              ).project(camera);
+              const px = (projected.x * 0.5 + 0.5) * container.clientWidth;
+              const py = (-projected.y * 0.5 + 0.5) * container.clientHeight;
+              // Keep a single hint in the playable area, clear of the HUD and construction dock.
+              if (
+                projected.z < -1 ||
+                projected.z > 1 ||
+                px < 90 ||
+                px > container.clientWidth - 90 ||
+                py < 290 ||
+                py > container.clientHeight - 240
+              )
+                continue;
+              const score =
+                Math.abs(py - container.clientHeight * 0.48) +
+                Math.abs(px - container.clientWidth * 0.5) * 0.4;
+              if (!chosen || score < chosen.score) chosen = { site, x: px, y: py, score };
+            }
+          }
+          hint.style.display = chosen ? "" : "none";
+          if (chosen) {
+            hint.style.transform = `translate(${chosen.x}px,${chosen.y}px) translate(-50%,-100%)`;
+            const title = hint.querySelector("strong");
+            const advice = hint.querySelector("small");
+            if (title && title.textContent !== chosen.site.title)
+              title.textContent = chosen.site.title;
+            if (advice && advice.textContent !== chosen.site.advice)
+              advice.textContent = chosen.site.advice;
+          }
+        }
         renderer.render(scene, camera);
       };
       frame = requestAnimationFrame(draw);
@@ -442,10 +512,22 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       <div className="diorama-game-map" data-3d-buildings={ready ? "ready" : "loading"}>
         <div className="diorama-game-map__canvas" ref={host} />
         <div className="diorama-labels" aria-hidden="true">
+          <div
+            className="diorama-label diorama-guidance"
+            ref={guidanceLabel}
+            style={{ display: "none" }}
+          >
+            <strong />
+            <small />
+          </div>
           {props.placements.map((p, index) => (
             <div
               className={`diorama-label${p.preview ? " is-preview" : ""}`}
-              data-tone={influences[index]?.coverageTone ?? "warn"}
+              data-tone={
+                influences[index]?.adverseSiteIds.length
+                  ? "warn"
+                  : (influences[index]?.coverageTone ?? "warn")
+              }
               key={p.id}
               ref={(el) => {
                 if (el) labels.current.set(p.id, el);
@@ -456,6 +538,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
               <small>
                 {p.preview ? "位置を調整中" : (influences[index]?.coverageHint ?? "建設済み")}
               </small>
+              {!p.preview && (influences[index]?.adverseSiteIds.length ?? 0) > 0 ? (
+                <small>相性注意 {influences[index]!.adverseSiteIds.length}地点</small>
+              ) : null}
             </div>
           ))}
         </div>
@@ -484,12 +569,20 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
                 </button>
               </div>
             </div>
-            <p className={`river-placement-feedback is-${influence?.coverageTone ?? "warn"}`}>
+            <p
+              className={`river-placement-feedback is-${influence?.adverseSiteIds.length ? "warn" : (influence?.coverageTone ?? "warn")}`}
+            >
               <strong>{influence?.coverageHint ?? "川や河岸で効果を確認"}</strong>
               <span>
                 配置有効率 {Math.round((influence?.effectiveness ?? 0) * 100)}% ·{" "}
                 {influence?.coveredSiteIds.length ?? 0}地点をカバー
               </span>
+              {(influence?.adverseSiteIds.length ?? 0) > 0 ? (
+                <span>
+                  相性注意 {influence!.adverseSiteIds.length}地点 ·
+                  位置・向きや施設の組み合わせを確認
+                </span>
+              ) : null}
             </p>
             <label className="diorama-rotation">
               向き <output>{Math.round(pending.headingDegrees)}°</output>

@@ -7,8 +7,8 @@ const BANK_EXTENT = 1600;
 const ROAD_OFFSET = 110;
 const BRIDGES = [-400, 640];
 const CREAM = "#fff1cd";
-const WALLS = [CREAM, "#ffe1bc", "#deebef", "#f5e2d9", "#dce9c8"];
-const ROOFS = ["#ef796c", "#658acb", "#68b4c8", "#e6b565", "#7f92c9"];
+const WALLS = [CREAM, "#ffe3b0", "#e4f1f5", "#ffe2d6", "#e5efce"];
+const ROOFS = ["#f47768", "#527fd0", "#50b6ce", "#edba56", "#808dd0"];
 const GREENS = ["#55ad32", "#299c52", "#81c638", "#40ad67"];
 
 type Instance = { matrix: THREE.Matrix4; color: THREE.Color };
@@ -111,9 +111,12 @@ function addSegment(
 }
 
 function addHouse(add: Add, random: () => number, x: number, z: number, side: number): void {
-  const width = 24 + random() * 15;
-  const depth = 24 + random() * 12;
-  const floors = random() > 0.78 ? 4 : 2 + Math.floor(random() * 2);
+  const kind = random();
+  const cottage = kind < 0.34;
+  const apartment = kind > 0.79;
+  const width = apartment ? 34 + random() * 6 : 24 + random() * 10;
+  const depth = apartment ? 30 + random() * 6 : 24 + random() * 8;
+  const floors = cottage ? 1 : apartment ? 4 + Math.floor(random() * 2) : 2;
   const height = floors * 9;
   const y = groundY(x, z);
   const wall = WALLS[Math.floor(random() * WALLS.length)]!;
@@ -131,8 +134,19 @@ function addHouse(add: Add, random: () => number, x: number, z: number, side: nu
   box("plinth", 0, 0.55, 0, width + 6, 1.1, depth + 6, "#eddfbe");
   box("walls", 0, height / 2 + 1, 0, width, height, depth, wall);
   box("trim", 0, height + 1.2, 0, width + 3, 1.4, depth + 3, CREAM);
-  box("roofs", 0, height + 1.9, 0, width + 5, 10, depth + 5, roof);
-  box("trim", width * 0.25, height + 7, depth * 0.18, 3, 10, 3, "#edccaa");
+  if (apartment) {
+    // Flat roofs and a small stairwell give apartments a distinct toy silhouette.
+    // Reuse box batches, so building variety adds no draw calls.
+    box("trim", 0, height + 2.2, 0, width + 2, 1.4, depth + 2, roof);
+    box("walls", width * 0.2, height + 4.8, depth * 0.18, 10, 4, 9, wall);
+    box("trim", width * 0.2, height + 7, depth * 0.18, 11, 0.8, 10, CREAM);
+    for (let floor = 1; floor < floors; floor++) {
+      box("trim", 0, 1.5 + floor * 9, -depth / 2 - 0.8, width + 1, 1, 2, CREAM);
+    }
+  } else {
+    box("roofs", 0, height + 1.9, 0, width + 5, cottage ? 8 : 11, depth + 5, roof);
+    box("trim", width * 0.25, height + 7, depth * 0.18, 3, 10, 3, "#edccaa");
+  }
   for (let floor = 0; floor < floors; floor++) {
     for (const column of [-1, 0, 1]) {
       for (const face of [-1, 1]) {
@@ -174,6 +188,68 @@ function addHouse(add: Add, random: () => number, x: number, z: number, side: nu
   }
   box("doors", -side * (width / 2 + 0.2), 4.8, 0, 0.6, 7.6, 5, "#947560");
   box("trim", -side * (width / 2 + 2), 9, 0, 5, 0.9, 8, roof);
+  if (cottage) {
+    box("plinth", -side * (width / 2 + 3), 0.5, 0, 6, 1, 9, CREAM);
+    box("trim", 0, 2.3, -depth / 2 - 1.2, width * 0.65, 2, 2.5, "#e5ad7b");
+    box("trim", 0, 3.5, -depth / 2 - 1.2, width * 0.6, 1.2, 2.8, "#78bc49");
+  }
+}
+
+function addBankDetails(add: Add, random: () => number, side: number): void {
+  const fitsBand = (
+    x: number,
+    z: number,
+    radiusX: number,
+    radiusZ: number,
+    min: number,
+    max: number,
+  ) => {
+    const zs = [
+      z - radiusZ,
+      z + radiusZ,
+      ...RIVER_POINTS.filter((point) => Math.abs(point.z - z) < radiusZ).map((point) => point.z),
+    ];
+    return zs.every((sampleZ) => {
+      const offset = Math.abs(x - riverX(sampleZ));
+      return offset - radiusX > min && offset + radiusX < max;
+    });
+  };
+  for (let z = -2110; z < 1740; z += 137) {
+    const clusterZ = z + random() * 22;
+    if (BRIDGES.some((bridge) => Math.abs(clusterZ - bridge) < 70)) continue;
+    // Tiny shoreline clusters leave the sloping bank and placement strip open.
+    for (let i = 0; i < 3; i++) {
+      const rockZ = clusterZ + i * 4.5;
+      const x = riverX(rockZ) + side * (49 + random());
+      const size = 1.4 + random() * 0.6;
+      if (!fitsBand(x, rockZ, size, size * 0.7, 43, 54)) continue;
+      add(
+        "rocks",
+        new THREE.Vector3(x, groundY(x, rockZ) + 0.3, rockZ),
+        new THREE.Vector3(size, size * 0.75, size * 0.7),
+        ["#d8d9cf", "#b4c2cc", "#ebdfc5"][i]!,
+      );
+    }
+    // Flowers remain by the existing tree verge, beyond the open inner bank.
+    for (let i = 0; i < 5; i++) {
+      const flowerZ = clusterZ + 18 + (random() - 0.5) * 7;
+      const x = riverX(flowerZ) + side * (86 + random() * 3);
+      if (!fitsBand(x, flowerZ, 1.3, 1.3, 83, 92)) continue;
+      const y = groundY(x, flowerZ);
+      add(
+        "leaves",
+        new THREE.Vector3(x, y + 0.5, flowerZ),
+        new THREE.Vector3(1.3, 0.7, 1.3),
+        "#71b84b",
+      );
+      add(
+        "flowers",
+        new THREE.Vector3(x, y + 1.3, flowerZ),
+        new THREE.Vector3(0.9, 0.7, 0.9),
+        i % 2 ? "#fff1a8" : "#ffadbb",
+      );
+    }
+  }
 }
 
 function addTree(add: Add, random: () => number, x: number, z: number, size = 1): void {
@@ -271,6 +347,8 @@ export function createDioramaWorld(): THREE.Group {
     leaves: sphere,
     hills: sphere,
     clouds: sphere,
+    rocks: new THREE.IcosahedronGeometry(1, 0),
+    flowers: sphere,
     trunks: new THREE.CylinderGeometry(1, 1.3, 1, 6),
   };
   const add: Add = (name, position, scale, color, rotation = new THREE.Quaternion()) => {
@@ -301,8 +379,8 @@ export function createDioramaWorld(): THREE.Group {
     surface(
       "continuous-green-bank",
       ribbon(side, [44, 49, 60, 70, 90, 260, 500, 900, BANK_EXTENT], 0, [
-        "#c6cd77",
-        "#86ce45",
+        "#d9d58b",
+        "#97d957",
         "#69bd35",
         "#78c73b",
         "#86ce45",
@@ -347,9 +425,29 @@ export function createDioramaWorld(): THREE.Group {
     for (let z = -2070; z < 1730; z += 73) {
       if (BRIDGES.some((bridge) => Math.abs(z - bridge) < 48)) continue;
       for (let row = 0; row < 4; row++) {
-        const houseZ = z + (random() - 0.5) * 12;
-        const offset = 150 + row * 65 + random() * 8;
-        addHouse(add, random, riverX(houseZ) + side * offset, houseZ, side);
+        const houseZ = z + (row % 2) * 29 + (side > 0 ? 13 : 0) + (random() - 0.5) * 18;
+        if (BRIDGES.some((bridge) => Math.abs(houseZ - bridge) < 48)) continue;
+        const offset = 163 + row * 65 + (random() - 0.5) * 14;
+        // Occasional pocket gardens break up the rows without widening the town.
+        if (random() < 0.16) {
+          addTree(add, random, riverX(houseZ) + side * offset, houseZ, 0.85);
+          continue;
+        }
+        // At tight bends, measure the whole lot against the road, not only its center.
+        const lotZs = [
+          houseZ - 22,
+          houseZ + 22,
+          ...RIVER_POINTS.filter((point) => Math.abs(point.z - houseZ) < 22).map(
+            (point) => point.z,
+          ),
+        ];
+        const houseX =
+          side *
+          Math.max(
+            side * riverX(houseZ) + offset,
+            ...lotZs.map((lotZ) => side * riverX(lotZ) + 158),
+          );
+        addHouse(add, random, houseX, houseZ, side);
         const treeZ = z + 30;
         addTree(add, random, riverX(treeZ) + side * (offset + 29), treeZ, 0.75 + random() * 0.5);
       }
@@ -383,6 +481,9 @@ export function createDioramaWorld(): THREE.Group {
         );
     }
   }
+  // Separate seed keeps decorative changes from reshuffling the town layout.
+  const detailRandom = seededRandom();
+  for (const side of [-1, 1]) addBankDetails(add, detailRandom, side);
   addBridges(add);
   for (const [name, batch] of batches) {
     const mesh = new THREE.InstancedMesh(batch.geometry, batch.material, batch.instances.length);
@@ -393,7 +494,7 @@ export function createDioramaWorld(): THREE.Group {
     });
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    mesh.castShadow = !["clouds", "roadDashes", "windows"].includes(name);
+    mesh.castShadow = !["clouds", "roadDashes", "windows", "flowers"].includes(name);
     mesh.receiveShadow = name !== "clouds";
     mesh.computeBoundingBox();
     mesh.computeBoundingSphere();

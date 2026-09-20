@@ -42,9 +42,10 @@ describe("river mission progress", () => {
     expect(result.averageEffectiveness).toBeNull();
   });
 
-  it("requires compatible coverage without adverse sites for the first objective", () => {
+  it("recognizes compatible coverage while keeping adverse-site advice visible", () => {
     expect(mission([influence({ coveredSiteIds: [] })]).stage).toBe(1);
-    expect(mission([influence({ adverseSiteIds: ["erosion"] })]).stage).toBe(1);
+    expect(mission([influence({ adverseSiteIds: ["erosion"] })]).stage).toBe(2);
+    expect(mission([influence({ adverseSiteIds: ["erosion"] })]).objective).toContain("相性注意");
     expect(mission([influence({ coverageTone: "warn" })]).stage).toBe(1);
     expect(mission([influence()]).stage).toBe(2);
   });

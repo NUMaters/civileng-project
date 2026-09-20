@@ -23,7 +23,7 @@ import type { PlayMode } from "./features/lobby/types";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
 /** タイトル／メニューでは Cesium（約 10MB+）を読まず、真っ白待ちを防ぐ。 */
-const CesiumGameMap = lazy(async () => {
+const DioramaGameMap = lazy(async () => {
   const mod = await import("./components/GameCanvas/DioramaGameMap");
   return { default: mod.DioramaGameMap };
 });
@@ -373,7 +373,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
       />
 
       <Suspense fallback={<MapBootFallback />}>
-        <CesiumGameMap
+        <DioramaGameMap
           ref={mapRef}
           onReadyChange={setMapReady}
           mapActive={inGame}

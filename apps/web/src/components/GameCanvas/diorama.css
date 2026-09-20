@@ -44,6 +44,15 @@
 .diorama-label[data-tone="bad"] small {
   color: #b43b2f;
 }
+.diorama-guidance {
+  border-left: 3px solid #16b2c2;
+  max-width: 210px;
+  background: #fffffff0;
+}
+.diorama-guidance small {
+  color: #426779;
+  line-height: 1.5;
+}
 .diorama-label:after {
   content: "";
   position: absolute;
