@@ -1,4 +1,5 @@
 import {
+  Cartesian2,
   Cartesian3,
   Color,
   ColorMaterialProperty,
@@ -6,10 +7,12 @@ import {
   ConstantProperty,
   CornerType,
   HeightReference,
+  HorizontalOrigin,
   Math as CesiumMath,
   PolygonHierarchy,
   PolylineDashMaterialProperty,
   PolylineGlowMaterialProperty,
+  VerticalOrigin,
   Viewer,
 } from "cesium";
 import { getHazardMarkerColor } from "../../features/construction/structureVisuals";
@@ -234,26 +237,40 @@ function addWeaknessTargetMarker(
   const covered = status === "covered";
   const adverse = status === "adverse";
   const hazardColor = getHazardMarkerColor(candidate.primaryHazard);
-  const fill = Color.fromCssColorString(
-    adverse ? "#ef4d4d" : covered ? "#3ecf8e" : hazardColor.fill,
-  ).withAlpha(adverse ? 0.5 : covered ? 0.42 : 0.22);
-  const outline = Color.fromCssColorString(
-    adverse ? "#ffd0c8" : covered ? "#b8ffe0" : hazardColor.outline,
-  ).withAlpha(adverse || covered ? 0.95 : 0.7);
+  const fill = adverse ? "#ef5b5b" : covered ? "#35c995" : hazardColor.fill;
+  const outline = adverse ? "#ffd8d1" : covered ? "#c5ffe7" : hazardColor.outline;
+  const icon = adverse ? "!" : covered ? "✓" : "!";
+  const size = adverse ? 52 : covered ? 48 : 44;
+
+  // 地面に寝かせた楕円は俯瞰時に潰れて、弱点の位置と状態が読みにくい。
+  // 画面正面を向くビーコンにして、地形の傾きに左右されず同じ視認性を保つ。
   viewer.entities.add({
     id: `${TARGET_PREFIX}${candidate.id}`,
     position: Cartesian3.fromDegrees(candidate.longitude, candidate.latitude),
-    ellipse: {
-      semiMajorAxis: adverse ? 40 : covered ? 34 : 26,
-      semiMinorAxis: adverse ? 30 : covered ? 26 : 20,
-      height: 0.4,
-      heightReference: HeightReference.RELATIVE_TO_GROUND,
-      material: fill,
-      outline: false,
-      outlineColor: outline,
-      outlineWidth: adverse ? 3 : covered ? 2.5 : 1.5,
+    billboard: {
+      image: createWeaknessBeaconImage(fill, outline, icon),
+      width: size,
+      height: size,
+      heightReference: HeightReference.CLAMP_TO_GROUND,
+      verticalOrigin: VerticalOrigin.BOTTOM,
+      horizontalOrigin: HorizontalOrigin.CENTER,
+      pixelOffset: new Cartesian2(0, -4),
+      // 建物や地形を貫通させず、対象地点との前後関係を保つ。
+      disableDepthTestDistance: 0,
     },
   });
+}
+
+/** 弱点の状態を一目で伝える、地形に潰れないピン型ビーコン。 */
+function createWeaknessBeaconImage(fill: string, outline: string, icon: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <path d="M48 91 22 55a31 31 0 1 1 52 0L48 91Z" fill="#061722" fill-opacity=".92" stroke="${outline}" stroke-width="4" stroke-linejoin="round"/>
+  <circle cx="48" cy="37" r="22" fill="${fill}" stroke="#f7ffff" stroke-opacity=".9" stroke-width="3"/>
+  <circle cx="48" cy="37" r="14" fill="#071c29" fill-opacity=".34"/>
+  <text x="48" y="44" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="23" font-weight="700">${icon}</text>
+  <path d="M35 67h26" stroke="#fff" stroke-opacity=".72" stroke-width="3" stroke-linecap="round"/>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 /** 施設足元に判定色を置き、影響圏を見失っても良否が読めるようにする。 */
