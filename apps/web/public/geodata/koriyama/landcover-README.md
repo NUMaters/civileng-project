@@ -50,3 +50,18 @@ An Overpass bbox may miss an enclosing polygon whose boundary has no matching bb
 nodes. Mapping completeness, survey dates, and current real-world condition are unknown.
 Local conversion uses the existing Koriyama origin, east +X / north -Z in metres;
 Y=0 is merely the local datum. Terrain must come from a separate elevation source.
+
+## Imagery canopy envelopes
+
+`imagery-canopy-observations.json` also contains three additional conservative
+riverbank-side canopy-core envelopes. They were visually interpreted from the
+GSI `seamlessphoto` view at
+https://maps.gsi.go.jp/#18/37.360206/140.378269/&ls=seamlessphoto&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1.
+The reference tile is z18/x233294/y101705, with its top-left at screen pixel
+(1066, 367) and 256 px tile size; the displayed layer period was 2022-07 to
+2022-09. The three envelopes are inferred screen-polygons for the south,
+middle, and north bank-side cores after subtracting that tile origin. They
+exclude broad grass and dark river shadows and are not surveyed boundaries or
+individual-tree observations. The displayed period is a view label; the
+acquisition date for each patch is unverified. The original four campus patch
+records and their existing source URL remain unchanged.

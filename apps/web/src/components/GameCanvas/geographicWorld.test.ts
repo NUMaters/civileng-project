@@ -55,6 +55,47 @@ afterEach(() => {
 });
 
 describe("actual geographic world", () => {
+  it("stages only the actual Abukuma polygon and named river lines, retaining source attribution", () => {
+    const data = JSON.parse(readFileSync(new URL("../../../public/geodata/koriyama/features.geojson", import.meta.url), "utf8")) as KoriyamaGeodata;
+    const sources = data.features.filter(f => f.properties.kind === "water" || f.properties.kind === "waterway");
+    const w = world(sources);
+    const expected = new Set(["relation/18504988", "way/60586145", "way/60604058", "way/60604253", "way/60604277", "way/60604405"]);
+    const staged = new Set<string>(), staticIds = new Set<string>();
+    for (const mesh of w.waterMeshes) {
+      expect(mesh.userData.sourceIds.length).toBeGreaterThan(0);
+      for (const id of mesh.userData.sourceIds as string[]) {
+        expect(mesh.userData.riverStageEligible).toBe(expected.has(id));
+        (mesh.userData.riverStageEligible ? staged : staticIds).add(id);
+      }
+    }
+    expect(staged).toEqual(expected);
+    expect(staticIds).toEqual(new Set(sources.map(f => f.id).filter(id => !expected.has(id))));
+    expect(staticIds.has("way/944067607")).toBe(true); // basin
+    expect(staticIds.has("way/601165894")).toBe(true); // Sasahara, also water=river
+    expect(staticIds.has("way/623832901")).toBe(true); // Yata
+    expect(w.userData.attributions[0].text).toContain("OpenStreetMap");
+  }, 30_000);
+
+  it("separates same-tile water by identity through flushes, preserving holes and source IDs", () => {
+    const river = polygon("relation/18504988", "water", [ring(100, 200, 100), ring(120, 220, 20)]);
+    river.properties.water = "river";
+    const basin = polygon("basin", "water", [ring(250, 200, 20)]);
+    basin.properties.water = "basin";
+    const other = polygon("unnamed-other-river", "water", [ring(280, 200, 20)]);
+    other.properties.water = "river";
+    const w = world([river, basin, other], { maxBatchVertices: 6, surfaceGridSpacing: 20 });
+    expect(w.waterMeshes.length).toBeGreaterThan(3);
+    expect(area(w, "water")).toBeCloseTo(10000 - 400 + 400 + 400, 2);
+    expect(hits(w, "water", 130, 230)).toHaveLength(0);
+    expect(hits(w, "water", 110, 210)[0]!.object.userData.riverStageEligible).toBe(true);
+    expect(hits(w, "water", 260, 210)[0]!.object.userData.riverStageEligible).toBe(false);
+    expect(hits(w, "water", 290, 210)[0]!.object.userData.riverStageEligible).toBe(false);
+    for (const mesh of w.waterMeshes) {
+      const ids = mesh.userData.sourceIds as string[];
+      expect(ids.length).toBeGreaterThan(0);
+      expect(ids.every(id => (id === river.id) === mesh.userData.riverStageEligible)).toBe(true);
+    }
+  });
   it("clips explicit pitched roof masks and continuous gable UVs without changing the source maximum", () => {
     const building = polygon("gable", "building", [[[101, 201], [113, 201], [113, 207], [101, 207], [101, 201]].map(([x, z]) => geo(x!, z!))]);
     building.properties.height = "14";
