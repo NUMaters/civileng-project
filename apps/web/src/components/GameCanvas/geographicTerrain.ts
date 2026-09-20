@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { geoToWorld, worldToGeo } from "./dioramaSpace";
 import { sampleKoriyamaTerrain, type KoriyamaTerrain } from "./koriyamaTerrain";
+import { createGeographicTerrainMaterial } from "./geographicTerrainMaterial";
 
 /** A measured ground surface, not bathymetry or bridge-deck geometry. */
 export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters = 12) {
@@ -20,19 +21,58 @@ export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters 
     source: "GSI DEM", localDatumM: terrain.metadata.localDatumM,
     spacingMeters, verticalExaggeration: 1, missingData: "holes-not-filled",
   };
-  const material = new THREE.MeshStandardMaterial({ color: "#91be72", roughness: 0.95 });
+  const material = createGeographicTerrainMaterial();
   let triangles = 0, missingTriangles = 0;
   // Independent bounded tiles keep frustum culling effective on mobile.
   for (let row = 0; row < rows; row += 32) {
     for (let column = 0; column < columns; column += 32) {
       const width = Math.min(32, columns - column), height = Math.min(32, rows - row);
+      // One-cell halo supplies ALL incident triangles at tile-edge vertices. This is the same
+      // area-weighted normal as a single global mesh, with at most 35*35 temporary vertices.
+      const startX = Math.max(0, column - 1), startZ = Math.max(0, row - 1);
+      const endX = Math.min(columns, column + width + 1), endZ = Math.min(rows, row + height + 1);
+      const stride = endX - startX + 1, haloRows = endZ - startZ + 1;
+      const haloPositions = new Float32Array(stride * haloRows * 3);
+      const haloValid = new Uint8Array(stride * haloRows);
+      const sums = new Float64Array(stride * haloRows * 3);
+      const haloIndex = (x: number, z: number) => (z - startZ) * stride + x - startX;
+      for (let z = startZ; z <= endZ; z++) for (let x = startX; x <= endX; x++) {
+        const worldX = a.x + (b.x - a.x) * x / columns;
+        const worldZ = a.z + (b.z - a.z) * z / rows;
+        const y = sampleGround(worldX, worldZ), i = haloIndex(x, z);
+        haloPositions[i * 3] = worldX; haloPositions[i * 3 + 1] = y ?? 0; haloPositions[i * 3 + 2] = worldZ;
+        haloValid[i] = y !== null ? 1 : 0;
+      }
+      const addNormal = (i: number, nx: number, ny: number, nz: number) => {
+        sums[i * 3] = sums[i * 3]! + nx;
+        sums[i * 3 + 1] = sums[i * 3 + 1]! + ny;
+        sums[i * 3 + 2] = sums[i * 3 + 2]! + nz;
+      };
+      const accumulate = (a: number, b: number, c: number) => {
+        if (!haloValid[a] || !haloValid[b] || !haloValid[c]) return;
+        const ax = haloPositions[a * 3]!, ay = haloPositions[a * 3 + 1]!, az = haloPositions[a * 3 + 2]!;
+        const ux = haloPositions[b * 3]! - ax, uy = haloPositions[b * 3 + 1]! - ay, uz = haloPositions[b * 3 + 2]! - az;
+        const vx = haloPositions[c * 3]! - ax, vy = haloPositions[c * 3 + 1]! - ay, vz = haloPositions[c * 3 + 2]! - az;
+        const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+        addNormal(a, nx, ny, nz);
+        addNormal(b, nx, ny, nz);
+        addNormal(c, nx, ny, nz);
+      };
+      // Global row/column order makes floating-point accumulation identical on both sides.
+      for (let z = startZ; z < endZ; z++) for (let x = startX; x < endX; x++) {
+        const p = haloIndex(x, z);
+        accumulate(p, p + stride, p + 1);
+        accumulate(p + 1, p + stride, p + stride + 1);
+      }
       const positions: number[] = [], indices: number[] = [], valid: boolean[] = [];
+      const normals: number[] = [];
       for (let j = 0; j <= height; j++) for (let i = 0; i <= width; i++) {
-        const x = a.x + (b.x - a.x) * (column + i) / columns;
-        const z = a.z + (b.z - a.z) * (row + j) / rows;
-        const y = sampleGround(x, z);
+        const h = haloIndex(column + i, row + j);
         // Missing samples have unused vertices; no triangles may reference them.
-        positions.push(x, y ?? 0, z); valid.push(y !== null);
+        positions.push(haloPositions[h * 3]!, haloPositions[h * 3 + 1]!, haloPositions[h * 3 + 2]!); valid.push(haloValid[h] === 1);
+        const nx = sums[h * 3]!, ny = sums[h * 3 + 1]!, nz = sums[h * 3 + 2]!;
+        const length = Math.hypot(nx, ny, nz) || 1;
+        normals.push(nx / length, ny / length, nz / length);
       }
       const emit = (x: number, y: number, z: number) => {
         if (valid[x] && valid[y] && valid[z]) { indices.push(x, y, z); triangles++; }
@@ -47,7 +87,7 @@ export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       geometry.setIndex(indices);
-      geometry.computeVertexNormals();
+      geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
       geometry.computeBoundingSphere();
       const mesh = new THREE.Mesh(geometry, material);
       mesh.name = `ground-${column}-${row}`;
