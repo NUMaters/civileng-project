@@ -34,6 +34,7 @@ import { FACILITY_LABEL_MARGIN, type FacilityLabelLayout } from "./facilityLabel
 import { cacheFacilityLabelEnvelope, projectFacilityBody, layoutFacilityLabelOutsideBody,
   type FacilityLabelEnvelope } from "./facilityModelLabelLayout";
 import { scoreGuidanceAnchor } from "./guidanceLabelLayout";
+import { guidanceClearsFacilities, MAX_GUIDANCE_OBSTACLES } from "./guidanceFacilityClearance";
 import { createRiverStageController } from "./riverStage";
 import { createRiverSurfaceSampler } from "./riverSurface";
 import { createRiverBoundaryResolver } from "./riverBoundary";
@@ -512,6 +513,11 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const projectedBody = { left: 0, top: 0, right: 0, bottom: 0, topX: 0, topY: 0, bottomX: 0, bottomY: 0 };
       const labelClipMatrix = new T.Matrix4();
       const projectedBodyPoint = new T.Vector3();
+      // Fixed storage: project visible placed facilities once per guidance update,
+      // not once per candidate. Never allocate bodies or traverse geometry in draw().
+      const guidanceObstacles = Array.from({ length: MAX_GUIDANCE_OBSTACLES }, () => ({ ...projectedBody }));
+      const guidanceFrustum = new T.Frustum();
+      const guidanceLocalBox = new T.Box3();
       let frame = 0,
         last = performance.now(),
         time = 0;
@@ -656,7 +662,28 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           const size = labelSizes.current.get(hint);
           const preparing = !state || state.phase === "preparation" || state.phase === "idle";
           if (size && preparing && !latest.current.placements.some((placement) => placement.preview)) {
-            for (const site of guidanceSites.current) {
+            let obstacleCount = 0;
+            let obstaclesReady = true;
+            for (const model of r.models.values()) {
+              if (!model.visible || model.userData.preview) continue;
+              const envelope = labelEnvelopes.current.get(model);
+              if (!envelope || envelope.corners.length !== 8) { obstaclesReady = false; break; }
+              model.updateWorldMatrix(true, false);
+              labelClipMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(model.matrixWorld);
+              // Local cached min/max corners suffice for frustum culling. A model
+              // crossing a clip plane is uncertain, not an obstacle we may ignore.
+              guidanceLocalBox.set(envelope.corners[0], envelope.corners[7]);
+              guidanceFrustum.setFromProjectionMatrix(labelClipMatrix);
+              if (!guidanceFrustum.intersectsBox(guidanceLocalBox)) continue;
+              if (obstacleCount === MAX_GUIDANCE_OBSTACLES ||
+                !projectFacilityBody(envelope, labelClipMatrix, viewportWidth, viewportHeight,
+                  guidanceObstacles[obstacleCount], projectedBodyPoint)) {
+                obstaclesReady = false;
+                break;
+              }
+              obstacleCount++;
+            }
+            if (obstaclesReady) for (const site of guidanceSites.current) {
               const position = geoToWorld(site.longitude, site.latitude);
               const ground = terrain.sampleGround(position.x, position.z);
               if (ground === null) continue;
@@ -669,7 +696,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
               const py = (-projected.y * 0.5 + 0.5) * viewportHeight;
               const score = scoreGuidanceAnchor(px, py, projected.z, viewportWidth, viewportHeight,
                 size.width, size.height, labelBounds, candidateHintLayout);
-              if (score < bestScore) {
+              if (score < bestScore && guidanceClearsFacilities(candidateHintLayout, size.width, size.height,
+                guidanceObstacles, obstacleCount)) {
                 chosen = site;
                 bestScore = score;
                 Object.assign(labelLayout, candidateHintLayout);
