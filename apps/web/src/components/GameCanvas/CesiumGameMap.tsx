@@ -665,7 +665,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
           if (queuedTileCount === 0) {
             setIsMapReady(true);
-            setMapLoadStage(renderProfile.loadBuildings ? "buildings" : "ready");
+            // 建物Tilesetの読み込み完了後に地形タイルが空になると、完了表示を
+            // 「建物を読み込み中…」へ戻さない。建物がまだ無い場合だけ待機表示にする。
+            setMapLoadStage(
+              renderProfile.loadBuildings && buildingTilesetRef.current === null
+                ? "buildings"
+                : "ready",
+            );
             // 地形詳細が揃った時点で施設高度を再評価し、地中への埋没を防ぐ。
             for (const placement of placementsRef.current) {
               applyPlacementHeading(
@@ -1414,9 +1420,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       }
       labelElementRefs.current.set(id, element);
     };
+    const buildingsLoadState = getCesiumRenderProfile().loadBuildings
+      ? mapLoadStage === "ready"
+        ? "ready"
+        : "loading"
+      : "disabled";
 
     return (
-      <div className="cesium-game-map">
+      <div className="cesium-game-map" data-3d-buildings={buildingsLoadState}>
         <div className="cesium-game-map__canvas" ref={containerRef} />
         <div className="cesium-game-map__labels" aria-hidden="true">
           {mapLabels.map((label) => (

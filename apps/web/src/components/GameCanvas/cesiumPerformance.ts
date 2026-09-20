@@ -46,7 +46,9 @@ const MOBILE_PROFILE: CesiumRenderProfile = {
   resolutionScaleFloor: 0.4,
   globeMaximumScreenSpaceError: 14,
   buildingMaximumScreenSpaceError: 32,
-  loadBuildings: false,
+  // 建物の立体感はゲーム体験の中心なので、スマホでもLOD1を表示する。
+  // 描画負荷は解像度・SSE・簡略化したエフェクト側で抑える。
+  loadBuildings: true,
   usePlateauTerrain: false,
   imageryMaximumLevel: 15,
   dynamicFrameIntervalMs: 1000 / 18,
@@ -78,6 +80,9 @@ function isLowEndDevice(): boolean {
 
 export function resolveCesiumRenderProfile(): CesiumRenderProfile {
   if (isMobileViewport()) {
+    if (isLowEndDevice()) {
+      return { ...MOBILE_PROFILE, loadBuildings: false };
+    }
     return MOBILE_PROFILE;
   }
   if (isLowEndDevice()) {
