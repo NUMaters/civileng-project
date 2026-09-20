@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { disposeDioramaObject } from "./disposeDioramaObject";
+import { BASIN_PORTS, PUMP_PORTS } from "./facilityVisualPorts";
 
 const ids = ["drainage-pump", "retention-basin", "levee", "revetment", "channel-dredging"];
 function meshes(group: THREE.Group): THREE.Mesh[] {
@@ -115,7 +116,7 @@ it("leaves unknown facilities empty and inactive", () => {
   expect(v.group.children).toHaveLength(0);
 });
 
-it("anchors all three pump jets at the existing outlets pointing downstream", () => {
+it("anchors short pump jets at shared mouths facing local north", () => {
   const v = createFacilityOperationVisuals("drainage-pump");
   v.update(1, 0);
   const jets = v.group.getObjectByName("three-outlet-jets") as THREE.InstancedMesh;
@@ -123,25 +124,29 @@ it("anchors all three pump jets at the existing outlets pointing downstream", ()
   for (let i = 0; i < 3; i++) {
     jets.getMatrixAt(i, matrix);
     const origin = new THREE.Vector3().setFromMatrixPosition(matrix);
-    expect(origin.x).toBe((i - 1) * 9);
-    expect(origin.y).toBeCloseTo(2.7);
-    expect(origin.z).toBe(13);
+    expect(origin.toArray()).toEqual(PUMP_PORTS[i].mouth);
+    const direction = new THREE.Vector3(0, 0, 1).transformDirection(matrix);
+    expect(direction.z).toBeCloseTo(-1);
   }
-  expect(vertices(jets).every(p => p.z >= 12.9 && p.z < 30)).toBe(true);
+  expect(vertices(jets).every(p => p.z > -18 && p.z < -12.9 && p.y > 2)).toBe(true);
   disposeDioramaObject(v.group);
 });
 
-it("fills monotonically to 4.2 and confines water and inlet to the berm", () => {
+it("fills to 4.2 with inlet crossing the low berm, and never invents outlet flow", () => {
   const v = createFacilityOperationVisuals("retention-basin");
   const water = v.group.getObjectByName("basin-fill")!;
   for (const amount of [0.001, 0.1, 0.5, 1, 2]) {
     v.update(amount, 3);
     expect(water.position.y).toBeCloseTo(0.22 + Math.min(amount, 1) * 3.98);
     expect(water.position.y).toBeGreaterThan(0.2);
-    for (const mesh of meshes(v.group)) for (const p of vertices(mesh)) {
+    for (const p of vertices(water as THREE.Mesh)) {
       expect(Math.abs(p.x)).toBeLessThanOrEqual(32.001);
       expect(Math.abs(p.z)).toBeLessThanOrEqual(22.001);
     }
+    const inlet = vertices(v.group.getObjectByName("directional-water-flow") as THREE.Mesh);
+    expect(inlet.some(p => p.z < -24)).toBe(true);
+    expect(inlet.every(p => Math.abs(p.x) < BASIN_PORTS.inletHalfWidth && p.z >= -36 && p.z <= -19)).toBe(true);
+    expect(v.group.children.map(child => child.name).sort()).toEqual(["basin-fill", "directional-water-flow"]);
   }
   disposeDioramaObject(v.group);
 });
