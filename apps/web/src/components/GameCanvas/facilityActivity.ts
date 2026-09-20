@@ -11,19 +11,26 @@ type ActivityState = Pick<FloodSimulationState, "riverLevelMeters" | "floodDepth
 
 /** Operational illustration, not a per-facility measured flow or saved-damage attribution. */
 export function resolveFacilityActivity(influence: StructureInfluence | undefined, state: ActivityState | undefined) {
-  if (!influence || influence.preview || !state) return { activity: 0, label: "配置を検討中" };
-  if (state.phase === "idle" || state.phase === "preparation") return { activity: 0, label: "大雨に備えて待機" };
-  if (influence.adverseSiteIds.length) return { activity: 0, label: "相性注意・位置や向きを確認" };
-  if (!influence.coveredSiteIds.length || influence.effectiveness <= 0)
-    return { activity: 0, label: "対象の弱点が範囲外" };
+  // A mismatch is a separate warning, not a facility-wide simulation shutdown.
+  const warning = influence?.adverseSiteIds.length ? `相性注意${influence.adverseSiteIds.length}地点` : undefined;
+  const result = (activity: number, label: string) => ({
+    // The map already renders the mismatch count on its own line. Keep the
+    // operational label concise rather than duplicating that warning here.
+    activity, warning, label,
+  });
+  if (!influence || influence.preview || !state) return result(0, "配置を検討中");
+  if (state.phase === "idle" || state.phase === "preparation") return result(0, "大雨に備えて待機");
+  if (!influence.positiveSiteContributions) return result(0, "施設の寄与を確認できません");
 
-  // Protection uses the simulation's current covered sites, not a placement-only badge.
-  const sites = state.protectedBankSites.filter(site => influence.coveredSiteIds.includes(site.id));
-  const protection = sites.reduce((max, site) => Math.max(max, clamp(site.protectionStrength)), 0);
+  const contributions = influence.positiveSiteContributions.filter(site => clamp(site.strength) > 0);
+  const protection = contributions.reduce((max, site) => Math.max(max, clamp(site.strength)), 0);
+  if (!protection || clamp(influence.effectiveness) === 0) return result(0, "対象地点への有効な寄与なし");
   const rise = clamp((state.riverLevelMeters - 2.2) / 2.5);
   const demand = influence.structureId === "drainage-pump" ? clamp(state.floodDepthMeters / 0.7) : rise;
   const activity = clamp(influence.effectiveness) * protection * demand;
-  if (activity < 0.01) return { activity: 0, label: "水の増加に備えて待機" };
-  const overwhelmed = sites.some(site => site.overflowing);
-  return { activity, label: overwhelmed ? "稼働中・周辺で浸水が継続" : (labels[influence.structureId] ?? "稼働中") };
+  if (activity < 0.01) return result(0, "水の増加に備えて待機");
+  // Aggregate site state is used only for the continuing-flood warning, never attribution.
+  const overwhelmed = state.protectedBankSites.some(site => site.overflowing &&
+    contributions.some(contribution => contribution.siteId === site.id));
+  return result(activity, overwhelmed ? "稼働中・周辺で浸水が継続" : (labels[influence.structureId] ?? "稼働中"));
 }
