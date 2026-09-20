@@ -54,6 +54,7 @@
     },
     {
       "id": "riverbank-middle-canopy-core",
+      "illustrativeProfile": "riverbank-detail-v1",
       "rings": [[[-409,-60],[-367,-81],[-344,-99],[-339,-73],[-372,-46],[-406,-31],[-409,-60]]],
       "observationView": {
         "mapUrl": "https://maps.gsi.go.jp/#18/37.360206/140.378269/&ls=seamlessphoto&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1",
@@ -67,6 +68,7 @@
     },
     {
       "id": "riverbank-north-canopy-core",
+      "illustrativeProfile": "riverbank-detail-v1",
       "rings": [[[-318,-115],[-304,-133],[-277,-140],[-269,-125],[-284,-104],[-306,-90],[-318,-115]]],
       "observationView": {
         "mapUrl": "https://maps.gsi.go.jp/#18/37.360206/140.378269/&ls=seamlessphoto&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1",

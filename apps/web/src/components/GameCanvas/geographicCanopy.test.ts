@@ -23,10 +23,37 @@ function create(patches: CanopyPatch[], extra: Partial<CanopyOptions> = {}) {
 }
 afterEach(() => groups.splice(0).forEach(disposeDioramaObject));
 
+function ringArea(r: readonly VegetationPoint[]) {
+  return Math.abs(r.reduce((sum, p, i) => { const q = r[(i + 1) % r.length]!; return sum + p.x * q.z - q.x * p.z; }, 0)) / 2;
+}
+// This closed, radially nested crown has one upper and one lower surface.
+// Half the sum of triangle XZ projection areas is its actual mesh plan footprint,
+// not the larger circular clearance envelope or a claim of observed leaf cover.
+function crownFootprint(geometry: THREE.BufferGeometry) {
+  const p = geometry.getAttribute("position"), index = geometry.index!;
+  let area = 0;
+  for (let i = 0; i < index.count; i += 3) {
+    const a = index.getX(i), b = index.getX(i + 1), c = index.getX(i + 2);
+    area += Math.abs((p.getX(b) - p.getX(a)) * (p.getZ(c) - p.getZ(a)) - (p.getZ(b) - p.getZ(a)) * (p.getX(c) - p.getX(a))) / 4;
+  }
+  return area;
+}
+function renderCost(group: THREE.Group) {
+  let triangles = 0, instanceBytes = 0;
+  for (const mesh of group.children as THREE.InstancedMesh[]) {
+    triangles += mesh.count * mesh.geometry.index!.count / 3;
+    instanceBytes += mesh.instanceMatrix.array.byteLength + (mesh.instanceColor?.array.byteLength ?? 0);
+  }
+  return { meshes: group.children.length, triangles, instanceBytes };
+}
+
 describe("bounded imagery canopy reconstruction", () => {
   it("preserves seven source envelopes and labels internal placement as illustrative, not observed trees", () => {
     const patches = convertImageryCanopyObservations(source);
     expect(patches).toHaveLength(7);
+    expect(patches.filter(p => p.illustrativeProfile).map(p => p.id)).toEqual([
+      "riverbank-middle-canopy-core", "riverbank-north-canopy-core",
+    ]);
     expect(patches.map(p => p.rings[0]!.length)).toEqual(source.patches.map(p => p.rings[0]!.length));
     for (const p of patches) expect(p.source).toBe(source.source);
     expect(source.source.mapUrl).toBe("https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1");
@@ -48,6 +75,27 @@ describe("bounded imagery canopy reconstruction", () => {
     expect(r.records.every(c => c.positionSource === "illustrative-within-imagery-envelope")).toBe(true);
     expect(r.group.userData.policy.radiusRangeM).toEqual([2.3, 3.5]);
     expect(create([]).group.children).toHaveLength(0);
+  });
+
+  it("restricts the opt-in profile and retains full-crown exclusions, nullable edge DEM and budgets", () => {
+    const p: CanopyPatch = { ...patch([ring(0, 0, 60)], "riverbank-south-canopy-core"), illustrativeProfile: "riverbank-detail-v1" };
+    const detailed = create([p]);
+    expect(detailed.records.every(r => r.radiusM >= 1.8 && r.radiusM <= 2.6)).toBe(true);
+    expect(detailed.records.filter(r => r.reason === "rendered").every(r => canopyContainsCrown(p.rings, r, r.radiusM))).toBe(true);
+    expect(() => create([{ ...p, id: "campus-north-grove-core" }])).toThrow(/out-of-scope/);
+    const invalid = structuredClone(source);
+    invalid.patches[0]!.illustrativeProfile = "riverbank-detail-v1";
+    expect(() => convertImageryCanopyObservations(invalid)).toThrow(/out-of-scope/);
+    expect(create([p], { maxCells: 4 }).stats.skippedPatches).toEqual([{ id: p.id, reason: "cell-budget" }]);
+    expect(create([p], { maxTrees: 1 }).stats.counts.rendered).toBe(1);
+    const centres = new Set(detailed.records.map(r => `${r.x}/${r.z}`));
+    const edgeMissing = create([p], { groundSampler: (x, z) => centres.has(`${x}/${z}`) ? 10 : null });
+    expect(edgeMissing.stats.counts.rendered).toBe(0);
+    expect(edgeMissing.stats.counts["no-ground-data"]).toBeGreaterThan(0);
+    const blocked = create([p], { exclusions: [{ sourceId: "water", kind: "water", geometry: { type: "polygon", rings: p.rings } }] });
+    expect(blocked.stats.counts.rendered).toBe(0);
+    const override = create([p], { spacingM: 6, radiusRangeM: [2.3, 3.5] });
+    expect(override.records).toEqual(create([{ ...p, illustrativeProfile: undefined }]).records);
   });
 
   it("requires the FULL crown to fit concave polygons, holes and local bounds", () => {
@@ -124,16 +172,44 @@ describe("bounded imagery canopy reconstruction", () => {
     const exclusions = createImageryVegetationExclusions(JSON.parse(read("features.geojson").toString()), JSON.parse(read("plateau-buildings.geojson").toString()), JSON.parse(read("landcover.geojson").toString()));
     const terrain = decodeKoriyamaTerrain(Uint8Array.from(read("terrain.bin")).buffer, JSON.parse(read("terrain-metadata.json").toString()));
     const nw = koriyamaGeoToLocal([140.370, 37.379]), se = koriyamaGeoToLocal([140.398, 37.351]);
-    const r = create(patches, { bounds: { minX: nw.x, minZ: nw.z, maxX: se.x, maxZ: se.z }, exclusions, observedCrowns,
-      groundSampler: (x, z) => { const p = worldToGeo(x, z); return sampleKoriyamaTerrain(terrain, p.longitude, p.latitude).localY; } });
+    const groundSampler = vi.fn((x: number, z: number) => { const p = worldToGeo(x, z); return sampleKoriyamaTerrain(terrain, p.longitude, p.latitude).localY; });
+    const options = { bounds: { minX: nw.x, minZ: nw.z, maxX: se.x, maxZ: se.z }, exclusions, observedCrowns, groundSampler };
+    const baseline = create(patches.map(p => ({ ...p, illustrativeProfile: undefined })), options);
+    const baselineGroundCalls = groundSampler.mock.calls.length;
+    groundSampler.mockClear();
+    const r = create(patches, options);
+    const detailedGroundCalls = groundSampler.mock.calls.length;
     const accepted = r.records.filter(c => c.reason === "rendered");
-    expect(accepted.length).toBe(66);
-    expect(r.stats.evaluatedCells).toBe(409); expect(r.stats.meshes).toBe(8);
+    expect(baseline.stats.counts.rendered).toBe(66);
+    expect(baseline.stats.evaluatedCells).toBe(409);
+    expect(accepted.length).toBe(73);
+    expect(r.stats.evaluatedCells).toBe(448); expect(r.stats.meshes).toBeLessThanOrEqual(10);
+    expect(r.stats.skippedPatches).toEqual([]); expect(r.stats.counts.capacity).toBe(0);
+    const campus = (record: { patchId: string }) => record.patchId.startsWith("campus-");
+    expect(r.records.filter(campus)).toEqual(baseline.records.filter(campus));
+    expect(r.records.filter(c => c.patchId === "riverbank-south-canopy-core")).toEqual(baseline.records.filter(c => c.patchId === "riverbank-south-canopy-core"));
+    expect(r.records.filter(campus).filter(c => c.reason === "rendered")).toHaveLength(58);
+    expect(baselineGroundCalls).toBe(66 * 9); expect(detailedGroundCalls).toBe(73 * 9);
+    expect(renderCost(r.group).triangles - renderCost(baseline.group).triangles).toBeLessThanOrEqual(7 * 400);
+    expect(renderCost(r.group).instanceBytes - renderCost(baseline.group).instanceBytes).toBe(7 * 140);
     for (const c of accepted) {
       expect(canopyContainsCrown(patches.find(p => p.id === c.patchId)!.rings, c, c.radiusM)).toBe(true);
       for (const o of observedCrowns) { const p = koriyamaGeoToLocal(o.coordinates); expect(Math.hypot(c.x - p.x, c.z - p.z)).toBeGreaterThan(c.radiusM + o.crownRadiusM); }
       for (const e of exclusions) expect(intersectsVegetationExclusion(c, c.radiusM, e)).toBe(false);
+      for (const other of accepted) if (other !== c) expect(Math.hypot(c.x - other.x, c.z - other.z)).toBeGreaterThan(c.radiusM + other.radiusM);
     }
+    const crown = (r.group.children as THREE.InstancedMesh[]).find(m => m.userData.part === "crown")!;
+    const unitArea = crownFootprint(crown.geometry);
+    expect(unitArea).toBeGreaterThan(2.8); expect(unitArea).toBeLessThan(Math.PI);
+    const coverage = patches.filter(p => p.id.startsWith("riverbank-")).map(p => {
+      const areaM2 = ringArea(p.rings[0]!) - p.rings.slice(1).reduce((sum, ring) => sum + ringArea(ring), 0);
+      const footprint = (result: typeof r) => result.records.filter(c => c.patchId === p.id && c.reason === "rendered").reduce((sum, c) => sum + unitArea * c.radiusM ** 2, 0);
+      return { id: p.id, areaM2, beforeM2: footprint(baseline), afterM2: footprint(r) };
+    });
+    const before = coverage.reduce((sum, p) => sum + p.beforeM2, 0), after = coverage.reduce((sum, p) => sum + p.afterM2, 0);
+    for (const p of coverage) expect(p.afterM2).toBeGreaterThanOrEqual(p.beforeM2);
+    expect(after / before).toBeGreaterThan(1.2);
+    console.info("canopy detail comparison", JSON.stringify({ coverage, beforeCost: renderCost(baseline.group), afterCost: renderCost(r.group), baselineGroundCalls, detailedGroundCalls }));
     console.info("actual canopy", JSON.stringify({ stats: r.stats, perPatch: patches.map(p => {
       const records = r.records.filter(c => c.patchId === p.id);
       const counts = records.reduce<Record<string, number>>((all, record) => { all[record.reason] = (all[record.reason] ?? 0) + 1; return all; }, {});
