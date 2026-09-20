@@ -21,21 +21,7 @@ import { createDioramaFacility } from "./dioramaFacilities";
 import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
 import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
 import "./diorama.css";
-
-function disposeObject(root: T.Object3D) {
-  const geometries = new Set<T.BufferGeometry>();
-  const materials = new Set<T.Material>();
-  root.traverse((object) => {
-    const mesh = object as T.Mesh;
-    if (mesh.geometry) geometries.add(mesh.geometry);
-    if (object instanceof T.InstancedMesh) object.dispose();
-    if (mesh.material)
-      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
-        materials.add(material);
-  });
-  geometries.forEach((g) => g.dispose());
-  materials.forEach((m) => m.dispose());
-}
+import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 
 type Runtime = {
   renderer: T.WebGLRenderer;
@@ -350,8 +336,11 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       renderer.domElement.addEventListener("pointerup", pointerUp);
       renderer.domElement.addEventListener("pointercancel", pointerUp);
       renderer.domElement.addEventListener("lostpointercapture", pointerUp);
+      let viewportWidth = 1, viewportHeight = 1;
       const resize = () => {
         const { width, height } = container.getBoundingClientRect();
+        viewportWidth = width;
+        viewportHeight = height;
         renderer.setSize(width, height);
         camera.aspect = width / Math.max(1, height);
         camera.updateProjectionMatrix();
@@ -365,6 +354,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       const notifyCameraFocus = createCameraFocusNotifier((x, z) => {
         latest.current.onCameraFocusChange?.(worldToGeo(x, z));
       });
+      // Scratch vectors are reused each frame; labels must not allocate per facility.
+      const cameraCorrection = new T.Vector3();
+      const projectedPoint = new T.Vector3();
       const draw = (now: number) => {
         frame = requestAnimationFrame(draw);
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -375,9 +367,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         controls.update();
         const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + 150, terrain.bounds.maxZ - 150);
         const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + 150, terrain.bounds.maxX - 150);
-        const correction = new T.Vector3(x - controls.target.x, 0, z - controls.target.z);
-        controls.target.add(correction);
-        camera.position.add(correction);
+        cameraCorrection.set(x - controls.target.x, 0, z - controls.target.z);
+        controls.target.add(cameraCorrection);
+        camera.position.add(cameraCorrection);
         notifyCameraFocus(controls.target.x, controls.target.z, now);
         if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
         for (const model of r.models.values()) {
@@ -407,31 +399,30 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
             element.style.display = "none";
             continue;
           }
-          const point = model.position
-            .clone()
-            .add(new T.Vector3(0, 35, 0))
-            .project(camera);
+          const point = projectedPoint.copy(model.position);
+          point.y += 35;
+          point.project(camera);
           const visible =
             point.z < 1 && point.z > -1 && Math.abs(point.x) < 1.1 && Math.abs(point.y) < 1.1;
           element.style.display = visible ? "" : "none";
           if (visible)
-            element.style.transform = `translate(${(point.x * 0.5 + 0.5) * container.clientWidth}px,${(-point.y * 0.5 + 0.5) * container.clientHeight}px) translate(-50%,-100%)`;
+            element.style.transform = `translate(${(point.x * 0.5 + 0.5) * viewportWidth}px,${(-point.y * 0.5 + 0.5) * viewportHeight}px) translate(-50%,-100%)`;
         }
         const actions = placementActions.current;
         const preview = latest.current.placements.find((placement) => placement.preview);
         const previewModel = preview ? r.models.get(preview.id) : undefined;
         if (actions && previewModel) {
-          const point = previewModel.position.clone().project(camera);
+          const point = projectedPoint.copy(previewModel.position).project(camera);
           actions.style.display = point.z > -1 && point.z < 1 ? "flex" : "none";
           const px = T.MathUtils.clamp(
-            (point.x * 0.5 + 0.5) * container.clientWidth,
+            (point.x * 0.5 + 0.5) * viewportWidth,
             60,
-            container.clientWidth - 60,
+            viewportWidth - 60,
           );
           const py = T.MathUtils.clamp(
-            (-point.y * 0.5 + 0.5) * container.clientHeight + 32,
+            (-point.y * 0.5 + 0.5) * viewportHeight + 32,
             160,
-            container.clientHeight - 90,
+            viewportHeight - 90,
           );
           actions.style.transform = `translate(${px}px,${py}px) translateX(-50%)`;
         }
@@ -447,26 +438,26 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           if (preparing && !latest.current.placements.some((placement) => placement.preview)) {
             for (const site of guidanceSites.current) {
               const position = geoToWorld(site.longitude, site.latitude);
-              const projected = new T.Vector3(
+              const projected = projectedPoint.set(
                 position.x,
                 (terrain.sampleGround(position.x, position.z) ?? 0) + 12,
                 position.z,
               ).project(camera);
-              const px = (projected.x * 0.5 + 0.5) * container.clientWidth;
-              const py = (-projected.y * 0.5 + 0.5) * container.clientHeight;
+              const px = (projected.x * 0.5 + 0.5) * viewportWidth;
+              const py = (-projected.y * 0.5 + 0.5) * viewportHeight;
               // Keep a single hint in the playable area, clear of the HUD and construction dock.
               if (
                 projected.z < -1 ||
                 projected.z > 1 ||
                 px < 90 ||
-                px > container.clientWidth - 90 ||
+                px > viewportWidth - 90 ||
                 py < 290 ||
-                py > container.clientHeight - 240
+                py > viewportHeight - 240
               )
                 continue;
               const score =
-                Math.abs(py - container.clientHeight * 0.48) +
-                Math.abs(px - container.clientWidth * 0.5) * 0.4;
+                Math.abs(py - viewportHeight * 0.48) +
+                Math.abs(px - viewportWidth * 0.5) * 0.4;
               if (!chosen || score < chosen.score) chosen = { site, x: px, y: py, score };
             }
           }
