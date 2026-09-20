@@ -25,6 +25,7 @@ import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
 import { getDioramaGuidance, initialDioramaFocus, isPreferredDioramaGuidanceCandidate } from "./dioramaGuidance";
+import { createGeographicGuidanceAnchors, selectGuidanceAdvice, selectGuidanceProjection } from "./geographicGuidanceAnchors";
 import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
 import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
@@ -303,6 +304,12 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const riverStage = createRiverStageController(world.waterMeshes);
       const sampleRiverSurface = createRiverSurfaceSampler(world.waterMeshes);
       const riverBoundary = createRiverBoundaryResolver(geography.osm, sampleRiverSurface);
+      // Static geography cache: never derive pump anchors in the animation loop.
+      // Hazard/readiness positions remain separate from placement action pointers.
+      const guidanceAnchors = createGeographicGuidanceAnchors(getDioramaGuidance([]), geography.osm, {
+        sampleGround: terrain.sampleGround, sampleRenderedGround: terrain.sampleRenderedGround,
+        waterMeshes: world.waterMeshes,
+      });
       const inundation = createDioramaInundation(terrain.sampleGround, riverBoundary);
       scene.add(inundation.group);
       let lastFloodFocusKey = "";
@@ -684,12 +691,11 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
               obstacleCount++;
             }
             if (obstaclesReady) for (const site of guidanceSites.current) {
-              const position = geoToWorld(site.longitude, site.latitude);
-              const ground = terrain.sampleGround(position.x, position.z);
-              if (ground === null) continue;
+              const position = selectGuidanceProjection(guidanceAnchors.get(site.id), site.hasContribution);
+              if (!position) continue; // No legal land anchor: hide this action hint.
               const projected = projectedPoint.set(
                 position.x,
-                ground + 12,
+                position.groundY + 12,
                 position.z,
               ).project(camera);
               const px = (projected.x * 0.5 + 0.5) * viewportWidth;
@@ -717,8 +723,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             hint.style.setProperty("--facility-pointer-width", `${labelLayout.pointerWidth}px`);
             if (guidanceTitle && guidanceTitle.textContent !== chosen.title)
               guidanceTitle.textContent = chosen.title;
-            if (guidanceAdvice && guidanceAdvice.textContent !== chosen.advice)
-              guidanceAdvice.textContent = chosen.advice;
+            const advice = selectGuidanceAdvice(guidanceAnchors.get(chosen.id), chosen);
+            if (guidanceAdvice && guidanceAdvice.textContent !== advice)
+              guidanceAdvice.textContent = advice;
           }
         }
         renderer.render(scene, camera);

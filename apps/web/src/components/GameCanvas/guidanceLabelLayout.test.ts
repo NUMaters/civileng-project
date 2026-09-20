@@ -92,7 +92,13 @@ it("uses cached measurements, one hint and unchanged prep/preview gates in the m
   expect(loop).toContain("isPreferredDioramaGuidanceCandidate(site.hasContribution, score");
   expect(loop).toContain("chosen?.hasContribution");
   expect(loop).toContain('hint.style.visibility = chosen ? "visible" : "hidden"');
-  expect(loop).toContain("if (ground === null) continue");
+  // Ground/water validation moved to the static geography cache; absent legal
+  // projections still fail closed, without repeating terrain queries per frame.
+  expect(loop).toContain("selectGuidanceProjection(guidanceAnchors.get(site.id), site.hasContribution)");
+  expect(loop).toContain("if (!position) continue");
+  expect(loop).not.toMatch(/createGeographicGuidanceAnchors|resolveLegalPumpGuidance|sampleGround|sampleRenderedGround/);
+  expect(map.indexOf("const guidanceAnchors = createGeographicGuidanceAnchors")).toBeLessThan(map.indexOf("const hint = guidanceLabel.current"));
+  expect(loop).toContain("selectGuidanceAdvice(guidanceAnchors.get(chosen.id), chosen)");
   expect(loop).not.toMatch(/getBoundingClientRect|getComputedStyle|offsetWidth|offsetHeight|py < 290|viewportHeight - 240|px < 90|hint.style.display/);
   expect(map).toContain("new T.PerspectiveCamera(43, 1, 1, 6000)");
   expect(map).toContain(".addScaledVector(downstream, 480)");
