@@ -278,6 +278,14 @@
     max-height: 52dvh;
   }
 }
+@media (max-width: 720px) {
+  .npc-guide {
+    top: calc(80px + env(safe-area-inset-top));
+    width: min(360px, calc(100% - 20px));
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+}
 @media (max-width: 600px) {
   .npc-prototype-note {
     bottom: 150px;
