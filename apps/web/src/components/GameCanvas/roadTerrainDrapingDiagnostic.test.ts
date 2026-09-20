@@ -72,6 +72,24 @@ function disposeWorld(world: GeographicWorld) {
   for (const material of materials) material.dispose();
 }
 
+type WorstSample = { x: number; z: number; roadY: number; terrainY: number; rawY: number; delta: number };
+function retainWorstSample(samples: WorstSample[], item: WorstSample, limit = 5) {
+  if (samples.length < limit) { samples.push(item); return; }
+  let largestIndex = 0;
+  for (let i = 1; i < samples.length; i++) {
+    if (samples[i]!.delta > samples[largestIndex]!.delta) largestIndex = i;
+  }
+  if (item.delta < samples[largestIndex]!.delta) samples[largestIndex] = item;
+}
+
+it("retains the true five smallest diagnostic deltas", () => {
+  const samples: WorstSample[] = [];
+  for (const delta of [3, 1, 5, 2, 4, 9, 0]) {
+    retainWorstSample(samples, { x: 0, z: 0, roadY: 0, terrainY: 0, rawY: 0, delta });
+  }
+  expect(samples.map((sample) => sample.delta).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
+});
+
 it("always regresses synthetic rendered-terrain draping, holes, no-data and non-ground layers", () => {
   const source = syntheticFeature("campus-hole", "campus", [[
     [0, 0], [4, 0], [4, 4], [0, 4], [0, 0],
@@ -192,7 +210,7 @@ it("audits raw-DEM and rendered-terrain draping on actual roads and landcover", 
     const meshes = root.children.filter((object): object is THREE.Mesh => object instanceof THREE.Mesh && ["road", "rail"].includes(object.userData.layer));
     let candidateSamples = 0, samples = 0, noData = 0, missingTerrain = 0, buriedOver2cm = 0, under2cm = 0;
     let minimum = Infinity, maximumTerrainMinusRaw = -Infinity, sum = 0;
-    const worst: { x: number; z: number; roadY: number; terrainY: number; rawY: number; delta: number; sourceIds: string[] }[] = [];
+    const worst: WorstSample[] = [];
     for (const mesh of meshes) {
       const p = mesh.geometry.getAttribute("position"), end = Math.min(p.count, mesh.geometry.drawRange.start + mesh.geometry.drawRange.count);
       for (let i = mesh.geometry.drawRange.start; i + 2 < end; i += 3) {
@@ -213,10 +231,7 @@ it("audits raw-DEM and rendered-terrain draping on actual roads and landcover", 
           samples++; sum += delta; minimum = Math.min(minimum, delta); maximumTerrainMinusRaw = Math.max(maximumTerrainMinusRaw, terrainY - rawY);
           if (delta < -0.02) buriedOver2cm++;
           if (delta < 0.02) under2cm++;
-          const item = { x: round(x)!, z: round(z)!, roadY: round(roadY)!, terrainY: round(terrainY)!, rawY: round(rawY)!, delta: round(delta)!,
-            sourceIds: Array.isArray(mesh.userData.sourceIds) ? [...mesh.userData.sourceIds] as string[] : [] };
-          if (worst.length < 5) worst.push(item);
-          else { const index = worst.reduce((iWorst, candidate, iCandidate) => candidate.delta < worst[iWorst]!.delta ? iCandidate : iWorst, 0); if (delta < worst[index]!.delta) worst[index] = item; }
+          retainWorstSample(worst, { x: round(x)!, z: round(z)!, roadY: round(roadY)!, terrainY: round(terrainY)!, rawY: round(rawY)!, delta: round(delta)! });
         }
       }
     }
@@ -260,7 +275,10 @@ it("audits raw-DEM and rendered-terrain draping on actual roads and landcover", 
         cellWidth: terrain.renderedSurface.cellWidth, cellHeight: terrain.renderedSurface.cellHeight, roadGridOriginBefore: { x: 0, z: 0 } },
       renderedMeshRaycast: { checks: raycastChecks, missing: raycastMissing, mismatches: raycastMismatches, maxAbsDelta: round(maxRaycastDelta) },
       before, after, landcoverBefore, landcoverAfter,
-      preservation: { roadSourceUnchanged: JSON.stringify(roadFeatures) === sourceRoadSnapshot, landcoverSourceUnchanged: JSON.stringify(landcoverData) === sourceLandcoverSnapshot,
+      preservation: { roadSourceTracing: "unavailable: rendered road meshes do not expose sourceIds metadata",
+        roadInputUnchanged: JSON.stringify(roadFeatures) === sourceRoadSnapshot,
+        roadSourcePreservation: "not asserted by this mesh audit; source-feature tracing is unavailable",
+        landcoverSourceUnchanged: JSON.stringify(landcoverData) === sourceLandcoverSnapshot,
         landcoverSurfaceIdsUnchanged: JSON.stringify(sourceIdsBefore) === JSON.stringify(sourceIdsAfter), polygonHoleSourceCount: landcoverData.features.filter((f: { geometry: { type: string; coordinates: unknown[][][] } }) => f.geometry.type === "MultiPolygon" && f.geometry.coordinates.some(rings => rings.length > 1)).length },
       recommendation: "Use sampleRenderedGround plus the existing display lift for ground layers; keep raw sampleGround for source data, and keep water/stage and bridge decks on their existing paths.",
     };
