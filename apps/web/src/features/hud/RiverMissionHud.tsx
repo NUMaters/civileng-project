@@ -121,7 +121,6 @@ export function RiverMissionHud({
             {Math.floor(budget).toLocaleString()}
             <small> pt</small>
           </strong>
-          <small className="river-hud__income">{incomeLabel}</small>
         </div>
         <button
           className={`river-hud__damage${danger ? " is-danger" : ""}`}
@@ -139,30 +138,26 @@ export function RiverMissionHud({
             <small> %</small>
           </strong>
         </button>
-        <div className="river-hud__water" aria-label="河川水位">
-          <MetricIcon kind="water" />
-          <span>水位</span>
-          <strong>
-            {flood.riverLevelMeters.toFixed(1)}
-            <small> m</small>
-          </strong>
-        </div>
       </div>
       <div className="river-hud__objective">
-        <span>
-          {mission.label}
-          <b>{mission.objective}</b>
-        </span>
+        <span>被害 {threshold}% 未満で街を守ろう</span>
         {prep ? (
           <button type="button" onClick={onStartRain}>
             大雨を開始 <span aria-hidden="true">→</span>
           </button>
         ) : (
-          <span className="river-hud__rain">被害 {threshold}% 未満</span>
+          <span className="river-hud__rain">
+            {mission.overflowingSites > 0 ? "浸水が広がっています" : "大雨に備えよう"}
+          </span>
         )}
       </div>
       {detailsOpen ? (
         <section className="river-hud__details" aria-label="河川と対策の詳細">
+          <p>{mission.objective}</p>
+          <div>
+            <span>予算の増減</span>
+            <strong>{incomeLabel}</strong>
+          </div>
           <div>
             <span>河川水位</span>
             <strong>{flood.riverLevelMeters.toFixed(1)} m</strong>

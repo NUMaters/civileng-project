@@ -175,7 +175,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     (structureId: string, position: GeoPosition, headingDegrees: number) => {
       const pending = beginPendingPlacement(structureId, position, headingDegrees);
       if (pending !== null) {
-        setMessage("仮配置しました。位置と向きを調整して確定してください。", "info");
+        setMessage("タップで回転・ドラッグで移動。✓で配置", "info");
       }
     },
     [beginPendingPlacement, setMessage],

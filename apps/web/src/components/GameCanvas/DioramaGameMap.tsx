@@ -10,6 +10,7 @@ import { geoToWorld, groundY, intersectDioramaSurface, riverX, worldToGeo } from
 import { createDioramaWorld } from "./dioramaWorld";
 import { createDioramaFacility } from "./dioramaFacilities";
 import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
+import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
 import "./diorama.css";
 
 function disposeObject(root: T.Object3D) {
@@ -115,12 +116,12 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
     const [error, setError] = useState("");
     const labels = useRef(new Map<string, HTMLDivElement>());
     const guidanceLabel = useRef<HTMLDivElement>(null);
+    const placementActions = useRef<HTMLDivElement>(null);
     const pending = props.placements.find((p) => p.preview);
     const influences = useMemo(
       () => calculateStructureInfluences(props.placements),
       [props.placements],
     );
-    const influence = pending ? influences[props.placements.indexOf(pending)] : undefined;
     const guidanceSites = useRef(getDioramaGuidance(influences));
     useEffect(() => {
       guidanceSites.current = getDioramaGuidance(influences);
@@ -287,9 +288,19 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         reset,
       };
       runtime.current = r;
-      let moving: { id: string; pointerId: number; original: PlacedStructure["position"] } | null =
-        null;
+      let moving: {
+        id: string;
+        pointerId: number;
+        original: PlacedStructure["position"];
+        x: number;
+        y: number;
+        dragged: boolean;
+        cancelled: boolean;
+        preview: boolean;
+      } | null = null;
       const pointerDown = (event: PointerEvent) => {
+        if (latest.current.freeCameraLook) return;
+        if (moving && moving.pointerId !== event.pointerId) moving.cancelled = true;
         if (moving || !pick(event.clientX, event.clientY)) return;
         const intersections = raycaster.intersectObjects([...r.models.values()], true);
         const hit = intersections[0]?.object;
@@ -299,8 +310,17 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         if (id) {
           latest.current.onSelectPlacement(id);
           const placement = latest.current.placements.find((p) => p.id === id);
-          if (placement?.preview) {
-            moving = { id, pointerId: event.pointerId, original: { ...placement.position } };
+          if (placement) {
+            moving = {
+              id,
+              pointerId: event.pointerId,
+              original: { ...placement.position },
+              x: event.clientX,
+              y: event.clientY,
+              dragged: false,
+              cancelled: false,
+              preview: placement.preview === true,
+            };
             controls.enabled = false;
             renderer.domElement.setPointerCapture(event.pointerId);
           }
@@ -308,6 +328,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       };
       const pointerMove = (event: PointerEvent) => {
         if (!moving || moving.pointerId !== event.pointerId) return;
+        moving.dragged ||=
+          Math.hypot(event.clientX - moving.x, event.clientY - moving.y) > FACILITY_TAP_SLOP;
+        if (!moving.dragged || !moving.preview || moving.cancelled) return;
         const point = pick(event.clientX, event.clientY);
         if (!point) return;
         const geo = resolvePlaceablePosition(worldToGeo(point.x, point.z));
@@ -315,8 +338,17 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       };
       const pointerUp = (event: PointerEvent) => {
         if (!moving || moving.pointerId !== event.pointerId) return;
-        if (event.type !== "pointerup") {
+        moving.dragged ||=
+          Math.hypot(event.clientX - moving.x, event.clientY - moving.y) > FACILITY_TAP_SLOP;
+        if (event.type !== "pointerup" || moving.cancelled) {
           latest.current.onMovePendingPlacement(moving.id, moving.original);
+        } else if (!moving.dragged) {
+          const placement = latest.current.placements.find((p) => p.id === moving!.id);
+          if (placement)
+            latest.current.onRotatePlacement(
+              placement.id,
+              nextFacilityHeading(placement.headingDegrees),
+            );
         }
         moving = null;
         controls.enabled = true;
@@ -353,6 +385,23 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         const correction = new T.Vector3(x - controls.target.x, 0, z - controls.target.z);
         controls.target.add(correction);
         camera.position.add(correction);
+        for (const model of r.models.values()) {
+          const delta =
+            T.MathUtils.euclideanModulo(
+              model.userData.targetRotation - model.rotation.y + Math.PI,
+              Math.PI * 2,
+            ) - Math.PI;
+          model.rotation.y += delta * (1 - Math.exp(-dt * 20));
+          const progress = (now - model.userData.popStarted) / 240;
+          const pop = facilityPopScale(progress);
+          model.scale.setScalar(pop);
+          model.position.y = model.userData.groundHeight + (pop - 1) * 24;
+          if (model.userData.rotationShadowDirty && Math.abs(delta) < 0.001 && progress >= 1) {
+            model.rotation.y = model.userData.targetRotation;
+            model.userData.rotationShadowDirty = false;
+            renderer.shadowMap.needsUpdate = true;
+          }
+        }
         const state = latest.current.getLatestFloodState?.();
         water.material.uniforms.time!.value = time;
         water.material.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
@@ -411,6 +460,24 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           element.style.display = visible ? "" : "none";
           if (visible)
             element.style.transform = `translate(${(point.x * 0.5 + 0.5) * container.clientWidth}px,${(-point.y * 0.5 + 0.5) * container.clientHeight}px) translate(-50%,-100%)`;
+        }
+        const actions = placementActions.current;
+        const preview = latest.current.placements.find((placement) => placement.preview);
+        const previewModel = preview ? r.models.get(preview.id) : undefined;
+        if (actions && previewModel) {
+          const point = previewModel.position.clone().project(camera);
+          actions.style.display = point.z > -1 && point.z < 1 ? "flex" : "none";
+          const px = T.MathUtils.clamp(
+            (point.x * 0.5 + 0.5) * container.clientWidth,
+            60,
+            container.clientWidth - 60,
+          );
+          const py = T.MathUtils.clamp(
+            (-point.y * 0.5 + 0.5) * container.clientHeight + 32,
+            240,
+            container.clientHeight - 90,
+          );
+          actions.style.transform = `translate(${px}px,${py}px) translateX(-50%)`;
         }
         const hint = guidanceLabel.current;
         if (hint) {
@@ -498,10 +565,23 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           model.userData.placementId = placement.id;
           r.models.set(placement.id, model);
           r.scene.add(model);
+          model.rotation.y = -T.MathUtils.degToRad(placement.headingDegrees);
+          model.userData.targetRotation = model.rotation.y;
+          model.userData.popStarted = -Infinity;
         }
         const point = geoToWorld(placement.position.longitude, placement.position.latitude);
-        model.position.set(point.x, groundY(point.x, point.z) + 0.5, point.z);
-        model.rotation.y = -T.MathUtils.degToRad(placement.headingDegrees);
+        model.userData.groundHeight = groundY(point.x, point.z) + 0.5;
+        model.position.set(point.x, model.userData.groundHeight, point.z);
+        const target = -T.MathUtils.degToRad(placement.headingDegrees);
+        if (target !== model.userData.targetRotation) {
+          const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+          model.userData.popStarted = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? -Infinity
+            : performance.now();
+          model.userData.targetRotation = target;
+          model.userData.rotationShadowDirty = true;
+          if (reduceMotion) model.rotation.y = target;
+        }
       }
       r.renderer.shadowMap.needsUpdate = true;
     }, [props.placements, ready]);
@@ -523,6 +603,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           {props.placements.map((p, index) => (
             <div
               className={`diorama-label${p.preview ? " is-preview" : ""}`}
+              data-heading={p.headingDegrees}
               data-tone={
                 influences[index]?.adverseSiteIds.length
                   ? "warn"
@@ -535,66 +616,36 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
               }}
             >
               <strong>{labelFor(p)}</strong>
-              <small>
-                {p.preview ? "位置を調整中" : (influences[index]?.coverageHint ?? "建設済み")}
-              </small>
-              {!p.preview && (influences[index]?.adverseSiteIds.length ?? 0) > 0 ? (
+              <small>{influences[index]?.coverageHint ?? "タップで回転"}</small>
+              {(influences[index]?.adverseSiteIds.length ?? 0) > 0 ? (
                 <small>相性注意 {influences[index]!.adverseSiteIds.length}地点</small>
               ) : null}
             </div>
           ))}
         </div>
         {pending ? (
-          <div className="cesium-pending-panel" role="region" aria-label="仮配置操作">
-            <div className="cesium-pending-panel__topline">
-              <div className="cesium-pending-panel__summary">
-                <span className="cesium-pending-panel__eyebrow">建設プレビュー</span>
-                <strong>{labelFor(pending)}</strong>
-                <span>施設をドラッグして調整</span>
-              </div>
-              <div className="cesium-confirm-hud" role="group" aria-label="仮配置の確定">
-                <button
-                  className="cesium-confirm-hud__cancel"
-                  aria-label="キャンセル"
-                  onClick={props.onCancelPendingPlacement}
-                >
-                  戻す
-                </button>
-                <button
-                  className="cesium-confirm-hud__confirm"
-                  aria-label="確定して配置"
-                  onClick={props.onConfirmPendingPlacement}
-                >
-                  ✓ 配置する
-                </button>
-              </div>
+          <div
+            className="diorama-placement-actions"
+            ref={placementActions}
+            role="region"
+            aria-label="仮配置操作"
+          >
+            <div className="diorama-confirm" role="group" aria-label="仮配置の確定">
+              <button
+                className="diorama-confirm__cancel"
+                aria-label="キャンセル"
+                onClick={props.onCancelPendingPlacement}
+              >
+                ×
+              </button>
+              <button
+                className="diorama-confirm__confirm"
+                aria-label="確定して配置"
+                onClick={props.onConfirmPendingPlacement}
+              >
+                ✓
+              </button>
             </div>
-            <p
-              className={`river-placement-feedback is-${influence?.adverseSiteIds.length ? "warn" : (influence?.coverageTone ?? "warn")}`}
-            >
-              <strong>{influence?.coverageHint ?? "川や河岸で効果を確認"}</strong>
-              <span>
-                配置有効率 {Math.round((influence?.effectiveness ?? 0) * 100)}% ·{" "}
-                {influence?.coveredSiteIds.length ?? 0}地点をカバー
-              </span>
-              {(influence?.adverseSiteIds.length ?? 0) > 0 ? (
-                <span>
-                  相性注意 {influence!.adverseSiteIds.length}地点 ·
-                  位置・向きや施設の組み合わせを確認
-                </span>
-              ) : null}
-            </p>
-            <label className="diorama-rotation">
-              向き <output>{Math.round(pending.headingDegrees)}°</output>
-              <input
-                aria-label="向きスライダー"
-                type="range"
-                min="0"
-                max="359"
-                value={pending.headingDegrees}
-                onChange={(e) => props.onRotatePlacement(pending.id, Number(e.target.value))}
-              />
-            </label>
           </div>
         ) : null}
         {error ? (

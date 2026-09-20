@@ -62,19 +62,33 @@
   border-style: solid;
   border-color: #fffffff2 transparent transparent;
 }
-.diorama-rotation {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 4px;
-  color: #215b76;
-  font-size: 12px;
-  font-weight: 700;
+.diorama-placement-actions {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
 }
-.diorama-rotation input {
-  grid-column: 1/-1;
-  width: 100%;
-  min-height: 44px;
-  accent-color: #0aadc6;
+.diorama-placement-actions .diorama-confirm {
+  display: flex;
+  gap: 10px;
+}
+.diorama-placement-actions button {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 24px;
+  border: 2px solid white;
+  box-shadow: 0 3px 10px #17495733;
+  touch-action: manipulation;
+}
+.diorama-placement-actions .diorama-confirm__confirm {
+  background: #0b9b83;
+  color: white;
+}
+.diorama-placement-actions .diorama-confirm__cancel {
+  background: white;
+  color: #315669;
 }
 .diorama-error {
   position: absolute;

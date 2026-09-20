@@ -308,20 +308,35 @@ async function main() {
       client,
       `(() => {
         const panel = document.querySelector('[aria-label="仮配置操作"]');
-        const text = panel?.textContent ?? '';
         return Boolean(
           panel &&
-          text.includes('建設プレビュー') &&
-          text.includes('戻す') &&
-          text.includes('配置する') &&
-          panel.querySelector('[aria-label="向きスライダー"]'),
+          panel.querySelector('[aria-label="キャンセル"]') &&
+          panel.querySelector('[aria-label="確定して配置"]') &&
+          !document.querySelector('[aria-label="向きスライダー"]') &&
+          !document.querySelector('.cesium-pending-panel'),
         );
       })()`,
     );
     if (!pendingPanel) {
-      throw new Error("仮配置操作パネルの内容が不足しています");
+      throw new Error("施設横の確定・取消または下部パネル廃止の検証に失敗しました");
     }
-    step("仮配置操作パネル表示");
+    step("下部パネルなし・施設横の確定と取消");
+    const tap = await evaluate(
+      client,
+      `(() => {
+      const rect = document.querySelector('.diorama-placement-actions').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y - 38,
+        heading: Number(document.querySelector('.diorama-label.is-preview').dataset.heading) };
+    })()`,
+    );
+    await dispatchMouse(client, "mousePressed", tap.x, tap.y, 1);
+    await dispatchMouse(client, "mouseReleased", tap.x, tap.y);
+    await waitFor(
+      client,
+      `Number(document.querySelector('.diorama-label.is-preview')?.dataset.heading) === ${(tap.heading + 36) % 360}`,
+      5_000,
+    );
+    step("施設をタップして36度回転");
     const touchActionAfterDrag = await evaluate(
       client,
       `getComputedStyle(document.querySelector('.structure-card:not(:disabled)')).touchAction`,

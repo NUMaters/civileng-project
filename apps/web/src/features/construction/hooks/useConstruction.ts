@@ -292,7 +292,7 @@ export function useConstruction() {
     return confirmed;
   }, [pendingPlacement, setMessage]);
 
-  /** 向き変更は仮配置中のみ。確定済み施設は変更しない。 */
+  /** タップ回転は仮配置・確定済みの両方に反映し、治水判定も更新する。 */
   const rotatePlacement = useCallback((placementId: string, headingDegrees: number) => {
     const nextHeading = normalizeHeadingDegrees(headingDegrees);
     setPendingPlacement((current) => {
@@ -301,6 +301,11 @@ export function useConstruction() {
       }
       return { ...current, headingDegrees: nextHeading };
     });
+    setPlacements((current) =>
+      current.map((placement) =>
+        placement.id === placementId ? { ...placement, headingDegrees: nextHeading } : placement,
+      ),
+    );
   }, []);
 
   /** 仮配置の位置を配置可能域内で更新する（確定前の微調整用）。 */
