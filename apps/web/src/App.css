@@ -1044,6 +1044,127 @@ a {
   pointer-events: none;
 }
 
+/* 仮配置の操作は施設上に散らさず、視線を集める一枚のコントロールパネルにする。 */
+.cesium-pending-panel {
+  position: absolute;
+  z-index: 32;
+  right: 12px;
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  left: 12px;
+  width: min(420px, calc(100% - 24px));
+  margin: 0 auto;
+  padding: 12px;
+  border: 1px solid rgb(122 216 255 / 42%);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgb(7 30 40 / 95%), rgb(8 22 31 / 92%));
+  box-shadow:
+    0 18px 38px rgb(0 8 14 / 40%),
+    inset 0 1px rgb(255 255 255 / 12%);
+  backdrop-filter: blur(16px) saturate(1.08);
+  pointer-events: auto;
+}
+
+.cesium-pending-panel__topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cesium-pending-panel__summary {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.cesium-pending-panel__eyebrow {
+  color: #8bdcff;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.cesium-pending-panel__summary strong {
+  overflow: hidden;
+  color: #f4fbff;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cesium-pending-panel__summary > span:last-child {
+  color: rgb(207 229 238 / 68%);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.cesium-pending-panel .cesium-confirm-hud,
+.cesium-pending-panel .cesium-orientation-hud {
+  position: static;
+  visibility: visible;
+  width: auto;
+  transform: none;
+  pointer-events: auto;
+}
+
+.cesium-pending-panel .cesium-confirm-hud {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.cesium-pending-panel .cesium-confirm-hud__confirm,
+.cesium-pending-panel .cesium-confirm-hud__cancel {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: auto;
+  min-width: 58px;
+  height: 40px;
+  padding: 0 11px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.cesium-pending-panel .cesium-confirm-hud__confirm {
+  border-color: rgb(155 255 211 / 48%);
+  background: #2ca879;
+  box-shadow: 0 7px 16px rgb(0 28 18 / 32%);
+}
+
+.cesium-pending-panel .cesium-confirm-hud__cancel {
+  border-color: rgb(199 224 234 / 28%);
+  background: rgb(255 255 255 / 7%);
+  color: rgb(231 242 247 / 88%);
+}
+
+.cesium-pending-panel .cesium-orientation-hud {
+  margin-top: 10px;
+}
+
+.cesium-pending-panel .orientation-slider {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cesium-pending-panel .orientation-slider__header {
+  margin: 0 2px 1px;
+  font-size: 10px;
+}
+
+.cesium-pending-panel .orientation-slider__input {
+  height: 36px;
+}
+
 .cesium-orientation-hud {
   position: absolute;
   z-index: 20;
@@ -1179,6 +1300,30 @@ a {
 
 .cesium-orientation-hud.is-preview .orientation-slider__header output {
   color: #9fe4ff;
+}
+
+@media (max-width: 420px) {
+  .cesium-pending-panel {
+    right: 8px;
+    bottom: calc(150px + env(safe-area-inset-bottom));
+    left: 8px;
+    width: calc(100% - 16px);
+    padding: 10px;
+  }
+
+  .cesium-pending-panel__topline {
+    gap: 8px;
+  }
+
+  .cesium-pending-panel__summary strong {
+    font-size: 15px;
+  }
+
+  .cesium-pending-panel .cesium-confirm-hud__confirm,
+  .cesium-pending-panel .cesium-confirm-hud__cancel {
+    min-width: 52px;
+    padding: 0 9px;
+  }
 }
 
 .cesium-map-label {

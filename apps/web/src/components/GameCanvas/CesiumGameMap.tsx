@@ -1359,29 +1359,15 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
 
         const target = orientationTarget;
         if (target !== null) {
-          const screenBelow = viewer.scene.cartesianToCanvasCoordinates(
-            Cartesian3.fromDegrees(
-              target.position.longitude,
-              target.position.latitude,
-              target.position.height + 6,
-            ),
-          );
-          const screenAbove = viewer.scene.cartesianToCanvasCoordinates(
-            Cartesian3.fromDegrees(
-              target.position.longitude,
-              target.position.latitude,
-              target.position.height + 18,
-            ),
-          );
           const hud = orientationHudRef.current;
           if (hud !== null) {
-            // 施設の右下にスライダーを置き、モデル本体のドラッグ移設と重なりにくくする。
-            applyScreenHudPosition(hud, screenBelow, 72, 18, "below");
+            hud.style.visibility = "visible";
+            hud.style.transform = "none";
           }
           const confirmHud = confirmHudRef.current;
           if (confirmHud !== null) {
-            // 施設の上に確定／キャンセルをさりげなく置く。
-            applyScreenHudPosition(confirmHud, screenAbove, 0, -12, "above");
+            confirmHud.style.visibility = "visible";
+            confirmHud.style.transform = "none";
           }
         }
       };
@@ -1460,6 +1446,11 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         ? "ready"
         : "loading"
       : "disabled";
+    const pendingStructureName =
+      orientationTarget === null
+        ? "施設"
+        : (structures.find(({ id }) => id === orientationTarget.structureId)?.displayName ??
+          "施設");
 
     return (
       <div className="cesium-game-map" data-3d-buildings={buildingsLoadState}>
@@ -1491,41 +1482,54 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           ))}
         </div>
         {orientationTarget !== null ? (
-          <>
-            <div
-              ref={confirmHudRef}
-              className="cesium-confirm-hud"
-              role="group"
-              aria-label="仮配置の確定"
-              onPointerDown={(event) => {
-                event.stopPropagation();
-              }}
-            >
-              <button
-                type="button"
-                className="cesium-confirm-hud__cancel"
-                aria-label="キャンセル"
-                title="キャンセル（Esc）"
-                onClick={() => onCancelPendingPlacement?.()}
+          <div
+            className="cesium-pending-panel"
+            role="region"
+            aria-label="仮配置操作"
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+          >
+            <div className="cesium-pending-panel__topline">
+              <div className="cesium-pending-panel__summary">
+                <span className="cesium-pending-panel__eyebrow">仮配置</span>
+                <strong>{pendingStructureName}</strong>
+                <span>場所と向きを確認してください</span>
+              </div>
+              <div
+                ref={confirmHudRef}
+                className="cesium-confirm-hud"
+                role="group"
+                aria-label="仮配置の確定"
               >
-                <span aria-hidden="true">×</span>
-              </button>
-              <button
-                type="button"
-                className="cesium-confirm-hud__confirm"
-                aria-label="確定して配置"
-                title="確定（Enter）"
-                onClick={() => onConfirmPendingPlacement?.()}
-              >
-                <span aria-hidden="true">✓</span>
-              </button>
+                <button
+                  type="button"
+                  className="cesium-confirm-hud__cancel"
+                  aria-label="キャンセル"
+                  title="キャンセル（Esc）"
+                  onClick={() => onCancelPendingPlacement?.()}
+                >
+                  <span aria-hidden="true">×</span>
+                  <span>戻す</span>
+                </button>
+                <button
+                  type="button"
+                  className="cesium-confirm-hud__confirm"
+                  aria-label="確定して配置"
+                  title="確定（Enter）"
+                  onClick={() => onConfirmPendingPlacement?.()}
+                >
+                  <span aria-hidden="true">✓</span>
+                  <span>配置する</span>
+                </button>
+              </div>
             </div>
             <div
               ref={orientationHudRef}
               className={`cesium-orientation-hud${orientationTarget.preview === true ? " is-preview" : ""}`}
             >
               <RotationControls
-                floating
+                floating={false}
                 headingDegrees={orientationTarget.headingDegrees}
                 onLiveChange={(headingDegrees) => {
                   // スライダー操作中に施設モデル／影響圏を即回転（手を離す前に向きが分かる）。
@@ -1547,7 +1551,7 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
                 }
               />
             </div>
-          </>
+          </div>
         ) : null}
         {mapError === null && mapLoadStage !== "ready" ? (
           <div className="cesium-game-map__status" role="status">
@@ -1687,66 +1691,6 @@ function applyScreenLabelPosition(
   }
   element.style.visibility = "visible";
   element.style.transform = `translate(${screen.x + offsetX}px, ${screen.y + offsetY}px) translate(-50%, -100%)`;
-}
-
-/** 施設の手前など、アンカー点の下に UI を置く。画面端・ドック帯でははみ出さないようクランプする。 */
-function applyScreenHudPosition(
-  element: HTMLDivElement,
-  screen: Cartesian2 | undefined,
-  offsetX: number,
-  offsetY: number,
-  anchor: "below" | "above" = "below",
-): void {
-  if (screen === undefined) {
-    element.style.visibility = "hidden";
-    return;
-  }
-  element.style.visibility = "visible";
-  const parent = element.offsetParent as HTMLElement | null;
-  const viewWidth = parent?.clientWidth ?? window.innerWidth;
-  const viewHeight = parent?.clientHeight ?? window.innerHeight;
-  const safeTop = readSafeAreaInset("top");
-  const safeBottom = readSafeAreaInset("bottom");
-  const dockClearance = estimateDockClearancePx();
-  const padX = 12;
-  const padTop = 12 + safeTop;
-  const padBottom = 12 + safeBottom + dockClearance;
-  const halfWidth = Math.max(element.offsetWidth, 120) / 2;
-  const height = Math.max(element.offsetHeight, 44);
-  let x = screen.x + offsetX;
-  let y = screen.y + offsetY;
-  x = Math.min(viewWidth - padX - halfWidth, Math.max(padX + halfWidth, x));
-  if (anchor === "above") {
-    y = Math.min(viewHeight - padBottom, Math.max(padTop + height, y));
-  } else {
-    y = Math.min(viewHeight - padBottom - height, Math.max(padTop, y));
-  }
-  const anchorTransform = anchor === "above" ? "translate(-50%, -100%)" : "translate(-50%, 0)";
-  element.style.transform = `translate(${x}px, ${y}px) ${anchorTransform}`;
-}
-
-function readSafeAreaInset(edge: "top" | "bottom" | "left" | "right"): number {
-  if (typeof document === "undefined") {
-    return 0;
-  }
-  const probe = document.createElement("div");
-  probe.style.cssText = `position:fixed;visibility:hidden;pointer-events:none;padding-${edge}:env(safe-area-inset-${edge}, 0px);`;
-  document.body.appendChild(probe);
-  const value = Number.parseFloat(getComputedStyle(probe).getPropertyValue(`padding-${edge}`));
-  probe.remove();
-  return Number.isFinite(value) ? value : 0;
-}
-
-/** 下部建設ドックが覆う概算高さ。仮配置 HUD がドック下に沈まないようにする。 */
-function estimateDockClearancePx(): number {
-  if (typeof document === "undefined") {
-    return 120;
-  }
-  const dock = document.querySelector(".cmd-dock") ?? document.querySelector(".construction-menu");
-  if (!(dock instanceof HTMLElement) || dock.offsetParent === null) {
-    return 120;
-  }
-  return Math.min(Math.max(dock.offsetHeight + 16, 96), 220);
 }
 
 async function loadAlignedTerrain(
