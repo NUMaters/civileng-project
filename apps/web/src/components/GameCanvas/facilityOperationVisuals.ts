@@ -9,7 +9,7 @@ import { BASIN_PORTS, basinInletHeight, PUMP_JET_LENGTH, PUMP_PORTS } from "./fa
  */
 export function createFacilityOperationVisuals(structureId: string): {
   group: THREE.Group;
-  update(activity: number, elapsed: number, reducedMotion?: boolean): void;
+  update(activity: number, elapsed: number, reducedMotion?: boolean, operationActivity?: number): void;
 } {
   const group = new THREE.Group();
   group.name = `facility-operation:${structureId}`;
@@ -38,6 +38,8 @@ export function createFacilityOperationVisuals(structureId: string): {
   const transform = new THREE.Object3D();
   let jets: THREE.InstancedMesh | undefined;
   let water: THREE.Mesh | undefined;
+  let runningLights: THREE.InstancedMesh | undefined;
+  let runningMaterial: THREE.MeshBasicMaterial | undefined;
 
   if (structureId === "drainage-pump") {
     const curve = new THREE.CatmullRomCurve3([
@@ -49,6 +51,19 @@ export function createFacilityOperationVisuals(structureId: string): {
     jets.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     jets.frustumCulled = false;
     group.add(jets);
+    // Equipment lamps sit on the upper front/rear walls, within the body's
+    // silhouette. They show operation without inventing water on a dry site.
+    runningMaterial = new THREE.MeshBasicMaterial({ color: "#83ffe0", transparent: true, opacity: 0.9 });
+    const lampGeometry = new THREE.BoxGeometry(2, 2, 0.08);
+    lampGeometry.clearGroups();
+    runningLights = new THREE.InstancedMesh(lampGeometry, runningMaterial, 6);
+    runningLights.name = "pump-running-lamps";
+    for (let i = 0; i < 6; i++) {
+      transform.position.set((i % 3 - 1) * 3, 20, i < 3 ? -1.36 : 11.05);
+      transform.rotation.set(0, 0, 0); transform.scale.set(1, 1, 1); transform.updateMatrix();
+      runningLights.setMatrixAt(i, transform.matrix);
+    }
+    group.add(runningLights);
   } else if (structureId === "retention-basin") {
     const shape = new THREE.Shape();
     shape.moveTo(-24, -22);
@@ -65,9 +80,18 @@ export function createFacilityOperationVisuals(structureId: string): {
     group.add(water);
   }
 
-  function update(activity: number, elapsed: number, reducedMotion = false): void {
+  function update(activity: number, elapsed: number, reducedMotion = false, operationActivity = activity): void {
     const amount = Number.isFinite(activity) ? THREE.MathUtils.clamp(activity, 0, 1) : 0;
-    group.visible = amount > 0;
+    const operating = Number.isFinite(operationActivity) ? THREE.MathUtils.clamp(operationActivity, 0, 1) : 0;
+    group.visible = amount > 0 || Boolean(runningLights && operating > 0);
+    flow.visible = amount > 0;
+    if (jets) jets.visible = amount > 0;
+    if (runningLights && runningMaterial) {
+      runningLights.visible = operating > 0;
+      const clock = reducedMotion || !Number.isFinite(elapsed) ? 0 : ((elapsed % 8) + 8) % 8;
+      // Gentle breathing, never an alert flash. Reduced motion keeps a steady lamp.
+      runningMaterial.opacity = 0.65 + operating * 0.2 + (reducedMotion ? 0 : Math.sin(clock * Math.PI / 2) * 0.06);
+    }
     if (!group.visible) return;
     // Modulo before multiplication also keeps extreme finite times safe.
     const time = reducedMotion || !Number.isFinite(elapsed) ? 0 : ((elapsed % 8) + 8) % 8;

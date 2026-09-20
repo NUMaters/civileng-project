@@ -99,6 +99,10 @@ export type FloodSimulationState = {
   overflowMeters: number;
   /** 施設込みの越水開始水位（m）。 */
   overflowLevelMeters: number;
+  /** シミュレーション上の流入率（深さ換算 m/s）。実測流量ではない。 */
+  inflowPerSecond: number;
+  /** シミュレーション上の排水容量（深さ換算 m/s）。実際の需要ではない。 */
+  drainageCapacityPerSecond: number;
   floodDepthMeters: number;
   floodedAreaPercent: number;
   /** 氾濫寸前〜越水時の氾濫原の塗りつぶし率（0〜1）。通常水位では 0。 */
@@ -156,6 +160,8 @@ export function createInitialFloodState(): FloodSimulationState {
     riverLevelMeters: INITIAL_RIVER_LEVEL_METERS,
     overflowMeters: 0,
     overflowLevelMeters: BASE_OVERFLOW_LEVEL_METERS,
+    inflowPerSecond: 0,
+    drainageCapacityPerSecond: 0,
     floodDepthMeters: 0,
     floodedAreaPercent: 0,
     floodplainFillRatio: 0,
@@ -338,6 +344,8 @@ export function advanceFloodSimulation(
       riverLevelMeters,
       overflowMeters,
       overflowLevelMeters,
+      inflowPerSecond,
+      drainageCapacityPerSecond: drainagePerSecond,
       floodDepthMeters,
       floodedAreaPercent,
       floodplainFillRatio: floodplain.fillRatio,
@@ -363,6 +371,8 @@ export function advanceFloodSimulation(
     riverLevelMeters,
     overflowMeters,
     overflowLevelMeters,
+    inflowPerSecond,
+    drainageCapacityPerSecond: drainagePerSecond,
     floodDepthMeters,
     floodedAreaPercent,
     floodplainFillRatio: floodplain.fillRatio,

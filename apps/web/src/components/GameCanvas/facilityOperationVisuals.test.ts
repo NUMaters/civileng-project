@@ -5,6 +5,28 @@ import { disposeDioramaObject } from "./disposeDioramaObject";
 import { BASIN_PORTS, PUMP_PORTS } from "./facilityVisualPorts";
 
 const ids = ["drainage-pump", "retention-basin", "levee", "revetment", "channel-dredging"];
+it("shows preventive pump operation on its equipment panel without emitting water", () => {
+  const v = createFacilityOperationVisuals("drainage-pump");
+  v.update(0, 1, false, 0.6);
+  expect(v.group.visible).toBe(true);
+  expect(v.group.getObjectByName("three-outlet-jets")!.visible).toBe(false);
+  expect(v.group.getObjectByName("directional-water-flow")!.visible).toBe(false);
+  const lamps = v.group.getObjectByName("pump-running-lamps") as THREE.InstancedMesh;
+  expect(lamps.visible).toBe(true);
+  for (const p of vertices(lamps)) {
+    expect(Math.abs(p.x)).toBeLessThanOrEqual(4);
+    expect(p.y).toBeGreaterThanOrEqual(19);
+    expect(p.y).toBeLessThanOrEqual(21);
+    expect((p.z < -1.3 && p.z > -1.5) || (p.z > 11 && p.z < 11.1)).toBe(true);
+  }
+  v.update(0, 1, true, 0.6);
+  const frozen = snapshot(v.group);
+  v.update(0, 4, true, 0.6);
+  expect(snapshot(v.group)).toEqual(frozen);
+  v.update(0, 4, false, 0);
+  expect(v.group.visible).toBe(false);
+  disposeDioramaObject(v.group);
+});
 function meshes(group: THREE.Group): THREE.Mesh[] {
   const result: THREE.Mesh[] = [];
   group.traverse(object => { if (object instanceof THREE.Mesh) result.push(object); });
@@ -87,7 +109,7 @@ describe.each(ids)("facility operation: %s", id => {
   it("bounds draw calls, retains buffers and releases all owned resources once", () => {
     const v = createFacilityOperationVisuals(id);
     const all = meshes(v.group);
-    expect(all.length).toBe(id === "drainage-pump" || id === "retention-basin" ? 2 : 1);
+    expect(all.length).toBe(id === "drainage-pump" ? 3 : id === "retention-basin" ? 2 : 1);
     const geometries = all.map(m => m.geometry);
     const buffers = all.map(m => m.geometry.getAttribute("position").array);
     const instances = all.filter(m => m instanceof THREE.InstancedMesh);
