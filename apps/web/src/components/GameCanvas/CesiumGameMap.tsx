@@ -1736,6 +1736,11 @@ async function sampleOverflowBankElevations(viewer: Viewer): Promise<void> {
   if (candidates.length === 0) {
     return;
   }
+  // GSIのCustomHeightmapTerrainProviderはタイルの可用性情報を持たないため、
+  // sampleTerrainMostDetailedを呼ぶとDeveloperErrorになる。候補側の既定標高を使う。
+  if (viewer.terrainProvider.availability === undefined) {
+    return;
+  }
   const cartographics = candidates.map((candidate) =>
     Cartographic.fromDegrees(candidate.longitude, candidate.latitude),
   );
