@@ -356,6 +356,8 @@
   border-radius: 14px;
   background: #096fa9ed;
   box-shadow: 0 5px 18px #123c6420;
+  transform: none;
+  animation: tutorial-coach-enter 0.35s ease;
 }
 .river-recenter.river-recenter--flood {
   width: auto;
@@ -443,6 +445,19 @@
 .game-shell .tutorial-coach {
   right: 68px;
 }
+
+@keyframes tutorial-coach-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .game-shell *,
   .game-shell *::before,
