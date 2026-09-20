@@ -149,6 +149,22 @@ const FALLBACK_GROUND_HEIGHT_M = 18;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
 const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 20;
 
+function applyInitialCamera(viewer: Viewer): void {
+  // ゲーム画面への切り替え直後はコンテナのサイズが確定していないことがある。
+  // resize を先に行ってから視点を設定し、広域の既定カメラが残る競合を防ぐ。
+  viewer.resize();
+  viewer.camera.lookAt(
+    Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
+    new HeadingPitchRange(
+      CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
+      CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
+      INITIAL_VIEW.range,
+    ),
+  );
+  viewer.camera.lookAtTransform(Matrix4.IDENTITY);
+  viewer.scene.requestRender();
+}
+
 export type DragGhostStatus = {
   /** ポインタが地図キャンバス上にある。 */
   overMap: boolean;
@@ -716,19 +732,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           });
         }
 
-        mapViewer.camera.lookAt(
-          Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
-          new HeadingPitchRange(
-            CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
-            CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
-            INITIAL_VIEW.range,
-          ),
-        );
-        // lookAt のロックを解除し、以降は自由にパン／ズームできるようにする。
-        mapViewer.camera.lookAtTransform(Matrix4.IDENTITY);
+        applyInitialCamera(mapViewer);
         // タイル完了を待たず UI を出し、真っ黒のまま固まるのを防ぐ。
-        mapViewer.resize();
-        mapViewer.scene.requestRender();
         setIsMapReady(true);
 
         const canvas = mapViewer.scene.canvas;
@@ -1158,6 +1163,36 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         viewer?.destroy();
       };
     }, [visibilityEpoch]);
+
+    useEffect(() => {
+      if (!mapActive) {
+        return;
+      }
+
+      let cancelled = false;
+      let frame = 0;
+      let attempts = 0;
+      const resetAfterLayout = () => {
+        if (cancelled) {
+          return;
+        }
+        const viewer = viewerRef.current;
+        if (viewer !== null && !viewer.isDestroyed()) {
+          applyInitialCamera(viewer);
+          return;
+        }
+        if (attempts < 60) {
+          attempts += 1;
+          frame = window.requestAnimationFrame(resetAfterLayout);
+        }
+      };
+      frame = window.requestAnimationFrame(resetAfterLayout);
+
+      return () => {
+        cancelled = true;
+        window.cancelAnimationFrame(frame);
+      };
+    }, [mapActive]);
 
     useEffect(() => {
       const viewer = viewerRef.current;
