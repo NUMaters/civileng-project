@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-import type { CesiumGameMapHandle } from "./components/GameCanvas/CesiumGameMap";
+import type { DioramaGameMapHandle } from "./components/GameCanvas/DioramaGameMap";
 import { MapBootFallback } from "./components/GameCanvas/MapBootFallback";
 import { GameToast } from "./components/GameToast";
 import { ConstructionMenu, useConstruction } from "./features/construction";
@@ -80,7 +80,8 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   const flood = useFloodSimulation(construction.visiblePlacements, paused || !inGame || !mapReady);
   const { advanceForTest, getLatestState, phase, restart, startFreshGame, startRainNow } = flood;
   const socket = useGameSocket(REALTIME_ENABLED && playMode === "multi");
-  const mapRef = useRef<CesiumGameMapHandle>(null);
+  const mapRef = useRef<DioramaGameMapHandle>(null);
+  const [floodFocus, setFloodFocus] = useState({ available: false, viewing: false });
   const dragRef = useRef<DockDragState | null>(null);
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<DockDragState | null>(null);
@@ -374,6 +375,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         <DioramaGameMap
           ref={mapRef}
           onReadyChange={setMapReady}
+          onFloodFocusChange={setFloodFocus}
           mapActive={inGame}
           placements={construction.visiblePlacements}
           structures={construction.structures}
@@ -418,13 +420,15 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         />
       ) : null}
 
-      {inGame && !hideConstructionUi && !hasPendingPlacement ? (
+      {inGame && phase !== "result" && !hasPendingPlacement ? (
         <button
           type="button"
-          className="river-recenter"
-          aria-label="川の中心へ視点を戻す"
-          onClick={() => mapRef.current?.resetCamera()}
+          className={`river-recenter${floodFocus.available || floodFocus.viewing ? " river-recenter--flood" : ""}`}
+          aria-label={floodFocus.viewing ? "元の視点へ" : floodFocus.available ? "浸水を見る" : "川の中心へ視点を戻す"}
+          onClick={() => floodFocus.viewing ? mapRef.current?.returnFromFlood()
+            : floodFocus.available ? mapRef.current?.focusRenderedFlood() : mapRef.current?.resetCamera()}
         >
+          {floodFocus.available || floodFocus.viewing ? <span>{floodFocus.viewing ? "元の視点へ" : "浸水を見る"}</span> :
           <svg
             width="20"
             height="20"
@@ -437,6 +441,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
             <circle cx="12" cy="12" r="6" />
             <path d="M12 2v5m0 10v5M2 12h5m10 0h5" />
           </svg>
+          }
         </button>
       ) : null}
 

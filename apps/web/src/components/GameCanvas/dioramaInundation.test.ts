@@ -68,12 +68,120 @@ function connectedSetup(sample: SurfaceSampler = () => 0, water: SurfaceSampler 
     type: "Feature", id: "relation/18504988", properties: { kind: "water", water: "river", version: 1, timestamp: "test" },
     geometry: { type: "MultiPolygon", coordinates: [[[geo(-100, -300), geo(0, -300), geo(0, 300), geo(-100, 300), geo(-100, -300)]]] },
   }] };
-  const adapter = createDioramaInundation(sample, createRiverBoundaryResolver(data, water));
+  const resolveBoundary = createRiverBoundaryResolver(data, water);
+  const adapter = createDioramaInundation(sample, resolveBoundary);
   adapters.push(adapter);
   const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
   const state = { ...wetState(), overflowSites: [{ ...wetState().overflowSites[0]!, ...worldToGeo(60, 0), outflowHeadingDegrees: 90 }] };
-  return { adapter, geometry, state };
+  return { adapter, geometry, state, resolveBoundary };
 }
+
+describe("rendered flood patch snapshots", () => {
+  it("describes only emitted Float32 triangles with a wet anchor and deep immutability", () => {
+    const { adapter, geometry, state } = connectedSetup();
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    run(adapter, state, 10);
+    const patches = adapter.getRenderedPatches();
+    expect(patches).toHaveLength(1);
+    expect(patches.reduce((sum, p) => sum + p.vertexCount, 0)).toBe(geometry.drawRange.count);
+    const patch = patches[0]!, p = geometry.getAttribute("position");
+    expect(patch.id).toBe(state.overflowSites[0]!.id);
+    expect(patch.vertexCount).toBeLessThan(p.count);
+    const bounds = new THREE.Box3();
+    const triangle = new THREE.Triangle(), anchor = new THREE.Vector3(patch.anchor.x, patch.anchor.y, patch.anchor.z);
+    const closest = new THREE.Vector3();
+    let onTriangle = false, area = 0;
+    for (let i = 0; i < patch.vertexCount; i += 3) {
+      triangle.a.fromBufferAttribute(p, i); triangle.b.fromBufferAttribute(p, i + 1); triangle.c.fromBufferAttribute(p, i + 2);
+      bounds.expandByPoint(triangle.a); bounds.expandByPoint(triangle.b); bounds.expandByPoint(triangle.c);
+      area += triangle.getArea();
+      if (triangle.getArea() > 0 && triangle.closestPointToPoint(anchor, closest).distanceTo(anchor) < 1e-6) onTriangle = true;
+    }
+    expect(onTriangle).toBe(true);
+    expect(patch.areaM2).toBeCloseTo(area, 6);
+    expect(patch.bounds).toEqual({ minX: bounds.min.x, minY: bounds.min.y, minZ: bounds.min.z,
+      maxX: bounds.max.x, maxY: bounds.max.y, maxZ: bounds.max.z });
+    for (const value of [patches, patch, patch.anchor, patch.bounds]) expect(Object.isFrozen(value)).toBe(true);
+    const before = JSON.stringify(patches);
+    // Unused allocation contents are irrelevant to focus metadata.
+    p.setXYZ(p.count - 1, 1e9, 1e9, 1e9);
+    adapter.update({ ...state, disasterElapsedSeconds: 1.1 }, 0.1, 1.01);
+    expect(adapter.getRenderedPatches()).toBe(patches); // field advanced, upload still throttled
+    adapter.update({ ...state, disasterElapsedSeconds: 1.2 }, 0.1, 1.2);
+    expect(adapter.getRenderedPatches()).not.toBe(patches);
+    expect(JSON.stringify(patches)).toBe(before); // old snapshot never mutated
+    expect(adapter.getRenderedPatches()[0]!.bounds.maxX).toBeLessThan(1000);
+  });
+
+  it("retains the same snapshot while paused/result/review and hides/reset/disposes safely", () => {
+    const { adapter, geometry, state } = connectedSetup();
+    run(adapter, state, 10);
+    const snapshot = adapter.getRenderedPatches();
+    for (const phase of ["disaster", "result", "review"]) {
+      adapter.update({ ...state, phase, disasterElapsedSeconds: 1 }, 1, 2);
+      expect(adapter.getRenderedPatches()).toBe(snapshot);
+    }
+    adapter.group.visible = false;
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    adapter.group.visible = true;
+    const mesh = adapter.group.children[0]!;
+    mesh.visible = false;
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    mesh.visible = true;
+    expect(adapter.getRenderedPatches()).toBe(snapshot);
+    adapter.update({ ...state, phase: "preparation", disasterElapsedSeconds: 1 }, 0, 3);
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    expect(geometry.drawRange.count).toBe(0);
+    adapter.dispose();
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    expect(snapshot.length).toBe(1);
+  });
+
+  it.each(["elapsed", "clock", "water", "rewind"])("clears stale patches on invalid input or %s", kind => {
+    const { adapter, state } = connectedSetup();
+    run(adapter, state, 10);
+    expect(adapter.getRenderedPatches()).toHaveLength(1);
+    adapter.update({ ...state, disasterElapsedSeconds: kind === "elapsed" ? NaN : kind === "rewind" ? 0 : 1,
+      floodDepthMeters: kind === "water" ? NaN : state.floodDepthMeters }, 0, kind === "clock" ? Infinity : 2);
+    expect(adapter.getRenderedPatches()).toEqual([]);
+    expect(adapter.group.visible).toBe(false);
+  });
+
+  it.each(["boundary", "throat", "removed"])("removes a %s-invalid site during throttle while preserving valid rendered water", mode => {
+    const base = connectedSetup();
+    let reject = false;
+    const sample = (x: number, z: number) => reject && mode === "throat" && z > 0 && x > 2 && x < 6 ? 5 : 0;
+    const adapter = createDioramaInundation(sample, site => reject && mode === "boundary" && site.id === "second" ? null : base.resolveBoundary(site));
+    adapters.push(adapter);
+    const sites = [-120, 120].map((z, i) => ({ ...base.state.overflowSites[0]!, id: i ? "second" : "first", ...worldToGeo(60, z) }));
+    const state = { ...base.state, overflowSites: sites };
+    run(adapter, state, 10);
+    const before = adapter.getRenderedPatches();
+    expect(before.map(p => p.id)).toEqual(["first", "second"]);
+    reject = true;
+    // Only .01 renderer seconds after the last upload: stale removal must bypass .1 throttle.
+    adapter.update({ ...state, overflowSites: mode === "removed" ? sites.slice(0, 1) : sites, disasterElapsedSeconds: 1.1 }, 0.1, 1.01);
+    expect(adapter.group.visible).toBe(true);
+    const patches = adapter.getRenderedPatches();
+    expect(patches.map(p => p.id)).toEqual(["first"]);
+    const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
+    expect(geometry.drawRange.count).toBe(patches[0]!.vertexCount);
+    const p = geometry.getAttribute("position");
+    for (let i = 0; i < geometry.drawRange.count; i++) expect(p.getZ(i)).toBeLessThan(0);
+  });
+
+  it("a newly rejected site cannot hide existing valid geometry between uploads", () => {
+    const base = connectedSetup();
+    const adapter = createDioramaInundation(() => 0, site => site.id === "rejected" ? null : base.resolveBoundary(site));
+    adapters.push(adapter);
+    run(adapter, base.state, 10);
+    const snapshot = adapter.getRenderedPatches();
+    adapter.update({ ...base.state, disasterElapsedSeconds: 1.1,
+      overflowSites: [...base.state.overflowSites, { ...base.state.overflowSites[0]!, id: "rejected" }] }, 0.1, 1.01);
+    expect(adapter.group.visible).toBe(true);
+    expect(adapter.getRenderedPatches()).toBe(snapshot);
+  });
+});
 
 describe("source-connected inundation", () => {
   it("shows connected flood with actual scene water/DEM and a late unprotected simulation state", () => {

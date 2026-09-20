@@ -9,9 +9,22 @@ import { geoToWorld, groundY, worldToGeo } from "./dioramaSpace";
 import type { BankSurfacePoint, RiverBoundary, RiverBoundaryResolver, SurfaceSampler } from "./riverBoundary";
 import { MAX_RIVER_EDGE_POINTS } from "./riverBoundary";
 
+export type FloodPoint = Readonly<{ x: number; y: number; z: number }>;
+export type RenderedFloodPatch = Readonly<{
+  id: string;
+  vertexCount: number;
+  /** Area of emitted triangles, not a damage or forecast metric. */
+  areaM2?: number;
+  anchor: FloodPoint;
+  bounds: Readonly<{ minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number }>;
+}>;
+const NO_PATCHES: readonly RenderedFloodPatch[] = Object.freeze([]);
+
 export type DioramaInundation = {
   group: THREE.Group;
   object3D: THREE.Group;
+  /** Immutable geometry-upload snapshot, in the same local metre space as group. */
+  getRenderedPatches: () => readonly RenderedFloodPatch[];
   /** Seconds. dt is compatibility-only; simulation elapsed drives water, time throttles uploads. */
   update: (
     state: Pick<
@@ -92,6 +105,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
   let lastGeometryTime = -Infinity;
   let geometryDirty = false;
   let disposed = false;
+  let renderedPatches: readonly RenderedFloodPatch[] = NO_PATCHES;
 
   function reset(): void {
     grids.clear();
@@ -100,12 +114,15 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
     lastGeometryTime = -Infinity;
     geometry.setDrawRange(0, 0);
     group.visible = false;
+    renderedPatches = NO_PATCHES;
   }
 
   function rebuild(): void {
     let vertex = 0;
+    const patches: RenderedFloodPatch[] = [];
     for (const grid of grids.values()) {
       if (grid.boundary && (!validConnection(grid, sampleGround) || grid.depth[INLET_COL]! < WET)) continue;
+      const vertexStart = vertex;
       const connected = grid.boundary ? connectedWetCells(grid) : undefined;
       for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
@@ -147,6 +164,8 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
           colors.setXYZ(vertex++, color.r, color.g, color.b);
         }
       }
+      const patch = renderedPatch(positions, vertexStart, vertex - vertexStart, grid.seed.id);
+      if (patch) patches.push(patch);
     }
     geometry.setDrawRange(0, vertex);
     positions.clearUpdateRanges();
@@ -158,16 +177,18 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
       colors.needsUpdate = true;
     }
     group.visible = vertex > 0;
+    renderedPatches = Object.freeze(patches);
   }
 
   return {
     group,
     object3D: group,
+    getRenderedPatches: () => !disposed && group.visible && mesh.visible && geometry.drawRange.count > 0 ? renderedPatches : NO_PATCHES,
     update(state, dt, time) {
       if (disposed) return;
       void dt;
       const elapsed = state.disasterElapsedSeconds;
-      if (!Number.isFinite(elapsed) || elapsed < 0 || !Number.isFinite(time)) return;
+      if (!Number.isFinite(elapsed) || elapsed < 0 || !Number.isFinite(time)) { reset(); return; }
       const rewound = previousElapsed !== undefined && elapsed < previousElapsed;
       const delta = previousElapsed === undefined || rewound ? 0 : elapsed - previousElapsed;
       if (rewound) reset();
@@ -203,13 +224,13 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
           removed = true;
         }
       }
-      // Never leave a removed site's water visible until the next geometry tick.
-      if (removed) {
-        group.visible = false;
-        geometryDirty = true;
-      }
+      // Removal bypasses upload throttling without hiding unrelated valid patches.
+      if (removed) geometryDirty = true;
       // Freeze the final footprint during result/review. Do not keep injecting water.
-      if (state.phase !== "disaster") return;
+      if (state.phase !== "disaster") {
+        if (removed) { rebuild(); geometryDirty = false; lastGeometryTime = time; }
+        return;
+      }
       accumulator += Math.min(delta, STEP * MAX_CATCHUP_STEPS);
       const steps = Math.min(MAX_CATCHUP_STEPS, Math.floor((accumulator + 1e-9) / STEP));
       accumulator = Math.max(0, accumulator - steps * STEP);
@@ -225,7 +246,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
           let grid = grids.get(seed.id);
           const boundary = resolveBoundary?.(site);
           // An explicitly supplied resolver failing is NOT permission for a remote seed.
-          if (resolveBoundary && !boundary) { grids.delete(seed.id); group.visible = false; continue; }
+          if (resolveBoundary && !boundary) { removed = grids.delete(seed.id) || removed; continue; }
           if (
             !grid ||
             grid.seed.longitude !== seed.longitude ||
@@ -250,7 +271,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
           grid.seed = seed;
           if (boundary) {
             grid.boundary = boundary;
-            if (!validConnection(grid, sampleGround)) { grids.delete(seed.id); group.visible = false; continue; }
+            if (!validConnection(grid, sampleGround)) { removed = grids.delete(seed.id) || removed; continue; }
           }
           for (let step = 0; step < steps; step++) {
             advanceGrid(grid, Math.max(0, state.floodDepthMeters));
@@ -258,7 +279,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
         }
         geometryDirty = true;
       }
-      if (geometryDirty && time - lastGeometryTime + 1e-9 >= STEP) {
+      if (geometryDirty && (removed || time - lastGeometryTime + 1e-9 >= STEP)) {
         rebuild();
         geometryDirty = false;
         lastGeometryTime = time;
@@ -274,6 +295,37 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
       group.clear();
     },
   };
+}
+
+/** Read only the Float32 vertices actually uploaded, never the unused capacity. */
+function renderedPatch(positions: THREE.BufferAttribute, vertexStart: number, vertexCount: number, id: string): RenderedFloodPatch | null {
+  if (!vertexCount) return null;
+  const min = { x: Infinity, y: Infinity, z: Infinity };
+  const max = { x: -Infinity, y: -Infinity, z: -Infinity };
+  let surfaceArea = 0, largestArea = 0;
+  let anchor: FloodPoint | undefined;
+  for (let i = vertexStart; i < vertexStart + vertexCount; i += 3) {
+    const ax = positions.getX(i), ay = positions.getY(i), az = positions.getZ(i);
+    const bx = positions.getX(i + 1), by = positions.getY(i + 1), bz = positions.getZ(i + 1);
+    const cx = positions.getX(i + 2), cy = positions.getY(i + 2), cz = positions.getZ(i + 2);
+    if (![ax, ay, az, bx, by, bz, cx, cy, cz].every(Number.isFinite)) return null;
+    min.x = Math.min(min.x, ax, bx, cx); max.x = Math.max(max.x, ax, bx, cx);
+    min.y = Math.min(min.y, ay, by, cy); max.y = Math.max(max.y, ay, by, cy);
+    min.z = Math.min(min.z, az, bz, cz); max.z = Math.max(max.z, az, bz, cz);
+    const ux = bx - ax, uy = by - ay, uz = bz - az;
+    const vx = cx - ax, vy = cy - ay, vz = cz - az;
+    const area = Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 2;
+    surfaceArea += area;
+    if (area > largestArea) {
+      largestArea = area;
+      anchor = { x: (ax + bx + cx) / 3, y: (ay + by + cy) / 3, z: (az + bz + cz) / 3 };
+    }
+  }
+  if (!anchor || !Number.isFinite(surfaceArea)) return null;
+  return Object.freeze({ id, vertexCount, areaM2: surfaceArea,
+    anchor: Object.freeze(anchor), bounds: Object.freeze({
+      minX: min.x, minY: min.y, minZ: min.z, maxX: max.x, maxY: max.y, maxZ: max.z,
+    }) });
 }
 
 /** Average only adjacent wet cells. No dry-cell triangles or outward dilation. */
