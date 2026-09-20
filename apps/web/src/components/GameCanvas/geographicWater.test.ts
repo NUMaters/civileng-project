@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
 import { ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
 import { geoToWorld } from "./dioramaSpace";
 import { createGeographicWaterMaterial, riverFlowCoordinates } from "./geographicWater";
@@ -32,7 +33,13 @@ describe("Abukuma water coordinates", () => {
     expect(material.fragmentShader).toContain("length(fwidth(p))");
     expect(material.fragmentShader).not.toContain("sampler2D");
     expect(material.depthWrite).toBe(true);
-    expect(Object.keys(material.uniforms)).toEqual(["time", "storm"]);
+    expect(Object.keys(material.uniforms)).toEqual(["time", "storm", "bodyLow", "bodyHigh", "skyTint", "foamTint", "stormTint"]);
+    expect(material.uniforms.bodyHigh!.value).toEqual(new THREE.Color("#00b5dc"));
+    expect(material.uniforms.bodyHigh!.value.g).toBeLessThan(181 / 255); // sRGB->linear, not double-bright literals
+    expect(material.fragmentShader).toContain("clamp(storm,0.,1.)*.55");
+    expect(material.fragmentShader).toContain("#include <tonemapping_fragment>");
+    expect(material.fragmentShader).toContain("#include <colorspace_fragment>");
+    expect(material.userData.provenance).toContain("no invented shoreline foam or bathymetry");
     expect(material.userData.provenance).toContain("not measured speed, depth");
     material.dispose();
   });
