@@ -231,6 +231,8 @@ export type CesiumGameMapProps = {
    */
   getLatestFloodState?: () => {
     phase: string;
+    structureInfluences: StructureInfluence[];
+    protectedBankSites: ProtectedBankSite[];
     disasterElapsedSeconds: number;
     rainfallIntensity: number;
     riverLevelMeters: number;
