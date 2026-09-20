@@ -168,7 +168,8 @@ async function main() {
       width: 390,
       height: 844,
       deviceScaleFactor: 1,
-      mobile: true,
+      // CSSはスマホ幅で評価しつつ、CDPのマウスイベントをポインター操作として送る。
+      mobile: false,
     });
 
     await client.call("Page.navigate", { url: BASE });
