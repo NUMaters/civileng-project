@@ -1,9 +1,10 @@
 import * as THREE from "three";
+import { BASIN_PORTS, basinInletHeight, PUMP_JET_LENGTH, PUMP_PORTS } from "./facilityVisualPorts";
 
 /** Facility-local metres, +Y up. Add group to the actual facility, not the map.
  * The caller supplies normalized simulation activity and simulation elapsed seconds;
  * previews skip update. No wall clock, accumulated deltas, or simulation dependencies.
- * Basin integration must hide the model's decorative water/foam to reveal filling.
+ * The basin model is dry by default. Activity is illustrative, not a measured flow.
  * Resources are owned by this group; dispose with disposeDioramaObject(group).
  */
 export function createFacilityOperationVisuals(structureId: string): {
@@ -40,8 +41,8 @@ export function createFacilityOperationVisuals(structureId: string): {
 
   if (structureId === "drainage-pump") {
     const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.4, 5),
-      new THREE.Vector3(0, -0.1, 10), new THREE.Vector3(0, -1.5, 16),
+      new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -0.05, 1),
+      new THREE.Vector3(0, -0.3, 2), new THREE.Vector3(0, -1.2, PUMP_JET_LENGTH),
     ]);
     jets = new THREE.InstancedMesh(new THREE.TubeGeometry(curve, 16, 0.65, 6, false), material, 3);
     jets.name = "three-outlet-jets";
@@ -74,8 +75,9 @@ export function createFacilityOperationVisuals(structureId: string): {
     if (water) water.position.y = 0.22 + 3.98 * amount;
     if (jets) {
       for (let i = 0; i < 3; i++) {
-        transform.position.set((i - 1) * 9, 2.7, 13);
-        transform.rotation.set(0, 0, 0);
+        transform.position.fromArray(PUMP_PORTS[i].mouth);
+        const direction = PUMP_PORTS[i].direction;
+        transform.rotation.set(0, Math.atan2(direction[0], direction[2]), 0);
         transform.scale.set(0.4 + amount * 0.6, 1, 0.4 + amount * 0.6);
         transform.updateMatrix();
         jets.setMatrixAt(i, transform.matrix);
@@ -89,16 +91,25 @@ export function createFacilityOperationVisuals(structureId: string): {
       transform.scale.set(0.7 + amount * 0.6, 1, 3);
       switch (structureId) {
         case "drainage-pump": {
-          const distance = 1.8 + phase * 12;
-          transform.position.set((lane - 1) * 9, 3.45 - 0.008 * distance * distance, 13 + distance * (0.4 + amount * 0.6));
-          transform.scale.set(0.6, 1, 1.5);
+          const distance = 0.5 + phase * (PUMP_JET_LENGTH - 1);
+          const [x, y, z] = PUMP_PORTS[lane].mouth;
+          const direction = PUMP_PORTS[lane].direction;
+          transform.position.set(x + direction[0] * distance * (0.4 + amount * 0.6),
+            y + 0.1 - 0.075 * distance * distance, z + direction[2] * distance * (0.4 + amount * 0.6));
+          transform.rotation.y = Math.atan2(direction[0], direction[2]);
+          transform.scale.set(0.5, 1, 0.6);
           break;
         }
-        case "retention-basin":
-          // Enter from the local +Z edge, moving inward, entirely inside the berm.
-          transform.position.set((i - 1) * 3, 0.28 + 3.98 * amount, 19 - phase * 9);
-          transform.rotation.y = Math.PI;
+        case "retention-basin": {
+          const z = BASIN_PORTS.outerZ + 1 + phase * (BASIN_PORTS.poolZ - BASIN_PORTS.outerZ - 2);
+          const poolHeight = 0.22 + 3.98 * amount;
+          transform.position.set((i - 1) * 3, basinInletHeight(z, poolHeight), z);
+          // Tilt the whole short streak onto the descending chute, never through it.
+          const slope = (basinInletHeight(z + 0.1, poolHeight) - basinInletHeight(z - 0.1, poolHeight)) / 0.2;
+          transform.rotation.x = -Math.atan(slope);
+          transform.scale.z = 1;
           break;
+        }
         case "levee": {
           // Keep flow at the toe, not high on a potentially dry embankment.
           // The local slope satisfies y + z = 20; activity is not flood depth.
