@@ -12,7 +12,14 @@ export function getDioramaGuidance(influences: readonly StructureInfluence[]) {
   const covered = new Set(
     influences
       .filter((influence) => !influence.preview)
-      .flatMap((influence) => influence.coveredSiteIds),
+      // Coverage is affinity/geometry only: e.g. a basin can cover ponding yet
+      // contribute zero drainage. Require this facility's evaluated positive effect.
+      // Keep the original coverage gate so tiny effects outside it do not hide more
+      // guidance. Legacy snapshots without attribution keep the hint (same as 179).
+      .flatMap((influence) => (influence.positiveSiteContributions ?? [])
+        .filter((site) => Number.isFinite(site.strength) && site.strength > 0 &&
+          influence.coveredSiteIds.includes(site.siteId))
+        .map((site) => site.siteId)),
   );
   return listOverflowCandidates()
     .filter((site) => !covered.has(site.id))
