@@ -14,6 +14,11 @@ it("uses a shared texture-free ground treatment without altering measured geomet
   expect(shader.vertexShader).not.toMatch(/transformed\s*[+*\-/]?=/);
   expect(shader.vertexShader).toContain("modelMatrix * vec4(position, 1.0)");
   expect(shader.fragmentShader).toContain("length(fwidth(groundP))");
+  expect(shader.vertexShader).toContain("normalize(mat3(modelMatrix) * normal)");
+  expect(shader.fragmentShader).toContain("normalize(vGroundNormal).y");
+  expect(shader.fragmentShader).toContain("smoothstep(0.02, 0.28, sourceSlope)");
+  expect(material.customProgramCacheKey()).toBe("geographic-ground-relief-v2-vivid");
+  expect(material.color).toEqual(new THREE.Color("#78bc4d"));
   expect(shader.fragmentShader).toContain("#include <lights_physical_fragment>");
   expect(shader.fragmentShader).toContain("#include <colorspace_fragment>");
   expect(material.userData.provenance).toContain("no observed vegetation");

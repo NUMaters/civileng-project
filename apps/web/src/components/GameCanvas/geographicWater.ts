@@ -34,12 +34,18 @@ export function riverFlowCoordinates(x: number, z: number) {
 /** One shared opaque shader for source water polygons, no extra wave meshes. */
 export function createGeographicWaterMaterial() {
   const material = new THREE.ShaderMaterial({
-    uniforms: { time: { value: 0 }, storm: { value: 0 } },
+    // CSS swatches are converted once into working linear RGB, not treated as linear literals.
+    uniforms: { time: { value: 0 }, storm: { value: 0 },
+      bodyLow: { value: new THREE.Color("#0064ae") }, bodyHigh: { value: new THREE.Color("#00b5dc") },
+      skyTint: { value: new THREE.Color("#62d8f0") }, foamTint: { value: new THREE.Color("#d5fbff") },
+      stormTint: { value: new THREE.Color("#316c80") } },
     vertexShader: `varying vec2 flowUv; varying vec3 waterWorldPosition;
       void main(){ flowUv=uv; waterWorldPosition=(modelMatrix*vec4(position,1.)).xyz;
         gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
     fragmentShader: `varying vec2 flowUv; varying vec3 waterWorldPosition;
       uniform float time; uniform float storm;
+      uniform vec3 bodyLow; uniform vec3 bodyHigh; uniform vec3 skyTint;
+      uniform vec3 foamTint; uniform vec3 stormTint;
       void main(){
         // Increasing station is north/downstream. Speed is illustrative, not observed hydrology.
         float along=flowUv.y-time*7.;
@@ -63,17 +69,19 @@ export function createGeographicWaterMaterial() {
         vec3 halfDirection=normalize(viewDirection+normalize(vec3(-360.,650.,300.)));
         float fresnel=pow(1.-clamp(dot(normal,viewDirection),0.,1.),4.);
         float highlight=pow(max(dot(normal,halfDirection),0.),72.);
-        vec3 clear=mix(vec3(.008,.25,.49),vec3(.018,.54,.68),.5+.22*broad);
-        clear=mix(clear,vec3(.34,.69,.84),fresnel*.6);
-        clear+=vec3(.85,.94,1.)*highlight*.5;
-        vec3 color=mix(clear,vec3(.12,.33,.39),clamp(storm,0.,1.)*.55);
-        color=mix(color,vec3(.79,.95,1.),foam*.48*distant);
+        // Optical body shading only: NOT bathymetry, centreline depth or distance to a bank.
+        float bodyTone=clamp(.52+.18*broad+.08*ripple*fineFade,0.,1.);
+        vec3 clear=mix(bodyLow,bodyHigh,bodyTone);
+        clear=mix(clear,skyTint,fresnel*.28);
+        clear+=vec3(.85,.94,1.)*highlight*.18*(.3+.7*fineFade);
+        vec3 color=mix(clear,stormTint,clamp(storm,0.,1.)*.55);
+        color=mix(color,foamTint,foam*.55*distant);
         gl_FragColor=vec4(color,1.);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
   });
   material.name = "abukuma-flow-north";
-  material.userData.provenance = "Illustrative flow, analytic wave normals and sky/sun highlights; not measured speed, depth or reflection capture. Source polygon boundary unchanged; no invented shoreline foam";
+  material.userData.provenance = "Illustrative flow, optical body color, analytic wave normals and sky/sun highlights; not measured speed, depth or reflection capture. Source polygon boundary unchanged; no invented shoreline foam or bathymetry";
   return material;
 }
