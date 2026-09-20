@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createVegetationStyleResources, vegetationColor, VEGETATION_STYLE_PROVENANCE } from "./geographicVegetationStyle";
 import { createGeographicWorld } from "./geographicWorld";
 import { koriyamaGeoToLocal, type GeodataFeature } from "./koriyamaGeodata";
 import type { KoriyamaLandcover, LandcoverFeature } from "./koriyamaLandcover";
@@ -59,10 +60,9 @@ export function createGeographicLandcover(data: KoriyamaLandcover, options: {
       heightSource: known ? "osm-height-tag-unverified" : "illustrative-default-7m" });
   }
   if (trees.length) {
-    const trunks = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.15, 0.21, 1, 8),
-      new THREE.MeshStandardMaterial({ color: "#806546", roughness: 0.95 }), trees.length);
-    const crowns = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 10),
-      new THREE.MeshStandardMaterial({ color: "#50a868", roughness: 0.88 }), trees.length);
+    const style = createVegetationStyleResources();
+    const trunks = new THREE.InstancedMesh(style.trunk, style.bark, trees.length);
+    const crowns = new THREE.InstancedMesh(style.crown, style.leaf, trees.length);
     trunks.name = "mapped-tree-trunks"; crowns.name = "mapped-tree-crowns";
     const dummy = new THREE.Object3D();
     trees.forEach((tree, i) => {
@@ -71,13 +71,15 @@ export function createGeographicLandcover(data: KoriyamaLandcover, options: {
       dummy.position.y = tree.y + tree.height * 0.65;
       dummy.scale.set(tree.height * 0.28, tree.height * 0.35, tree.height * 0.28);
       dummy.updateMatrix(); crowns.setMatrixAt(i, dummy.matrix);
+      crowns.setColorAt(i, vegetationColor(tree.id));
     });
     for (const mesh of [trunks, crowns]) {
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
       mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingSphere();
       mesh.castShadow = true; mesh.receiveShadow = true; group.add(mesh);
     }
   }
-  group.userData = { source: "OpenStreetMap", treeRecords: trees, skippedTrees,
+  group.userData = { source: "OpenStreetMap", style: VEGETATION_STYLE_PROVENANCE, treeRecords: trees, skippedTrees,
     surfaceSourceIds: surfaces.map(feature => feature.id), surfacePrecedence: "park 0.03m < vegetation 0.06m < pitch 0.09m < roads 0.12m; display offsets, not measured heights",
     limitations: "Source boundaries/tree points only; colors, crown shapes and default heights illustrative. Park extents are not continuous grass/canopy. No invented tree positions." };
   return { group, stats: { trees: trees.length, skippedTrees, surfaces: surfaces.length, surfaceBatches: cover.stats.batches } };

@@ -122,7 +122,7 @@ function copySlimPublicAssets(): Plugin {
       mkdirSync(geodataDir, { recursive: true });
       for (const name of ["features.geojson", "plateau-buildings.geojson", "terrain.bin",
         "metadata.json", "plateau-metadata.json", "terrain-metadata.json", "README.md", "terrain-README.md",
-        "landcover.geojson", "landcover-metadata.json", "landcover-README.md", "imagery-tree-observations.json"]) {
+        "landcover.geojson", "landcover-metadata.json", "landcover-README.md", "imagery-tree-observations.json", "imagery-canopy-observations.json"]) {
         cpSync(path.join(webRoot, "public", "geodata", "koriyama", name), path.join(geodataDir, name));
       }
     },
