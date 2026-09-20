@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
+import { getDioramaGuidance, initialDioramaFocus, isPreferredDioramaGuidanceCandidate } from "./dioramaGuidance";
 import { calculateOverflowSites, calculateStructureInfluences } from "../../features/disaster/services/floodSimulation";
 import type { PlacedStructure } from "../../features/construction";
 import { listOverflowCandidates } from "../../features/disaster/services/overflowBankSites";
@@ -11,6 +11,21 @@ function placeAt(structureId: string, siteId: string, headingDegrees = 50): Plac
 }
 
 describe("diorama guidance", () => {
+  it("keeps the original real candidate coordinates while marking covered positive contributions", () => {
+    const candidates = listOverflowCandidates().filter(candidate =>
+      ["overtopping", "erosion", "inlandPonding"].includes(candidate.primaryHazard));
+    const [influence] = calculateStructureInfluences([placeAt("levee", "campus-core")]);
+    const sites = getDioramaGuidance([influence!]);
+
+    expect(sites.map(site => site.id)).toEqual(candidates.map(candidate => candidate.id));
+    for (const candidate of candidates) {
+      const site = sites.find(item => item.id === candidate.id)!;
+      expect([site.longitude, site.latitude]).toEqual([candidate.longitude, candidate.latitude]);
+    }
+    expect(sites.find(site => site.id === "campus-core")?.hasContribution).toBe(true);
+    expect(sites.find(site => site.id === "campus-south")?.hasContribution).toBe(false);
+  });
+
   it("starts near an actual high-vulnerability overtopping site", () => {
     expect(initialDioramaFocus().id).toBe("campus-core");
     expect(getDioramaGuidance([]).some((site) => site.id === initialDioramaFocus().id)).toBe(true);
@@ -20,7 +35,7 @@ describe("diorama guidance", () => {
     expect(sites.find((site) => site.id === "inland-campus")?.advice).toContain("排水機場");
     expect(sites.find((site) => site.id === "north-bend")?.advice).toContain("護岸");
   });
-  it("removes covered sites only after construction is confirmed", () => {
+  it("keeps a weak positive contribution visible with preparation-safe wording", () => {
     const site = initialDioramaFocus();
     const [influence] = calculateStructureInfluences([
       {
@@ -33,7 +48,13 @@ describe("diorama guidance", () => {
     ]);
     expect(influence!.coveredSiteIds).toContain(site.id);
     expect(influence!.positiveSiteContributions!.find(item => item.siteId === site.id)!.strength).toBeGreaterThan(0);
-    expect(getDioramaGuidance([influence!]).some((item) => item.id === site.id)).toBe(false);
+    const sites = getDioramaGuidance([{
+      ...influence!,
+      positiveSiteContributions: [{ siteId: site.id, strength: Number.EPSILON }],
+    }]);
+    expect(sites.some((item) => item.id === site.id)).toBe(true);
+    expect(sites.find((item) => item.id === site.id)?.hasContribution).toBe(true);
+    expect(sites.find((item) => item.id === site.id)?.advice).toBe("この地点に効果あり。大雨で確かめよう");
     expect(
       getDioramaGuidance([{ ...influence!, preview: true }]).some((item) => item.id === site.id),
     ).toBe(true);
@@ -62,7 +83,7 @@ describe("diorama guidance", () => {
     expect(getDioramaGuidance([basin]).some(site => site.id === "north-bend")).toBe(true);
   });
 
-  it("suppresses only positively covered sites of a real mixed facility, not its adverse sites", () => {
+  it("marks positively covered sites without suppressing adverse or other candidates", () => {
     const placements = listOverflowCandidates().flatMap(site => [0, 50, 90, 180, 270].map(heading =>
       placeAt("drainage-pump", site.id, heading)));
     const mixed = calculateStructureInfluences(placements).find(influence => influence.adverseSiteIds.length > 0 &&
@@ -72,7 +93,10 @@ describe("diorama guidance", () => {
     const initiallyShown = new Set(getDioramaGuidance([]).map(site => site.id));
     const positive = mixed.positiveSiteContributions!.filter(site => mixed.coveredSiteIds.includes(site.siteId));
     expect(positive.some(site => initiallyShown.has(site.siteId))).toBe(true);
-    for (const site of positive) expect(shown.has(site.siteId)).toBe(false);
+    for (const site of positive) {
+      expect(shown.has(site.siteId)).toBe(true);
+      expect(getDioramaGuidance([mixed]).find(item => item.id === site.siteId)?.hasContribution).toBe(true);
+    }
     for (const id of mixed.adverseSiteIds.filter(id => initiallyShown.has(id))) expect(shown.has(id)).toBe(true);
   });
 
@@ -86,23 +110,35 @@ describe("diorama guidance", () => {
     expect(getDioramaGuidance([{ ...confirmed, positiveSiteContributions: [] }])).toEqual(getDioramaGuidance([]));
   });
 
-  it.each([0, -0.1, NaN, Infinity, -Infinity])("does not hide a site for invalid/nonpositive strength %s", strength => {
+  it.each([0, -0.1, NaN, Infinity, -Infinity])("marks no contribution for invalid/nonpositive strength %s", strength => {
     const [influence] = calculateStructureInfluences([placeAt("levee", "campus-core", 140)]);
     expect(getDioramaGuidance([{ ...influence, positiveSiteContributions: [{ siteId: "campus-core", strength }] }])
-      .some(site => site.id === "campus-core")).toBe(true);
+      .find(site => site.id === "campus-core")?.hasContribution).toBe(false);
   });
 
-  it("does not expand suppression to positive effects outside the existing coverage gate", () => {
+  it("does not mark positive effects outside the existing coverage gate", () => {
     const [influence] = calculateStructureInfluences([placeAt("levee", "campus-core", 140)]);
     expect(influence.positiveSiteContributions!.some(site => site.siteId === "campus-core")).toBe(true);
-    expect(getDioramaGuidance([{ ...influence, coveredSiteIds: [] }])).toEqual(getDioramaGuidance([]));
+    const sites = getDioramaGuidance([{ ...influence, coveredSiteIds: [] }]);
+    expect(sites).toHaveLength(getDioramaGuidance([]).length);
+    expect(sites.find(site => site.id === "campus-core")?.hasContribution).toBe(false);
   });
 
   it("retains valid positive coverage when another facility at the same site is unsuitable", () => {
     const placements = [placeAt("retention-basin", "inland-campus"), placeAt("drainage-pump", "inland-campus")];
     const [basin, pump] = calculateStructureInfluences(placements);
     expect(pump.positiveSiteContributions!.some(site => site.siteId === "inland-campus")).toBe(true);
-    expect(getDioramaGuidance([basin]).some(site => site.id === "inland-campus")).toBe(true);
-    expect(getDioramaGuidance([basin, pump]).some(site => site.id === "inland-campus")).toBe(false);
+    expect(getDioramaGuidance([basin]).find(site => site.id === "inland-campus")?.hasContribution).toBe(false);
+    expect(getDioramaGuidance([basin, pump]).find(site => site.id === "inland-campus")?.hasContribution).toBe(true);
+  });
+
+  it("orders clear candidates by readiness tier, then existing geometric score", () => {
+    expect(isPreferredDioramaGuidanceCandidate(false, 900, true, 10)).toBe(true);
+    expect(isPreferredDioramaGuidanceCandidate(true, 10, false, 900)).toBe(false);
+    expect(isPreferredDioramaGuidanceCandidate(true, 10, undefined, Infinity)).toBe(true);
+    expect(isPreferredDioramaGuidanceCandidate(false, Infinity, undefined, Infinity)).toBe(false);
+    expect(isPreferredDioramaGuidanceCandidate(false, NaN, undefined, Infinity)).toBe(false);
+    expect(isPreferredDioramaGuidanceCandidate(false, 20, false, 40)).toBe(true);
+    expect(isPreferredDioramaGuidanceCandidate(false, 40, false, 20)).toBe(false);
   });
 });

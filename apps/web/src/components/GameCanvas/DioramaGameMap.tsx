@@ -24,7 +24,7 @@ import { createImageryVegetationExclusions } from "./imageryVegetationExclusions
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
-import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
+import { getDioramaGuidance, initialDioramaFocus, isPreferredDioramaGuidanceCandidate } from "./dioramaGuidance";
 import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
 import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
@@ -696,8 +696,10 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
               const py = (-projected.y * 0.5 + 0.5) * viewportHeight;
               const score = scoreGuidanceAnchor(px, py, projected.z, viewportWidth, viewportHeight,
                 size.width, size.height, labelBounds, candidateHintLayout);
-              if (score < bestScore && guidanceClearsFacilities(candidateHintLayout, size.width, size.height,
+              if (score < Infinity && guidanceClearsFacilities(candidateHintLayout, size.width, size.height,
                 guidanceObstacles, obstacleCount)) {
+                if (!isPreferredDioramaGuidanceCandidate(site.hasContribution, score,
+                  chosen?.hasContribution, bestScore)) continue;
                 chosen = site;
                 bestScore = score;
                 Object.assign(labelLayout, candidateHintLayout);
