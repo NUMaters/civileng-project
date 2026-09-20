@@ -50,7 +50,7 @@ type Grid = {
  * Neither the synthetic valley below nor dioramaSpace.groundY is a measured DEM;
  * these depths illustrate propagation, not building damage or real flood forecasts.
  */
-export function createDioramaInundation(): DioramaInundation {
+export function createDioramaInundation(sampleGround: (x: number, z: number) => number | null = groundY): DioramaInundation {
   const group = new THREE.Group();
   group.name = "diorama-inundation";
   group.visible = false;
@@ -115,6 +115,8 @@ export function createDioramaInundation(): DioramaInundation {
             const p = point(grid, sample.col, sample.row);
             return { ...geoToWorld(p.longitude, p.latitude), depth: sample.depth };
           });
+          const ground = samples.map(p => sampleGround(p.x, p.z));
+          if (ground.some(y => y === null)) continue;
           // Shared shoreline corners soften the staircase without extending
           // into dry cells. The center retains the field's actual cell depth.
           for (const index of [0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 1]) {
@@ -122,7 +124,7 @@ export function createDioramaInundation(): DioramaInundation {
             color.copy(shallow).lerp(deep, Math.min(1, p.depth / 1.5));
             // Ground-conforming educational surface: depth is meters, no circular
             // effects or artificially expanded footprint. Lift clears road decals.
-            positions.setXYZ(vertex, p.x, groundY(p.x, p.z) + 0.18 + p.depth, p.z);
+            positions.setXYZ(vertex, p.x, ground[index]! + 0.18 + p.depth, p.z);
             colors.setXYZ(vertex, color.r, color.g, color.b);
             vertex++;
           }

@@ -116,6 +116,14 @@ function copySlimPublicAssets(): Plugin {
       if (existsSync(iconsFrom)) {
         cpSync(iconsFrom, path.join(viteOutDir, "icons"), { recursive: true });
       }
+      // The bounded Three.js scene is required at runtime even when the legacy
+      // multi-gigabyte Cesium PLATEAU tiles are excluded from the Pages build.
+      const geodataDir = path.join(viteOutDir, "geodata", "koriyama");
+      mkdirSync(geodataDir, { recursive: true });
+      for (const name of ["features.geojson", "plateau-buildings.geojson", "terrain.bin",
+        "metadata.json", "plateau-metadata.json", "terrain-metadata.json", "README.md", "terrain-README.md"]) {
+        cpSync(path.join(webRoot, "public", "geodata", "koriyama", name), path.join(geodataDir, name));
+      }
     },
   };
 }

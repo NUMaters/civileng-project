@@ -46,6 +46,20 @@ afterEach(() => {
 });
 
 describe("Three inundation adapter", () => {
+  it("uses supplied measured ground for wet cells and omits missing ground", () => {
+    const supplied = createDioramaInundation(() => 17);
+    const missing = createDioramaInundation(() => null);
+    adapters.push(supplied, missing);
+    run(supplied);
+    run(missing);
+    const geometry = (supplied.group.children[0] as THREE.Mesh).geometry;
+    expect(geometry.drawRange.count).toBeGreaterThan(0);
+    const positions = geometry.getAttribute("position");
+    for (let i = 0; i < geometry.drawRange.count; i++)
+      expect(positions.getY(i)).toBeGreaterThanOrEqual(17.18 - 1e-5);
+    expect((missing.group.children[0] as THREE.Mesh).geometry.drawRange.count).toBe(0);
+    expect(missing.group.visible).toBe(false);
+  });
   it("does not start for rain/high river alone, zero water, absent sites or inactive phases", () => {
     for (const state of [
       createInitialFloodState(),

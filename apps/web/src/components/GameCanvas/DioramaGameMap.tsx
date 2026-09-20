@@ -6,8 +6,10 @@ import type { PlacedStructure } from "../../features/construction";
 import { calculateStructureInfluences } from "../../features/disaster/services/floodSimulation";
 import { suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
 import { resolvePlaceablePosition } from "./riverPlacement";
-import { geoToWorld, groundY, intersectDioramaSurface, riverX, worldToGeo } from "./dioramaSpace";
-import { createDioramaWorld } from "./dioramaWorld";
+import { geoToWorld, riverX, worldToGeo } from "./dioramaSpace";
+import { createGeographicWorld } from "./geographicWorld";
+import { createGeographicTerrain } from "./geographicTerrain";
+import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
 import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
@@ -86,6 +88,7 @@ type Runtime = {
   ghostType: string | null;
   pick: (x: number, y: number) => { x: number; z: number } | null;
   reset: () => void;
+  ground: (x: number, z: number) => number | null;
 };
 
 /** Local, meter-scaled Abukuma diorama. Game rules remain in geographic coordinates. */
@@ -98,6 +101,15 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
     const [ready, setReady] = useState(false);
     const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
     const [error, setError] = useState("");
+    const [geography, setGeography] = useState<KoriyamaSceneData | null>(null);
+    useEffect(() => {
+      const controller = new AbortController();
+      loadKoriyamaScene(controller.signal).then(setGeography).catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          setError(cause instanceof Error ? cause.message : "地理データを読み込めませんでした");
+      });
+      return () => controller.abort();
+    }, []);
     const labels = useRef(new Map<string, HTMLDivElement>());
     const guidanceLabel = useRef<HTMLDivElement>(null);
     const placementActions = useRef<HTMLDivElement>(null);
@@ -142,7 +154,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
             r.ghostType = id;
             r.scene.add(r.ghost);
           }
-          r.ghost.position.set(point.x, groundY(point.x, point.z) + 1, point.z);
+          const ground = r.ground(point.x, point.z);
+          if (ground === null) return { overMap: true, placeable: false };
+          r.ghost.position.set(point.x, ground + 1, point.z);
           r.ghost.rotation.y = -T.MathUtils.degToRad(suggestedStructureHeading(id, geo));
           r.ghost.scale.setScalar(0.98);
           return { overMap: true, placeable: resolved !== undefined };
@@ -165,7 +179,23 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
 
     useEffect(() => {
       const container = host.current;
-      if (!container) return;
+      if (!container || !geography) return;
+      const terrain = createGeographicTerrain(geography.terrain);
+      const world = createGeographicWorld(geography.osm, {
+        plateau: geography.plateau,
+        localBounds: terrain.bounds,
+        groundSampler: terrain.sampleGround,
+        surfaceGridSpacing: 12,
+        // Missing building heights remain explicitly provisional in source metadata.
+        provisionalBuildingHeight: 6,
+        surfaceSampler: (x, z, layer) => {
+          const ground = terrain.sampleGround(x, z);
+          if (ground === null) return null;
+          // DEM is ground, not water bathymetry or surveyed bridge decks.
+          // Small surface offsets avoid z-fighting; bridge clearance is provisional.
+          return ground + (layer.startsWith("bridge-") ? 3 : layer === "water" || layer === "waterway" ? 0.35 : 0.12);
+        },
+      });
       let renderer: T.WebGLRenderer;
       try {
         renderer = new T.WebGLRenderer({
@@ -174,6 +204,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           powerPreference: "high-performance",
         });
       } catch {
+        disposeObject(terrain.group);
+        disposeObject(world);
         setError("3D描画を開始できません。ブラウザーを再読み込みしてください。");
         return;
       }
@@ -218,7 +250,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       const reset = () => {
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
-        controls.target.set(riverX(focus.z), 0, focus.z);
+        controls.target.set(riverX(focus.z), terrain.sampleGround(riverX(focus.z), focus.z) ?? 0, focus.z);
         const downstream = new T.Vector3(
           riverX(focus.z + 80) - riverX(focus.z - 80),
           0,
@@ -226,15 +258,28 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         ).normalize();
         camera.position
           .copy(controls.target)
-          .addScaledVector(downstream, 730)
-          .add(new T.Vector3(downstream.z * 160, 510, -downstream.x * 160));
+          .addScaledVector(downstream, 480)
+          .add(new T.Vector3(downstream.z * 105, 360, -downstream.x * 105));
         controls.update();
       };
       reset();
-      scene.add(createDioramaWorld());
+      scene.add(terrain.group, world);
       const water = createWater();
-      scene.add(water);
-      const inundation = createDioramaInundation();
+      water.geometry.dispose();
+      const oldWaterMaterials = new Set<T.Material>();
+      for (const mesh of world.waterMeshes) {
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) oldWaterMaterials.add(material);
+        const positions = mesh.geometry.getAttribute("position");
+        const uv = new Float32Array(positions.count * 2);
+        for (let i = 0; i < positions.count; i++) {
+          uv[i * 2] = T.MathUtils.clamp((positions.getX(i) - riverX(positions.getZ(i))) / 100 + 0.5, 0, 1);
+          uv[i * 2 + 1] = positions.getZ(i);
+        }
+        mesh.geometry.setAttribute("uv", new T.BufferAttribute(uv, 2));
+        mesh.material = water.material;
+      }
+      oldWaterMaterials.forEach(material => material.dispose());
+      const inundation = createDioramaInundation(terrain.sampleGround);
       scene.add(inundation.group);
       const raycaster = new T.Raycaster(),
         cursor = new T.Vector2();
@@ -243,7 +288,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         if (x < rect.left || y < rect.top || x > rect.right || y > rect.bottom) return null;
         cursor.set(((x - rect.left) / rect.width) * 2 - 1, 1 - ((y - rect.top) / rect.height) * 2);
         raycaster.setFromCamera(cursor, camera);
-        return intersectDioramaSurface(raycaster.ray.origin, raycaster.ray.direction);
+        const hit = raycaster.intersectObjects([...terrain.group.children, ...world.waterMeshes], false)[0];
+        return hit ? { x: hit.point.x, z: hit.point.z } : null;
       };
       const r: Runtime = {
         renderer,
@@ -255,6 +301,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         ghostType: null,
         pick,
         reset,
+        ground: terrain.sampleGround,
       };
       runtime.current = r;
       let moving: {
@@ -349,8 +396,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         if (document.hidden || latest.current.mapActive === false) return;
         time += dt;
         controls.update();
-        const z = T.MathUtils.clamp(controls.target.z, -1800, 1400);
-        const x = T.MathUtils.clamp(controls.target.x, riverX(z) - 500, riverX(z) + 500);
+        const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + 150, terrain.bounds.maxZ - 150);
+        const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + 150, terrain.bounds.maxX - 150);
         const correction = new T.Vector3(x - controls.target.x, 0, z - controls.target.z);
         controls.target.add(correction);
         camera.position.add(correction);
@@ -423,7 +470,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
               const position = geoToWorld(site.longitude, site.latitude);
               const projected = new T.Vector3(
                 position.x,
-                groundY(position.x, position.z) + 12,
+                (terrain.sampleGround(position.x, position.z) ?? 0) + 12,
                 position.z,
               ).project(camera);
               const px = (projected.x * 0.5 + 0.5) * container.clientWidth;
@@ -472,12 +519,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         scene.remove(inundation.group);
         inundation.dispose();
         disposeObject(scene);
+        if (!world.waterMeshes.length) water.material.dispose();
         renderer.dispose();
         renderer.domElement.remove();
         runtime.current = null;
         latest.current.onReadyChange?.(false);
       };
-    }, []);
+    }, [geography]);
 
     useEffect(() => {
       const r = runtime.current;
@@ -502,7 +550,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           model.userData.popStarted = -Infinity;
         }
         const point = geoToWorld(placement.position.longitude, placement.position.latitude);
-        model.userData.groundHeight = groundY(point.x, point.z) + 0.5;
+        const ground = r.ground(point.x, point.z);
+        model.visible = ground !== null;
+        model.userData.groundHeight = (ground ?? 0) + 0.5;
         model.position.set(point.x, model.userData.groundHeight, point.z);
         const target = -T.MathUtils.degToRad(placement.headingDegrees);
         if (target !== model.userData.targetRotation) {
@@ -584,7 +634,14 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           <p role="alert" className="diorama-error">
             {error}
           </p>
-        ) : null}
+        ) : !ready ? <p role="status" className="diorama-error">阿武隈川の地形と街を読み込み中…</p> : null}
+        <details className="diorama-attribution">
+          <summary>地図出典</summary>
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
+          <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
+          <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル（国土地理院）標高タイルを加工</a>
+          <p>建物はLOD1形状。未収録の高さ・橋の高さは仮表現です。浸水はゲーム用で、実際の災害予測ではありません。</p>
+        </details>
       </div>
     );
   },

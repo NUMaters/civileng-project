@@ -98,3 +98,22 @@
   border-radius: 20px;
   color: #853924;
 }
+.diorama-attribution {
+  position: absolute;
+  z-index: 9;
+  left: 8px;
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  max-width: min(290px, calc(100% - 76px));
+  border-radius: 12px;
+  background: #f7fcfff0;
+  color: #234b63;
+  font-size: 11px;
+}
+.diorama-attribution summary {
+  padding: 12px;
+  min-height: 44px;
+  box-sizing: border-box;
+  cursor: pointer;
+}
+.diorama-attribution a { display: block; padding: 8px 12px; color: #076d9a; }
+.diorama-attribution p { padding: 0 12px 12px; margin: 0; line-height: 1.5; }
