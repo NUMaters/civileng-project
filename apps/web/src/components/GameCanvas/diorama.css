@@ -18,6 +18,59 @@
   pointer-events: none;
   overflow: hidden;
 }
+.diorama-npc-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.diorama-npc-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 58px;
+  padding: 0;
+  border: 0;
+  color: #173846;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px #fff, 0 0 5px #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  will-change: transform;
+}
+.diorama-npc-marker__avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #e8b75e;
+  box-shadow: 0 4px 10px #17384655;
+  font-size: 25px;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.diorama-npc-marker__name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diorama-npc-marker:hover .diorama-npc-marker__avatar,
+.diorama-npc-marker:focus-visible .diorama-npc-marker__avatar,
+.diorama-npc-marker.is-highlighted .diorama-npc-marker__avatar {
+  transform: translateY(-4px) scale(1.08);
+  box-shadow: 0 0 0 4px #f6d16e99, 0 6px 14px #17384677;
+}
+.diorama-npc-marker:focus-visible { outline: none; }
 .diorama-label {
   position: absolute;
   top: 0;

@@ -75,6 +75,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       return () => controller.abort();
     }, []);
     const labels = useRef(new Map<string, HTMLDivElement>());
+    const npcMarkers = useRef(new Map<string, HTMLButtonElement>());
     const guidanceLabel = useRef<HTMLDivElement>(null);
     const placementActions = useRef<HTMLDivElement>(null);
     const pending = props.placements.find((p) => p.preview);
@@ -93,6 +94,15 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         resetCamera: () => runtime.current?.reset(),
         focusRenderedFlood: () => runtime.current?.focusFlood(),
         returnFromFlood: () => runtime.current?.returnFromFlood(),
+        focusNpc: (position) => {
+          const r = runtime.current;
+          if (!r) return;
+          const focus = geoToWorld(position.longitude, position.latitude);
+          const offset = r.camera.position.clone().sub(r.controls.target);
+          r.controls.target.set(focus.x, r.ground(focus.x, focus.z) ?? 0, focus.z);
+          r.camera.position.copy(r.controls.target).add(offset);
+          r.controls.update();
+        },
         clearDragGhost: () => {
           const r = runtime.current;
           if (r?.ghost) {
@@ -489,6 +499,32 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           if (visible)
             element.style.transform = `translate(${(point.x * 0.5 + 0.5) * viewportWidth}px,${(-point.y * 0.5 + 0.5) * viewportHeight}px) translate(-50%,-100%)`;
         }
+        for (const npc of latest.current.npcMarkers ?? []) {
+          const element = npcMarkers.current.get(npc.id);
+          if (!element) continue;
+          if (latest.current.interactionLocked) {
+            element.style.display = "none";
+            continue;
+          }
+          const position = geoToWorld(npc.position.longitude, npc.position.latitude);
+          const point = projectedPoint.set(
+            position.x,
+            (terrain.sampleGround(position.x, position.z) ?? 0) + 18,
+            position.z,
+          ).project(camera);
+          const px = (point.x * 0.5 + 0.5) * viewportWidth;
+          const py = (-point.y * 0.5 + 0.5) * viewportHeight;
+          const visible =
+            point.z < 1 &&
+            point.z > -1 &&
+            Math.abs(point.x) < 1.08 &&
+            Math.abs(point.y) < 1.08 &&
+            py >= 185 &&
+            py <= viewportHeight - 175;
+          element.style.display = visible ? "" : "none";
+          if (visible)
+            element.style.transform = `translate(${px}px,${py}px) translate(-50%,-100%)`;
+        }
         const actions = placementActions.current;
         const preview = latest.current.placements.find((placement) => placement.preview);
         const previewModel = preview ? r.models.get(preview.id) : undefined;
@@ -672,6 +708,29 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             </div>
           ) : null)}
         </div>
+        {!props.interactionLocked && props.npcMarkers && props.onSelectNpc ? (
+          <div className="diorama-npc-markers" aria-label="会話できる人物">
+            {props.npcMarkers.map((npc) => (
+              <button
+                type="button"
+                className={`diorama-npc-marker${npc.id === props.highlightedNpcId ? " is-highlighted" : ""}`}
+                key={npc.id}
+                aria-label={`${npc.locationLabel}にいる${npc.name}に話しかける`}
+                onClick={() => props.onSelectNpc?.(npc.id)}
+                ref={(element) => {
+                  if (element) npcMarkers.current.set(npc.id, element);
+                  else npcMarkers.current.delete(npc.id);
+                }}
+                style={{ display: "none" }}
+              >
+                <span className="diorama-npc-marker__avatar" aria-hidden="true">
+                  {npc.kind === "experienced" ? "👷" : "🧑"}
+                </span>
+                <span className="diorama-npc-marker__name">{npc.name}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
         {pending ? (
           <div
             className="diorama-placement-actions"
@@ -707,7 +766,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
           <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
           <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル（国土地理院）標高タイルを加工</a>
-          <p>建物はLOD1形状。未収録の高さ・橋面・樹木の大きさは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。</p>
+          <p>建物はLOD1等の位置・高さを使用。屋根の形・勾配・色は一部推定したゲーム用表現です。未収録の高さ・橋面・樹木の大きさは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。</p>
         </details>
       </div>
     );

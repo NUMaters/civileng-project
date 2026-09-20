@@ -96,6 +96,67 @@ describe("actual geographic world", () => {
       expect(ids.every(id => (id === river.id) === mesh.userData.riverStageEligible)).toBe(true);
     }
   });
+  it("clips explicit pitched roof masks and continuous gable UVs without changing the source maximum", () => {
+    const building = polygon("gable", "building", [[[101, 201], [113, 201], [113, 207], [101, 207], [101, 201]].map(([x, z]) => geo(x!, z!))]);
+    building.properties.height = "14";
+    building.properties["roof:shape"] = "gabled";
+    const w = world([building], { groundSampler: () => 0, tileSize: 16,
+      localBounds: { minX: 102, minZ: 202, maxX: 114, maxZ: 208 } });
+    const record = w.userData.buildingRoofs.gable[0];
+    expect(record.style).toBe("gabled");
+    expect(record.topY).toBeCloseTo(14.08);
+    expect(record.eaveY).toBeCloseTo(11.58);
+    expect(record.provenance.classification).toBe("tagged-shape-but-inferred-pitch");
+    let slopes = 0, caps = 0;
+    for (const mesh of meshes(w, "building")) {
+      const p = mesh.geometry.getAttribute("position"), n = mesh.geometry.getAttribute("normal");
+      const uv = mesh.geometry.getAttribute("facadeUv"), mask = mesh.geometry.getAttribute("roofMask");
+      expect(mask.count).toBe(p.count);
+      for (let i = 0; i < p.count; i++) {
+        expect(p.getY(i)).toBeLessThanOrEqual(14.08001);
+        expect(p.getX(i)).toBeGreaterThanOrEqual(102 - 0.00001);
+        expect(p.getZ(i)).toBeGreaterThanOrEqual(202 - 0.00001);
+        expect([0, 1]).toContain(mask.getX(i));
+        if (Math.abs(n.getY(i)) > 0.1 && Math.abs(n.getY(i)) < 0.8) {
+          expect(mask.getX(i)).toBe(1); slopes++;
+        }
+        if (Math.abs(n.getY(i)) < 0.1) {
+          expect(mask.getX(i)).toBe(0);
+          expect(uv.getY(i)).toBeCloseTo(p.getY(i) - 0.08, 3);
+          if (p.getY(i) > 11.581) {
+            expect(p.getX(i)).toBeCloseTo(113, 3);
+            expect(uv.getX(i)).toBeCloseTo(p.getZ(i) - 201, 3); caps++;
+          }
+        }
+      }
+    }
+    expect(slopes).toBeGreaterThan(0);
+    expect(caps).toBeGreaterThan(0);
+    expect(hits(w, "building", 108, 204)[0]!.point.y).toBeCloseTo(14.08, 3);
+    expect(w.stats.taggedRoofParts).toBe(1);
+  });
+
+  it("discloses optional illustrative hips and conservatively excludes actual campus overlaps, not campus holes", () => {
+    const campus = polygon("campus-source", "campus", [ring(100, 100, 100), ring(140, 140, 30)]);
+    const buildings = [["inside", 110, 110], ["boundary", 195, 110], ["hole", 145, 145], ["outside", 230, 110], ["school", 250, 110]].map(([id, x, z]) => {
+      const b = polygon(String(id), "building", [ring(Number(x), Number(z), 10)]);
+      b.properties.height = "10"; return b;
+    });
+    buildings[0]!.properties["roof:shape"] = "hipped";
+    buildings[4]!.properties.amenity = "school";
+    const w = world([campus, ...buildings], { groundSampler: () => 0 });
+    for (const id of ["inside", "boundary", "school"]) expect(w.userData.buildingRoofs[id][0].style).toBe("flat");
+    for (const id of ["hole", "outside"]) {
+      expect(w.userData.buildingRoofs[id][0].style).toBe("hipped");
+      expect(w.userData.buildingRoofs[id][0].provenance.classification).toBe("illustrative");
+    }
+    expect(w.userData.buildingRoofs.boundary[0].campusSourceIds).toEqual(["campus-source"]);
+    expect(w.userData.buildingRoofs.hole[0].campusSourceIds).toEqual([]);
+    expect(w.stats.campusExcludedBuildings).toBe(3);
+    const flat = world([buildings[3]!], { groundSampler: () => 0, allowIllustrativeHip: false });
+    expect(flat.userData.buildingRoofs.outside[0].style).toBe("flat");
+    expect(flat.stats.pitchedRoofParts).toBe(0);
+  });
 
   it("keeps facade UVs anchored to original edges through bounds/tile clipping with one shared building material", () => {
     const building = polygon("styled", "building", [ring(101, 201, 90)]);

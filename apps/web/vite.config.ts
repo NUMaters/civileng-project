@@ -229,6 +229,10 @@ export default defineConfig(({ command }) => ({
           },
         }),
     proxy: {
+      "/api/npc": {
+        target: process.env.NPC_API_TARGET ?? "http://127.0.0.1:8081",
+        changeOrigin: false,
+      },
       // ゲームサーバー WebSocket（cmd/game GET /ws）
       "/ws": {
         target: "ws://127.0.0.1:8081",

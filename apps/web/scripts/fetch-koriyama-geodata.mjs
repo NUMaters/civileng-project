@@ -41,6 +41,7 @@ const clipBox = [
 await mkdir(root, { recursive: true });
 
 let source;
+let existingSourceBytes;
 if (args.includes("--refresh") || args.includes("--source")) {
   let bytes;
   if (args.includes("--source")) bytes = await readFile(option("--source"));
@@ -91,7 +92,10 @@ if (args.includes("--refresh") || args.includes("--source")) {
         : {}),
     })),
   };
-} else source = JSON.parse(gunzipSync(await readFile(sourcePath)));
+} else {
+  existingSourceBytes = await readFile(sourcePath);
+  source = JSON.parse(gunzipSync(existingSourceBytes));
+}
 if (source.query !== query) throw new Error("Snapshot query differs; refresh explicitly");
 
 const same = (a, b) => a[0] === b[0] && a[1] === b[1];
@@ -184,6 +188,13 @@ const keepTags = [
   "height",
   "min_height",
   "roof:height",
+  "roof:shape",
+  "roof:direction",
+  "roof:orientation",
+  "roof:angle",
+  "roof:levels",
+  "roof:material",
+  "roof:colour",
   "highway",
   "railway",
   "waterway",
@@ -256,7 +267,7 @@ const json =
   JSON.stringify(collection, (_key, value) =>
     typeof value === "number" && !Number.isInteger(value) ? Math.round(value * 1e7) / 1e7 : value,
   ) + "\n";
-const sourceBytes = gzipSync(JSON.stringify(source), { level: 9 });
+const sourceBytes = existingSourceBytes ?? gzipSync(JSON.stringify(source), { level: 9 });
 const counts = Object.fromEntries(
   ["building", "road", "rail", "waterway", "water", "campus"].map((kind) => [
     kind,
@@ -277,6 +288,12 @@ const metadata = {
   attribution: "© OpenStreetMap contributors",
   licenseUrl: "https://www.openstreetmap.org/copyright",
   counts,
+  roofShapeCounts: features.reduce((counts, feature) => {
+    const shape = feature.properties["roof:shape"];
+    if (shape) counts[shape] = (counts[shape] ?? 0) + 1;
+    return counts;
+  }, {}),
+  roofHints: "OSM roof tags are source-attributed but unverified. Shape alone does not establish roof rise, ridge position/direction or pitch; never add guessed roof height to source building height.",
   bridgeSegments: features.filter((f) => f.properties.bridge && f.properties.bridge !== "no")
     .length,
   elevation: "none; all coordinates are 2D; no DEM or measured terrain",
@@ -284,7 +301,8 @@ const metadata = {
   dataSha256: hash(json),
   sourceSha256: hash(sourceBytes),
 };
-await writeFile(sourcePath, sourceBytes);
+// Offline replay never rewrites the bundled source snapshot.
+if (!existingSourceBytes) await writeFile(sourcePath, sourceBytes);
 await writeFile(resolve(root, "features.geojson"), json);
 await writeFile(resolve(root, "metadata.json"), JSON.stringify(metadata, null, 2) + "\n");
 process.stdout.write(
