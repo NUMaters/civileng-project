@@ -221,7 +221,7 @@ async function main() {
     step("一時停止で時間・予算を保持し、再開");
     await waitFor(
       client,
-      `document.querySelector('.cesium-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
+      `document.querySelector('.diorama-game-map')?.getAttribute('data-3d-buildings') === 'ready'`,
       60_000,
     );
     // 建物タイルのready直後は初期カメラと地形ピックの最初の描画がまだ収束していないため、
@@ -243,7 +243,7 @@ async function main() {
       client,
       `(() => {
         const card = document.querySelector('.structure-card:not(:disabled)');
-        const canvas = document.querySelector('.cesium-widget canvas');
+        const canvas = document.querySelector('.diorama-game-map canvas');
         if (!(card instanceof HTMLElement) || !(canvas instanceof HTMLCanvasElement)) return null;
         const cardRect = card.getBoundingClientRect();
         const canvasRect = canvas.getBoundingClientRect();
@@ -288,7 +288,7 @@ async function main() {
           pending: !!document.querySelector('[aria-label="仮配置の確定"]'),
           dragging: !!document.querySelector('.game-shell.is-dock-dragging'),
           ghost: !!document.querySelector('.dock-drag-ghost'),
-          canvas: !!document.querySelector('.cesium-widget canvas')
+          canvas: !!document.querySelector('.diorama-game-map canvas')
         })`,
       );
       dragAttempts.push({ xRatio, yRatio, ...draggedToMap });
@@ -308,20 +308,35 @@ async function main() {
       client,
       `(() => {
         const panel = document.querySelector('[aria-label="仮配置操作"]');
-        const text = panel?.textContent ?? '';
         return Boolean(
           panel &&
-          text.includes('建設プレビュー') &&
-          text.includes('戻す') &&
-          text.includes('配置する') &&
-          panel.querySelector('[aria-label="向きスライダー"]'),
+          panel.querySelector('[aria-label="キャンセル"]') &&
+          panel.querySelector('[aria-label="確定して配置"]') &&
+          !document.querySelector('[aria-label="向きスライダー"]') &&
+          !document.querySelector('.cesium-pending-panel'),
         );
       })()`,
     );
     if (!pendingPanel) {
-      throw new Error("仮配置操作パネルの内容が不足しています");
+      throw new Error("施設横の確定・取消または下部パネル廃止の検証に失敗しました");
     }
-    step("仮配置操作パネル表示");
+    step("下部パネルなし・施設横の確定と取消");
+    const tap = await evaluate(
+      client,
+      `(() => {
+      const rect = document.querySelector('.diorama-placement-actions').getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y - 38,
+        heading: Number(document.querySelector('.diorama-label.is-preview').dataset.heading) };
+    })()`,
+    );
+    await dispatchMouse(client, "mousePressed", tap.x, tap.y, 1);
+    await dispatchMouse(client, "mouseReleased", tap.x, tap.y);
+    await waitFor(
+      client,
+      `Number(document.querySelector('.diorama-label.is-preview')?.dataset.heading) === ${(tap.heading + 36) % 360}`,
+      5_000,
+    );
+    step("施設をタップして36度回転");
     const touchActionAfterDrag = await evaluate(
       client,
       `getComputedStyle(document.querySelector('.structure-card:not(:disabled)')).touchAction`,
@@ -403,7 +418,12 @@ async function main() {
       `document.querySelector('.result-panel__badge')?.textContent?.trim() === '成功'`,
       30_000,
     );
-    step("ミッションクリア", result.title ?? result.badge);
+    const resultTitle = await evaluate(
+      client,
+      `document.querySelector('.result-panel h2')?.textContent?.trim()`,
+    );
+    if (!resultTitle) throw new Error("結果状態には到達したが、結果の見出しが描画されていません");
+    step("ミッションクリア", resultTitle);
 
     await evaluate(client, `document.querySelector('.result-panel__retry')?.click()`);
     await waitFor(

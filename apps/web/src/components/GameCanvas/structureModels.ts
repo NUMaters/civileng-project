@@ -2,7 +2,13 @@ import type { StructureMaterialKind } from "./structureMaterials";
 
 export type StructureModelPart = {
   id: string;
-  kind: "box" | "cylinder";
+  kind: "box" | "cylinder" | "mesh";
+  /** Closed triangle mesh, local meters relative to the part center (east, north, up).
+   * Renderer: rotate with placement heading, translate by centerHeight/offsets,
+   * compute per-face normals, and use the same opaque material as other parts.
+   * dimensions is the mesh bounding size, NOT a box fallback (which fills basin holes).
+   */
+  mesh?: { positions: [number, number, number][]; indices: number[] };
   dimensions?: { length: number; width: number; height: number };
   radius?: number;
   offsetEast?: number;
@@ -36,6 +42,80 @@ function box(
   };
 }
 
+/** Closed prism with a trapezoidal cross-section; four broad sloping/flat faces. */
+function wedge(
+  id: string,
+  length: number,
+  width: number,
+  crestWidth: number,
+  height: number,
+  centerHeight: number,
+  material: StructureMaterialKind,
+  offsetNorth = 0,
+): StructureModelPart {
+  const x = length / 2;
+  const y = width / 2;
+  const c = crestWidth / 2;
+  const z = height / 2;
+  return {
+    ...box(id, length, width, height, centerHeight, material, 0, offsetNorth),
+    kind: "mesh",
+    mesh: {
+      positions: [
+        [-x, -y, -z],
+        [x, -y, -z],
+        [x, y, -z],
+        [-x, y, -z],
+        [-x, -c, z],
+        [x, -c, z],
+        [x, c, z],
+        [-x, c, z],
+      ],
+      indices: [
+        0, 2, 1, 0, 3, 2, 4, 5, 6, 4, 6, 7, 0, 1, 5, 0, 5, 4, 1, 2, 6, 1, 6, 5, 2, 3, 7, 2, 7, 6, 3,
+        0, 4, 3, 4, 7,
+      ],
+    },
+  };
+}
+
+/** Rounded rectangular berm: four concentric loops form an actual empty enclosure.
+ * Outer/inner toes sit at z=0; the broad crest is at z=9. No solid lid covers water.
+ */
+function basinBerm(): StructureModelPart {
+  const positions: [number, number, number][] = [];
+  const indices: number[] = [];
+  const loops = [
+    { x: 46, y: 36, r: 14, z: -4.5 },
+    { x: 41, y: 31, r: 12, z: 4.5 },
+    { x: 34, y: 24, r: 8, z: 4.5 },
+    { x: 30, y: 20, r: 6, z: -4.5 },
+  ];
+  for (const { x, y, r, z } of loops) {
+    for (let corner = 0; corner < 4; corner += 1) {
+      const cx = corner === 0 || corner === 3 ? x - r : -x + r;
+      const cy = corner < 2 ? y - r : -y + r;
+      for (let step = 0; step <= 3; step += 1) {
+        const angle = ((corner + step / 3) * Math.PI) / 2;
+        positions.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle), z]);
+      }
+    }
+  }
+  const count = 16;
+  for (let loop = 0; loop < 4; loop += 1) {
+    const nextLoop = (loop + 1) % 4;
+    for (let i = 0; i < count; i += 1) {
+      const next = (i + 1) % count;
+      const a = loop * count + i;
+      const b = loop * count + next;
+      const c = nextLoop * count + next;
+      const d = nextLoop * count + i;
+      indices.push(a, b, c, a, c, d);
+    }
+  }
+  return { ...box("berm", 92, 72, 9, 4.5, "grass"), kind: "mesh", mesh: { positions, indices } };
+}
+
 /**
  * Broad engineering silhouettes with no decorative badges or subpixel railings.
  * Keep all slabs at least 0.8 m thick to match the scene renderer's minimum.
@@ -44,31 +124,27 @@ function box(
 export function getStructureModelParts(structureId: string): StructureModelPart[] {
   switch (structureId) {
     case "levee":
-      // Low earth embankment and grass terraces, topped by a continuous service path.
+      // A continuous raised trapezoid, with a broad crest and visible earth footing.
       return [
-        box("toe", 96, 34, 1.6, 0.8, "earth"),
-        box("slope-lower", 94, 26, 2.4, 2.8, "grass"),
-        box("slope-upper", 92, 16, 2, 5, "grass"),
-        box("crest", 92, 7, 0.8, 6.4, "asphalt"),
+        box("toe", 98, 38, 2, 1, "earth"),
+        wedge("embankment", 96, 36, 12, 12, 8, "grass"),
+        box("crest", 96, 9, 1, 14.5, "asphalt"),
       ];
     case "retention-basin":
-      // A low rectangular enclosure reads as storage, rather than a raised circular tank.
-      // The pool is below the crest and is not buried inside a solid berm.
+      // Water intersects the inner slope below its crest, leaving a deep visible rim.
       return [
-        box("bed", 80, 60, 0.8, 0.4, "earth"),
-        box("pool", 68, 48, 0.8, 1.2, "water"),
-        box("berm-north", 80, 6, 3.2, 1.6, "grass", 0, 27),
-        box("berm-south", 80, 6, 3.2, 1.6, "grass", 0, -27),
-        box("berm-east", 6, 48, 3.2, 1.6, "grass", 37),
-        box("berm-west", 6, 48, 3.2, 1.6, "grass", -37),
-        box("outlet", 8, 10, 4, 2, "concrete", 36),
+        box("bed", 90, 70, 1, 0.5, "earth"),
+        basinBerm(),
+        box("pool", 68, 48, 1, 3, "water"),
+        box("outlet", 10, 12, 12, 6, "concrete", 37),
+        box("outlet-roof", 12, 14, 1.2, 12.6, "metal", 37),
       ];
     case "drainage-pump":
       return [
         box("pad", 36, 28, 1.2, 0.6, "concrete"),
-        box("hall", 24, 18, 9, 5.7, "concrete"),
-        box("window-band", 19, 0.8, 2, 7, "metal", 0, 9.2),
-        box("roof", 26, 20, 0.8, 10.6, "metal"),
+        box("hall", 26, 20, 16, 9.2, "concrete"),
+        box("window-band", 20, 0.8, 3.5, 12, "metal", 0, 10.2),
+        box("roof", 30, 24, 2, 18.2, "metal"),
         box("intake", 10, 16, 2, 1, "concrete", -17),
         box("intake-water", 7, 12, 0.8, 2.4, "water", -17),
       ];
@@ -76,15 +152,15 @@ export function getStructureModelParts(structureId: string): StructureModelPart[
       return [
         box("riprap", 76, 18, 1.6, 0.8, "riprap", 0, -3),
         box("apron", 74, 9, 1.6, 1.6, "concrete", 0, 2),
-        box("wall", 74, 3.5, 5.2, 3.4, "concrete", 0, 7),
-        box("coping", 76, 5, 0.8, 6.4, "concrete", 0, 7),
+        wedge("wall", 74, 8, 4, 10, 5, "concrete", 7),
+        box("coping", 76, 6, 1.2, 10.6, "concrete", 0, 7),
       ];
     case "channel-dredging":
       return [
         box("channel-bed", 102, 32, 0.8, 0.4, "riprap"),
-        box("bank-left", 100, 6, 1.6, 0.8, "earth", 0, 13),
-        box("bank-right", 100, 6, 1.6, 0.8, "earth", 0, -13),
-        box("channel", 102, 20, 0.8, 1.2, "water"),
+        wedge("bank-left", 100, 10, 5, 6, 3.8, "earth", 13),
+        wedge("bank-right", 100, 10, 5, 6, 3.8, "earth", -13),
+        box("channel", 102, 22, 1, 1.3, "water"),
       ];
     default:
       return [box("facility", 22, 22, 10, 5, "concrete")];

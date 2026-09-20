@@ -48,11 +48,10 @@ export function GameMenuScreen({
     const load = async () => {
       try {
         await Promise.all([
-          fetch("/cesiumStatic/Widgets/widgets.css", { cache: "force-cache" }),
           fetch("/manifest.webmanifest", { cache: "force-cache" }),
           import("@civilcraft/game-data/load"),
-          // スタート押下前に Cesium チャンクを温めてゲーム入場の白画面を短縮する。
-          import("../../components/GameCanvas/CesiumGameMap"),
+          // Warm the local diorama; no satellite tiles or terrain download is needed.
+          import("../../components/GameCanvas/DioramaGameMap"),
         ]);
         if (cancelled) {
           return;
@@ -112,8 +111,7 @@ export function GameMenuScreen({
         <h1 id={titleId} className="game-menu__title">
           プレイモードを選択
         </h1>
-        <p className="game-menu__brief-copy">限られた予算と時間で、川沿いの弱点を対策する。</p>
-        <p className="game-menu__availability">川を読み、施設を選び、この街の明日をつくる。</p>
+        <p className="game-menu__brief-copy">施設を選んで川へドラッグ。大雨への備えを始めよう。</p>
       </div>
 
       <div className="game-menu__modes" role="group" aria-label="プレイモード">

@@ -1,23 +1,23 @@
-/* Mobile river-defense interface: quiet framing around a playable 3D landscape. */
+/* Bright mobile river-defense interface, with the city as the play surface. */
 .game-shell {
-  --river-ink: #102e37;
-  --river-paper: #f6f4ec;
-  --river-green: #176e60;
+  --river-ink: #123c64;
+  --river-paper: #f7fcff;
+  --river-green: #0782b9;
   font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
   color: var(--river-paper);
 }
 .game-shell .game-shell__veil--top {
   height: 160px;
-  background: linear-gradient(#0d25295e, transparent);
+  background: linear-gradient(#048eda30, transparent);
 }
 .game-shell .game-shell__veil--bottom {
   height: 150px;
-  background: linear-gradient(transparent, #0d252966);
+  background: linear-gradient(transparent, #048eda22);
 }
 .river-hud {
   position: absolute;
   z-index: 10;
-  inset: calc(8px + env(safe-area-inset-top)) 12px auto;
+  inset: calc(8px + env(safe-area-inset-top)) 8px auto;
   pointer-events: none;
 }
 .river-hud button {
@@ -30,26 +30,31 @@
   justify-content: space-between;
   align-items: center;
   color: #fff;
-  text-shadow: 0 1px 4px #102e37;
+  text-shadow: none;
   min-height: 36px;
 }
 .river-hud__location > span {
-  font-size: 11px;
-  font-weight: 750;
-  letter-spacing: 0.12em;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 4px 10px;
+  border: 1px solid #ffffff40;
+  border-radius: 24px;
+  background: #087abbdc;
 }
 .river-hud__location small {
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-size: 11px;
+  letter-spacing: 0;
   margin-left: 8px;
   font-weight: 500;
 }
 .river-hud__location i {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 14px;
   border-radius: 50%;
-  background: #8ee0bd;
+  background: #2de2ce;
+  box-shadow: 0 0 0 4px #ffffff18;
   margin-right: 7px;
 }
 .river-hud .river-hud__menu {
@@ -58,59 +63,62 @@
   border: 1px solid #ffffff40;
   border-radius: 50%;
   color: white;
-  background: #102e37;
+  background: #09699f;
   display: grid;
   place-items: center;
 }
 .river-hud__dashboard {
   display: grid;
-  grid-template-columns: 0.85fr 1.25fr 0.85fr;
-  border-radius: 18px 18px 0 0;
-  background: #f6f4ecf5;
-  color: #102e37;
-  box-shadow: 0 5px 20px #102e3720;
+  grid-template-columns: 0.95fr 1.25fr 1fr;
+  border-radius: 20px;
+  border: 1px solid #ffffffd9;
+  background: #f7fcfff5;
+  color: #123c64;
+  box-shadow: 0 5px 20px #123c6420;
   margin-top: 6px;
 }
 .river-hud__dashboard > * {
   min-width: 0;
-  padding: 12px 10px 10px;
+  padding: 5px 8px;
+  position: relative;
   text-align: left;
 }
 .river-hud__dashboard > * + * {
-  border-left: 1px solid #102e3714;
+  border-left: 1px solid #123c6414;
 }
 .river-hud__dashboard span {
   display: block;
-  font-size: 10px;
-  font-weight: 650;
-  color: #52676d;
+  font-size: 11px;
+  font-weight: 700;
+  color: #487596;
 }
 .river-hud__dashboard strong,
 .river-hud__dashboard time {
   display: block;
   font-size: 23px;
-  letter-spacing: -0.06em;
+  letter-spacing: -0.04em;
   line-height: 1.4;
   font-weight: 750;
   font-variant-numeric: tabular-nums;
 }
 .river-hud__dashboard strong small {
-  font-size: 10px;
-  font-weight: 550;
+  font-size: 11px;
+  font-weight: 650;
   letter-spacing: 0;
 }
 .river-hud__budget > span small {
   margin-left: 4px;
-  color: #176e60;
-  font-size: 8px;
+  color: #0782b9;
+  font-size: 11px;
   white-space: nowrap;
 }
 .river-hud .river-hud__damage {
   border: 0;
-  border-left: 1px solid #102e3714;
+  border-left: 1px solid #123c6414;
   background: transparent;
-  color: #176e60;
-  border-radius: 0 18px 0 0;
+  color: #0782b9;
+  border-radius: 0;
+  color: #078664;
 }
 .river-hud__damage > span > span {
   display: inline;
@@ -123,54 +131,59 @@
   align-items: center;
   justify-content: space-between;
   gap: 5px;
-  padding: 6px 10px;
+  padding: 0 10px;
   min-height: 44px;
-  background: #153c42f5;
-  border-radius: 0 0 16px 16px;
+  background: #0875afda;
+  border-radius: 20px;
+  margin-top: 5px;
+  backdrop-filter: blur(12px);
 }
 .river-hud__objective > span {
-  font-size: 9px;
-  color: #b5d0c9;
+  min-width: 0;
+  font-size: 11px;
+  color: #d4f3ff;
   letter-spacing: 0.03em;
 }
 .river-hud__objective b {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 550;
-  color: #f6f4ec;
+  color: #f7fcff;
   margin-top: 3px;
 }
 .river-hud__objective button {
+  flex-shrink: 0;
   min-height: 44px;
   border: 0;
   background: transparent;
-  font-size: 10px;
-  color: #c3ecce;
+  font-size: 12px;
+  color: #ffffff;
   padding: 0 2px 0 8px;
   white-space: nowrap;
 }
 .river-hud.is-storm .river-hud__objective {
-  background: #244851f5;
+  display: none;
 }
 .river-hud__details {
   pointer-events: auto;
-  background: #f6f4ec;
-  color: #102e37;
+  background: #f7fcff;
+  color: #123c64;
   border-radius: 16px;
-  padding: 16px;
+  padding: 10px 14px;
   margin-top: 8px;
-  box-shadow: 0 12px 30px #102e3730;
+  box-shadow: 0 12px 30px #123c6430;
 }
 .river-hud__details > div {
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  padding: 6px 0;
+  gap: 8px;
+  padding: 4px 0;
 }
 .river-hud__details p {
   font-size: 12px;
-  line-height: 1.8;
-  color: #52676d;
+  line-height: 1.5;
+  color: #487596;
   margin: 10px 0 0;
 }
 .river-pause {
@@ -180,17 +193,17 @@
   border-radius: 24px;
   width: min(340px, calc(100vw - 40px));
   box-sizing: border-box;
-  color: #102e37;
-  background: #f6f4ec;
+  color: #123c64;
+  background: #f7fcff;
   text-align: center;
 }
 .river-pause::backdrop {
   background: #092730b8;
 }
 .river-pause p {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.22em;
-  color: #176e60;
+  color: #0782b9;
 }
 .river-pause h2 {
   font-size: 26px;
@@ -201,7 +214,7 @@
   display: block;
   font-size: 11px;
   line-height: 1.8;
-  color: #52676d;
+  color: #487596;
 }
 .river-pause button {
   display: block;
@@ -209,14 +222,14 @@
   min-height: 48px;
   border-radius: 12px;
   margin: 12px 0;
-  border: 1px solid #102e3720;
+  border: 1px solid #123c6420;
   background: transparent;
-  color: #102e37;
+  color: #123c64;
   font-weight: 650;
 }
 .river-pause .river-pause__resume {
   margin-top: 24px;
-  background: #176e60;
+  background: #0782b9;
   color: white;
 }
 .game-shell .cesium-pending-panel {
@@ -228,9 +241,9 @@
   padding: 16px;
   border: 0;
   border-radius: 22px;
-  background: #f6f4ec;
-  color: #102e37;
-  box-shadow: 0 8px 40px #102e3738;
+  background: #f7fcff;
+  color: #123c64;
+  box-shadow: 0 8px 40px #123c6438;
   backdrop-filter: none;
 }
 .game-shell .cesium-pending-panel__topline {
@@ -242,44 +255,44 @@
   min-width: 115px;
 }
 .game-shell .cesium-pending-panel__summary strong {
-  color: #102e37;
+  color: #123c64;
   font-size: 18px;
 }
 .game-shell .cesium-pending-panel__eyebrow {
-  color: #176e60;
-  font-size: 10px;
+  color: #0782b9;
+  font-size: 12px;
 }
 .game-shell .cesium-pending-panel__summary > span:last-child {
-  color: #52676d;
-  font-size: 10px;
+  color: #487596;
+  font-size: 12px;
 }
 .game-shell .cesium-pending-panel .cesium-confirm-hud button {
   min-height: 48px;
   height: auto;
-  border: 1px solid #102e3725;
+  border: 1px solid #123c6425;
   border-radius: 12px;
   font-size: 12px;
   box-shadow: none;
   padding: 0 12px;
 }
 .game-shell .cesium-pending-panel .cesium-confirm-hud__confirm {
-  background: #176e60;
+  background: #0782b9;
   color: white;
 }
 .game-shell .cesium-pending-panel .cesium-confirm-hud__cancel {
-  color: #52676d;
+  color: #487596;
   background: transparent;
 }
 .game-shell .cesium-pending-panel .orientation-slider__header {
-  color: #52676d;
+  color: #487596;
   font-size: 11px;
 }
 .game-shell .cesium-pending-panel .orientation-slider__header output {
-  color: #176e60;
+  color: #0782b9;
 }
 .game-shell .cesium-pending-panel .orientation-slider__input {
   height: 44px;
-  accent-color: #176e60;
+  accent-color: #0782b9;
 }
 .game-shell.is-pending-placement .cmd-dock {
   visibility: hidden;
@@ -289,23 +302,23 @@
   padding: 7px 10px;
   border: 1px solid #ffffffa0;
   border-radius: 10px;
-  background: #f6f4eced;
-  color: #102e37;
-  box-shadow: 0 3px 12px #102e3720;
+  background: #f7fcffed;
+  color: #123c64;
+  box-shadow: 0 3px 12px #123c6420;
   backdrop-filter: none;
   min-width: 0;
 }
 .game-shell .cesium-map-label.cesium-map-label .cesium-map-label__name {
-  color: #102e37;
+  color: #123c64;
   font-size: 11px;
   text-shadow: none;
 }
 .game-shell .cesium-map-label__effect {
-  color: #52676d;
-  font-size: 10px;
+  color: #487596;
+  font-size: 12px;
 }
 .game-shell .cesium-map-label.is-good .cesium-map-label__effect {
-  color: #176e60;
+  color: #0782b9;
 }
 .game-shell .cesium-map-label.is-warn .cesium-map-label__effect {
   color: #795b28;
@@ -333,7 +346,7 @@
 }
 .game-shell .tutorial-coach {
   top: auto;
-  bottom: calc(180px + env(safe-area-inset-bottom));
+  bottom: calc(158px + env(safe-area-inset-bottom));
   left: 16px;
   right: 16px;
   width: auto;
@@ -341,8 +354,8 @@
   padding: 12px 52px 12px 14px;
   border: 0;
   border-radius: 14px;
-  background: #153c42f0;
-  box-shadow: 0 5px 18px #102e3720;
+  background: #096fa9ed;
+  box-shadow: 0 5px 18px #123c6420;
 }
 .game-shell .tutorial-coach__kicker {
   display: none;
@@ -352,9 +365,9 @@
   color: white;
 }
 .game-shell .tutorial-coach p {
-  font-size: 10px;
+  font-size: 12px;
   margin: 4px 0 0;
-  color: #c8dcd8;
+  color: #e0f5ff;
 }
 .game-shell .tutorial-coach__skip {
   min-width: 44px;
@@ -367,20 +380,24 @@
   display: none;
 }
 .game-shell .game-toast {
-  top: 205px;
-  bottom: auto;
+  top: auto;
+  bottom: calc(158px + env(safe-area-inset-bottom));
+  max-width: calc(100% - 100px);
+  padding: 8px 12px;
+  font-size: 12px;
+  pointer-events: none;
 }
 .river-placement-feedback {
   margin: 10px 0 0;
   padding: 9px 11px;
-  background: #e9e6da;
+  background: #fff1cf;
   border-radius: 10px;
   font-size: 11px;
-  color: #735d31;
+  color: #775518;
 }
 .river-placement-feedback.is-good {
-  background: #e1eee5;
-  color: #176e60;
+  background: #dff9f4;
+  color: #0782b9;
 }
 .river-placement-feedback.is-bad {
   background: #f7e5da;
@@ -391,7 +408,7 @@
   display: block;
 }
 .river-placement-feedback span {
-  font-size: 10px;
+  font-size: 12px;
   margin-top: 4px;
   font-weight: 400;
   line-height: 1.6;
@@ -400,14 +417,14 @@
   position: absolute;
   z-index: 8;
   right: 14px;
-  bottom: calc(190px + env(safe-area-inset-bottom));
+  bottom: calc(158px + env(safe-area-inset-bottom));
   width: 44px;
   height: 44px;
   border: 1px solid #fff9;
   border-radius: 50%;
-  background: #f6f4ec;
-  color: #176e60;
-  box-shadow: 0 3px 12px #102e3725;
+  background: #f7fcff;
+  color: #0782b9;
+  box-shadow: 0 3px 12px #123c6425;
   display: grid;
   place-items: center;
 }
@@ -420,5 +437,52 @@
   .game-shell *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+.river-hud__metric-icon {
+  display: none;
+  width: 28px;
+  height: 24px;
+  margin-bottom: 3px;
+  font-size: 23px;
+  font-style: normal;
+  line-height: 24px;
+}
+.river-hud__income {
+  display: block;
+  color: #078664;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.river-hud__water strong {
+  color: #087fbc;
+}
+.river-hud__dashboard > button {
+  align-self: stretch;
+}
+.river-hud__objective > .river-hud__rain {
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.river-hud button:focus-visible,
+.river-recenter:focus-visible {
+  outline: 3px solid #20d9ef;
+  outline-offset: 3px;
+}
+@media (max-width: 360px) {
+  .river-hud__dashboard > * {
+    padding-inline: 4px;
+  }
+  .river-hud__dashboard strong,
+  .river-hud__dashboard time {
+    font-size: 21px;
+  }
+  .river-hud__objective {
+    padding-inline: 8px;
   }
 }

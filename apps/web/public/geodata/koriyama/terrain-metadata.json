@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "bounds": [
+    140.37,
+    37.351,
+    140.398,
+    37.379
+  ],
+  "zoom": 14,
+  "width": 328,
+  "height": 413,
+  "pixelOrigin": [
+    3732580,
+    1627005
+  ],
+  "pixelAnchor": "centre (+0.5)",
+  "rowOrder": "north-to-south",
+  "horizontalCrs": "EPSG:3857 raster; longitude/latitude input",
+  "encoding": "row-major interleaved int32 little-endian centimetres + uint8 quality (5 bytes/sample)",
+  "noData": -2147483648,
+  "qualityCodes": {
+    "0": "noData",
+    "1": "DEM5A",
+    "2": "DEM5B fallback",
+    "3": "DEM10B fallback"
+  },
+  "localDatumM": 230,
+  "verticalDatum": "GSI orthometric elevation H, Japan national mean-sea-level height system (Tokyo Peil mainland reference); NOT ellipsoid height",
+  "verticalDatumEpoch": "Tile payload has no epoch identifier. 2011/2024 realization not independently verified; do not assume compatibility with PLATEAU 2020 absolute heights.",
+  "sourceNominalResolutionM": {
+    "DEM5A": 5,
+    "DEM5B": 5,
+    "DEM10B": 10
+  },
+  "gridSpacingAtCentreM": 7.593880190108757,
+  "acquisitionDate": "Unknown; retrieval dates and HTTP Last-Modified are not survey dates",
+  "sources": [
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/14/14580/6355.png",
+      "file": "terrain-source-dem5a_png-14-14580-6355.png",
+      "bytes": 74222,
+      "sha256": "d44e2b25989a52e1d3f1fc78e2f21176e1257c8b28581936665eb1ce0f3dbeea",
+      "retrievedAt": "2026-09-20T13:56:25.226Z",
+      "lastModified": "Mon, 30 Mar 2026 01:11:21 GMT",
+      "layer": "dem5a_png",
+      "quality": 1,
+      "x": 14580,
+      "y": 6355,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/14/14581/6355.png",
+      "file": "terrain-source-dem5a_png-14-14581-6355.png",
+      "bytes": 73015,
+      "sha256": "13bb6cd4028c92be2b2abf6bbe1ddf9dd345866f2677ece170aa0a57e6a49b40",
+      "retrievedAt": "2026-09-20T13:56:25.355Z",
+      "lastModified": "Mon, 30 Mar 2026 01:11:26 GMT",
+      "layer": "dem5a_png",
+      "quality": 1,
+      "x": 14581,
+      "y": 6355,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/14/14580/6356.png",
+      "file": "terrain-source-dem5a_png-14-14580-6356.png",
+      "bytes": 75838,
+      "sha256": "90e8cc02cdcc118f0342a20a40def894f4928ff30915cde76e2193660492060b",
+      "retrievedAt": "2026-09-20T13:56:25.448Z",
+      "lastModified": "Mon, 30 Mar 2026 01:11:21 GMT",
+      "layer": "dem5a_png",
+      "quality": 1,
+      "x": 14580,
+      "y": 6356,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem_png/14/14580/6356.png",
+      "file": "terrain-source-dem_png-14-14580-6356.png",
+      "bytes": 47957,
+      "sha256": "27caaf438ada95784d6a3b7fc6a30a29b8605a73985e109b3d03af986f6feea4",
+      "retrievedAt": "2026-09-20T13:56:25.539Z",
+      "lastModified": "Thu, 26 Mar 2026 00:58:55 GMT",
+      "layer": "dem_png",
+      "quality": 3,
+      "x": 14580,
+      "y": 6356,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/14/14581/6356.png",
+      "file": "terrain-source-dem5a_png-14-14581-6356.png",
+      "bytes": 74543,
+      "sha256": "38abff536dad2629de0d9df831230c38a278323e5926e8da0919d418fd1a4b6c",
+      "retrievedAt": "2026-09-20T13:56:25.629Z",
+      "lastModified": "Mon, 30 Mar 2026 01:11:26 GMT",
+      "layer": "dem5a_png",
+      "quality": 1,
+      "x": 14581,
+      "y": 6356,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem_png/14/14581/6356.png",
+      "file": "terrain-source-dem_png-14-14581-6356.png",
+      "bytes": 43996,
+      "sha256": "557a84e8688040f69061a58640f26d03f5c3999b7c70181aa75c1de6f23694a0",
+      "retrievedAt": "2026-09-20T13:56:25.769Z",
+      "lastModified": "Thu, 26 Mar 2026 00:59:11 GMT",
+      "layer": "dem_png",
+      "quality": 3,
+      "x": 14581,
+      "y": 6356,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/14/14580/6357.png",
+      "file": "terrain-source-dem5a_png-14-14580-6357.png",
+      "bytes": 80952,
+      "sha256": "a17718725c9cefe9ff5d1941df7153d4fa577f9eca69f5f3ce2f008ad0b6a4de",
+      "retrievedAt": "2026-09-20T13:56:25.882Z",
+      "lastModified": "Mon, 30 Mar 2026 01:11:21 GMT",
+      "layer": "dem5a_png",
+      "quality": 1,
+      "x": 14580,
+      "y": 6357,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5a_png/14/14581/6357.png",
+      "file": "terrain-source-dem5a_png-14-14581-6357.png",
+      "bytes": 78502,
+      "sha256": "e3231aa248cdfb6f7388adc6469370786d6691456e37f81406c3ca83bbea84ac",
+      "retrievedAt": "2026-09-20T13:56:25.977Z",
+      "lastModified": "Mon, 30 Mar 2026 01:11:26 GMT",
+      "layer": "dem5a_png",
+      "quality": 1,
+      "x": 14581,
+      "y": 6357,
+      "z": 14
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem_png/14/14581/6357.png",
+      "file": "terrain-source-dem_png-14-14581-6357.png",
+      "bytes": 60742,
+      "sha256": "b689d59a35b00e3b5d7dbf4201d68529faa12a1cf7d64aa6bbce8522b9e9e193",
+      "retrievedAt": "2026-09-20T13:56:26.162Z",
+      "lastModified": "Thu, 26 Mar 2026 00:59:09 GMT",
+      "layer": "dem_png",
+      "quality": 3,
+      "x": 14581,
+      "y": 6357,
+      "z": 14
+    }
+  ],
+  "attempts": [
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/14/14580/6356.png",
+      "status": 404
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/14/14581/6356.png",
+      "status": 404
+    },
+    {
+      "url": "https://cyberjapandata.gsi.go.jp/xyz/dem5b_png/14/14581/6357.png",
+      "status": 404
+    }
+  ],
+  "counts": {
+    "noData": 0,
+    "dem5a": 135309,
+    "dem5b": 0,
+    "dem10b": 155
+  },
+  "elevationRangeM": [
+    218.01,
+    242.54
+  ],
+  "asset": {
+    "file": "terrain.bin",
+    "bytes": 677320,
+    "sha256": "ae4df57576c675a1cf574fbdefdefcb636999dd3478cadc52a58c0549016eff6"
+  },
+  "sourceUrl": "https://maps.gsi.go.jp/development/ichiran.html",
+  "encodingUrl": "https://maps.gsi.go.jp/development/demtile.html",
+  "license": "GSI content terms / PDL1.0; attribution and processing statement required",
+  "licenseUrl": "https://www.gsi.go.jp/kikakuchousei/kikakuchousei40182.html",
+  "attribution": "地理院タイル（国土地理院）標高タイルを加工して作成",
+  "limitations": [
+    "Source DEM is interpolated terrain, not a direct survey of each output point",
+    "No bridge decks, building roofs or reliable river bathymetry",
+    "No geoid offset or vertical exaggeration applied",
+    "Strict noData; no synthetic filling"
+  ]
+}

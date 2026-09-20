@@ -6,6 +6,8 @@ import { GameToast } from "./components/GameToast";
 import { ConstructionMenu, useConstruction } from "./features/construction";
 import type { GeoPosition } from "./features/construction/types/construction";
 import { RiverMissionHud } from "./features/hud/RiverMissionHud";
+import { getPlacementFeedback } from "./features/hud/riverMissionFeedback";
+import { calculateStructureInfluences } from "./features/disaster/services/floodSimulation";
 import { TutorialCoachmark } from "./features/hud/TutorialCoachmark";
 import { hasSeenTutorial, markTutorialDone } from "./features/hud/tutorialStorage";
 import "./command-hud.css";
@@ -21,9 +23,9 @@ import type { PlayMode } from "./features/lobby/types";
 import { useGameSocket } from "./features/realtime/hooks/useGameSocket";
 
 /** タイトル／メニューでは Cesium（約 10MB+）を読まず、真っ白待ちを防ぐ。 */
-const CesiumGameMap = lazy(async () => {
-  const mod = await import("./components/GameCanvas/CesiumGameMap");
-  return { default: mod.CesiumGameMap };
+const DioramaGameMap = lazy(async () => {
+  const mod = await import("./components/GameCanvas/DioramaGameMap");
+  return { default: mod.DioramaGameMap };
 });
 
 type DockDragState = {
@@ -44,7 +46,6 @@ const DOCK_DRAG_PLACE_THRESHOLD_PX = 18;
 /** 配置ゴーストを出し始める移動量（意図ロック直後から追従させる）。 */
 const DOCK_DRAG_GHOST_THRESHOLD_PX = 10;
 /** カメラ移動の WS 送信スロットル（ms）。 */
-const MOVE_SEND_THROTTLE_MS = 400;
 /** ローカル単独プレイではWS再接続を止め、開発サーバーのプロキシ負荷を避ける。 */
 const REALTIME_ENABLED = import.meta.env.VITE_REALTIME_ENABLED === "true";
 
@@ -82,7 +83,6 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   const mapRef = useRef<CesiumGameMapHandle>(null);
   const dragRef = useRef<DockDragState | null>(null);
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
-  const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
   const [showTutorial, setShowTutorial] = useState(() => !hasSeenTutorial());
 
@@ -173,7 +173,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     (structureId: string, position: GeoPosition, headingDegrees: number) => {
       const pending = beginPendingPlacement(structureId, position, headingDegrees);
       if (pending !== null) {
-        setMessage("仮配置しました。位置と向きを調整して確定してください。", "info");
+        setMessage("タップで回転・ドラッグで移動。✓で配置", "info");
       }
     },
     [beginPendingPlacement, setMessage],
@@ -184,6 +184,14 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     if (placement === null) {
       return;
     }
+    const influence = calculateStructureInfluences([placement])[0];
+    if (influence) {
+      const feedback = getPlacementFeedback(influence);
+      setMessage(
+        feedback.tone === "warn" ? "設置しました。位置・向きの相性に注意" : "設置しました",
+        feedback.tone,
+      );
+    }
     markTutorialDone();
     setShowTutorial(false);
     socket.sendPlaceStructure({
@@ -192,7 +200,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
       headingDegrees: placement.headingDegrees,
       clientPlacementId: placement.id,
     });
-  }, [confirmPendingPlacement, socket]);
+  }, [confirmPendingPlacement, setMessage, socket]);
 
   useEffect(() => {
     if (!inGame || paused || pendingPlacement === null) {
@@ -215,11 +223,8 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
 
   const handleCameraFocusChange = useCallback(
     (position: GeoPosition) => {
-      const now = Date.now();
-      if (now - lastMoveSentAtRef.current < MOVE_SEND_THROTTLE_MS) {
-        return;
-      }
-      lastMoveSentAtRef.current = now;
+      // The map owns throttling and delivers the final settled position.
+      // A second throttle here can discard that trailing update permanently.
       socket.sendMove({ position });
     },
     [socket],
@@ -267,11 +272,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         dragGhostRef.current.style.left = `${event.clientX}px`;
         dragGhostRef.current.style.top = `${event.clientY}px`;
       }
-      if (
-        current.overMap !== next.overMap ||
-        current.placeable !== next.placeable ||
-        !next.overMap
-      ) {
+      if (current.overMap !== next.overMap || current.placeable !== next.placeable) {
         setDrag(next);
       }
     };
@@ -294,13 +295,22 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
       mapRef.current?.tryDropStructure(current.structureId, event.clientX, event.clientY);
     };
 
+    const onCancel = (event: PointerEvent) => {
+      if (dragRef.current !== null && event.pointerId !== dragRef.current.pointerId) {
+        return;
+      }
+      dragRef.current = null;
+      setDrag(null);
+      mapRef.current?.clearDragGhost();
+    };
+
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-    window.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointercancel", onCancel);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
-      window.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointercancel", onCancel);
       map?.clearDragGhost();
     };
   }, [inGame, isDockDragging]);
@@ -361,7 +371,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
       />
 
       <Suspense fallback={<MapBootFallback />}>
-        <CesiumGameMap
+        <DioramaGameMap
           ref={mapRef}
           onReadyChange={setMapReady}
           mapActive={inGame}
