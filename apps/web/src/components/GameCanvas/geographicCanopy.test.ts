@@ -24,11 +24,25 @@ function create(patches: CanopyPatch[], extra: Partial<CanopyOptions> = {}) {
 afterEach(() => groups.splice(0).forEach(disposeDioramaObject));
 
 describe("bounded imagery canopy reconstruction", () => {
-  it("preserves four source envelopes and labels internal placement as illustrative, not observed trees", () => {
+  it("preserves seven source envelopes and labels internal placement as illustrative, not observed trees", () => {
     const patches = convertImageryCanopyObservations(source);
-    expect(patches).toHaveLength(4);
+    expect(patches).toHaveLength(7);
     expect(patches.map(p => p.rings[0]!.length)).toEqual(source.patches.map(p => p.rings[0]!.length));
     for (const p of patches) expect(p.source).toBe(source.source);
+    expect(source.source.mapUrl).toBe("https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1");
+    const riverbankIds = ["riverbank-south-canopy-core", "riverbank-middle-canopy-core", "riverbank-north-canopy-core"];
+    expect(patches.filter(p => riverbankIds.includes(p.id)).map(p => p.id).sort()).toEqual([...riverbankIds].sort());
+    const mapBounds = { minX: koriyamaGeoToLocal([140.370, 37.379]).x, maxX: koriyamaGeoToLocal([140.398, 37.351]).x,
+      minZ: koriyamaGeoToLocal([140.370, 37.379]).z, maxZ: koriyamaGeoToLocal([140.398, 37.351]).z };
+    for (const patch of patches.filter(p => riverbankIds.includes(p.id))) {
+      const sourcePatch = source.patches.find(candidate => candidate.id === patch.id)!;
+      expect(sourcePatch.rings).toEqual([sourcePatch.observationView!.screenVerticesPx.map(([x, y]) => [x - 1066, y - 367])]);
+      expect(patch.observationView?.mapUrl).toBe("https://maps.gsi.go.jp/#18/37.360206/140.378269/&ls=seamlessphoto&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1");
+      expect(patch.observationView?.referenceTileTopLeftScreenPx).toEqual([1066, 367]);
+      expect(patch.observationView?.captureDateUncertainty).toMatch(/unverified/);
+      const points = patch.rings.flat();
+      expect(points.every(p => p.x >= mapBounds.minX && p.x <= mapBounds.maxX && p.z >= mapBounds.minZ && p.z <= mapBounds.maxZ)).toBe(true);
+    }
     const r = create([patch()]);
     expect(r.stats.counts.rendered).toBeGreaterThan(0);
     expect(r.records.every(c => c.positionSource === "illustrative-within-imagery-envelope")).toBe(true);
@@ -113,13 +127,17 @@ describe("bounded imagery canopy reconstruction", () => {
     const r = create(patches, { bounds: { minX: nw.x, minZ: nw.z, maxX: se.x, maxZ: se.z }, exclusions, observedCrowns,
       groundSampler: (x, z) => { const p = worldToGeo(x, z); return sampleKoriyamaTerrain(terrain, p.longitude, p.latitude).localY; } });
     const accepted = r.records.filter(c => c.reason === "rendered");
-    expect(accepted.length).toBe(58);
-    expect(r.stats.evaluatedCells).toBe(318); expect(r.stats.meshes).toBe(6);
+    expect(accepted.length).toBe(66);
+    expect(r.stats.evaluatedCells).toBe(409); expect(r.stats.meshes).toBe(8);
     for (const c of accepted) {
       expect(canopyContainsCrown(patches.find(p => p.id === c.patchId)!.rings, c, c.radiusM)).toBe(true);
       for (const o of observedCrowns) { const p = koriyamaGeoToLocal(o.coordinates); expect(Math.hypot(c.x - p.x, c.z - p.z)).toBeGreaterThan(c.radiusM + o.crownRadiusM); }
       for (const e of exclusions) expect(intersectsVegetationExclusion(c, c.radiusM, e)).toBe(false);
     }
-    console.info("actual canopy", JSON.stringify({ stats: r.stats, perPatch: patches.map(p => ({ id: p.id, rendered: accepted.filter(c => c.patchId === p.id).length })) }));
+    console.info("actual canopy", JSON.stringify({ stats: r.stats, perPatch: patches.map(p => {
+      const records = r.records.filter(c => c.patchId === p.id);
+      const counts = records.reduce<Record<string, number>>((all, record) => { all[record.reason] = (all[record.reason] ?? 0) + 1; return all; }, {});
+      return { id: p.id, counts };
+    }) }));
   }, 60_000);
 });
