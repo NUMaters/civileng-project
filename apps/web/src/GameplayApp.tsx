@@ -385,6 +385,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
           inGame &&
           (flood.phase === "disaster" || flood.phase === "result" || flood.phase === "review")
         }
+        paused={paused}
         getLatestState={flood.getLatestState}
       />
 
@@ -393,7 +394,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
           ref={mapRef}
           onReadyChange={setMapReady}
           onFloodFocusChange={setFloodFocus}
-          mapActive={inGame}
+          mapActive={inGame && !paused}
           npcMarkers={npc.available ? npcs : undefined}
           highlightedNpcId={npc.state.highlightedNpcId}
           onSelectNpc={openNpc}
