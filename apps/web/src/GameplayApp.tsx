@@ -46,7 +46,6 @@ const DOCK_DRAG_PLACE_THRESHOLD_PX = 18;
 /** 配置ゴーストを出し始める移動量（意図ロック直後から追従させる）。 */
 const DOCK_DRAG_GHOST_THRESHOLD_PX = 10;
 /** カメラ移動の WS 送信スロットル（ms）。 */
-const MOVE_SEND_THROTTLE_MS = 400;
 /** ローカル単独プレイではWS再接続を止め、開発サーバーのプロキシ負荷を避ける。 */
 const REALTIME_ENABLED = import.meta.env.VITE_REALTIME_ENABLED === "true";
 
@@ -84,7 +83,6 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   const mapRef = useRef<CesiumGameMapHandle>(null);
   const dragRef = useRef<DockDragState | null>(null);
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
-  const lastMoveSentAtRef = useRef(0);
   const [drag, setDrag] = useState<DockDragState | null>(null);
   const [showTutorial, setShowTutorial] = useState(() => !hasSeenTutorial());
 
@@ -225,11 +223,8 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
 
   const handleCameraFocusChange = useCallback(
     (position: GeoPosition) => {
-      const now = Date.now();
-      if (now - lastMoveSentAtRef.current < MOVE_SEND_THROTTLE_MS) {
-        return;
-      }
-      lastMoveSentAtRef.current = now;
+      // The map owns throttling and delivers the final settled position.
+      // A second throttle here can discard that trailing update permanently.
       socket.sendMove({ position });
     },
     [socket],

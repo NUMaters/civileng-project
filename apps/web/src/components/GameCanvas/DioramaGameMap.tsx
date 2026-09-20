@@ -10,6 +10,7 @@ import { geoToWorld, riverX, worldToGeo } from "./dioramaSpace";
 import { createGeographicWorld } from "./geographicWorld";
 import { createGeographicTerrain } from "./geographicTerrain";
 import { createGeographicWaterMaterial, riverFlowCoordinates } from "./geographicWater";
+import { createCameraFocusNotifier } from "./cameraFocusNotification";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
@@ -343,6 +344,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       let frame = 0,
         last = performance.now(),
         time = 0;
+      const notifyCameraFocus = createCameraFocusNotifier((x, z) => {
+        latest.current.onCameraFocusChange?.(worldToGeo(x, z));
+      });
       const draw = (now: number) => {
         frame = requestAnimationFrame(draw);
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -355,6 +359,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         const correction = new T.Vector3(x - controls.target.x, 0, z - controls.target.z);
         controls.target.add(correction);
         camera.position.add(correction);
+        notifyCameraFocus(controls.target.x, controls.target.z, now);
         for (const model of r.models.values()) {
           const delta =
             T.MathUtils.euclideanModulo(
