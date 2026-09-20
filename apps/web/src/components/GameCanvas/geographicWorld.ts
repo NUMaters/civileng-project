@@ -65,7 +65,7 @@ export type GeographicWorld = THREE.Group & {
 };
 type Layer = "building" | "campus" | "water" | "waterway" | "road" | "rail" | "bridge-road" | "bridge-rail";
 export type GeographicSurfaceLayer = Exclude<Layer, "building">;
-type Buffer = { layer: Layer; tx: number; tz: number; positions: number[]; normals: number[]; colors: number[]; uvs: number[] };
+type Buffer = { layer: Layer; tx: number; tz: number; positions: number[]; normals: number[]; colors: number[]; uvs: number[]; riverStageEligible: boolean; sourceIds: Set<string> };
 type Point = LocalPoint & { u?: number; v?: number };
 const COLORS = ["#528dce", "#718da9", "#cf7857", "#68a7cf", "#df9369"].map((c) => new THREE.Color(c));
 const WALL_COLOR = new THREE.Color("#f6e8c9");
@@ -101,6 +101,19 @@ function inLocalBounds(feature: GeographicFeature, bounds: NonNullable<Geographi
 
 function isOsmFeature(feature: GeographicFeature): feature is GeodataFeature {
   return "version" in feature.properties;
+}
+
+/** Bundled OSM identity, not a proximity/width guess or a surveyed river boundary.
+ * The unnamed relation contains the named Abukuma centerlines; the other bundled
+ * river polygons belong to Sasahara/Yata. Re-audit this ID when refreshing assets.
+ */
+export function isAbukumaWater(feature: GeographicFeature): boolean {
+  if (!isOsmFeature(feature)) return false;
+  const p = feature.properties;
+  const named = p["name:ja"] === "阿武隈川" || p.name === "阿武隈川";
+  return (p.kind === "water" && p.water === "river" && feature.geometry.type === "MultiPolygon" &&
+    (feature.id === "relation/18504988" || named)) ||
+    (p.kind === "waterway" && p.waterway === "river" && feature.geometry.type === "MultiLineString" && named);
 }
 
 function buildingHeight(feature: GeographicFeature, options: GeographicWorldOptions) {
@@ -311,6 +324,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     const mesh = new THREE.Mesh(geometry, water ? waterMaterial : buffer.layer === "building" ? buildingMaterial : material);
     mesh.name = `geographic-${buffer.layer}/${buffer.tx}/${buffer.tz}/${stats.batches}`;
     mesh.userData = { layer: buffer.layer, tile: [buffer.tx, buffer.tz], tileSize,
+      riverStageEligible: buffer.riverStageEligible, sourceIds: [...buffer.sourceIds],
       bridge: buffer.layer.startsWith("bridge-"), elevationSource: buffer.layer === "building" ? group.userData.groundSource : group.userData.surfaceSource };
     mesh.frustumCulled = true;
     mesh.receiveShadow = !water; mesh.castShadow = buffer.layer === "building";
@@ -318,8 +332,9 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     if (water) { group.waterGeometries.push(geometry); group.waterMeshes.push(mesh); }
     stats.batches++; stats.vertices += count; buffered -= count;
     buffer.positions = []; buffer.normals = []; buffer.colors = []; buffer.uvs = [];
+    buffer.sourceIds.clear();
   }
-  function emit(buffer: Buffer, a: Point, b: Point, c: Point, color: THREE.Color) {
+  function emit(buffer: Buffer, a: Point, b: Point, c: Point, color: THREE.Color, sourceId?: string) {
     const ux = b.x - a.x, uy = b.y - a.y, uz = b.z - a.z;
     const vx = c.x - a.x, vy = c.y - a.y, vz = c.z - a.z;
     const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
@@ -331,6 +346,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       for (const candidate of buffers.values()) if (candidate.positions.length > largest.positions.length) largest = candidate;
       flush(largest);
     }
+    if (sourceId) buffer.sourceIds.add(sourceId);
     for (const p of [a, b, c]) {
       buffer.positions.push(p.x, p.y, p.z);
       buffer.normals.push(nx / length, ny / length, nz / length);
@@ -346,7 +362,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
     result = clip(result, "z", bounds.minZ, true);
     return clip(result, "z", bounds.maxZ, false);
   }
-  function tileTriangle(layer: Layer, a: Point, b: Point, c: Point, color: THREE.Color) {
+  function tileTriangle(layer: Layer, a: Point, b: Point, c: Point, color: THREE.Color, feature?: GeographicFeature) {
     const minX = Math.floor(Math.min(a.x, b.x, c.x) / tileSize), maxX = Math.floor(Math.max(a.x, b.x, c.x) / tileSize);
     const minZ = Math.floor(Math.min(a.z, b.z, c.z) / tileSize), maxZ = Math.floor(Math.max(a.z, b.z, c.z) / tileSize);
     for (let tx = minX; tx <= maxX; tx++) for (let tz = minZ; tz <= maxZ; tz++) {
@@ -358,13 +374,14 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
         polygon = clip(polygon, "z", (tz + 1) * tileSize, false);
       }
       if (polygon.length < 3) continue;
-      const key = `${layer}/${tx}/${tz}`;
+      const riverStageEligible = feature !== undefined && isAbukumaWater(feature);
+      const key = `${layer}/${tx}/${tz}/${riverStageEligible ? "abukuma" : "static"}`;
       let buffer = buffers.get(key);
       if (!buffer) {
-        buffer = { layer, tx, tz, positions: [], normals: [], colors: [], uvs: [] };
+        buffer = { layer, tx, tz, positions: [], normals: [], colors: [], uvs: [], riverStageEligible, sourceIds: new Set() };
         buffers.set(key, buffer); tiles.add(`${tx}/${tz}`);
       }
-      for (let i = 1; i < polygon.length - 1; i++) emit(buffer, polygon[0]!, polygon[i]!, polygon[i + 1]!, color);
+      for (let i = 1; i < polygon.length - 1; i++) emit(buffer, polygon[0]!, polygon[i]!, polygon[i + 1]!, color, feature?.id);
     }
   }
   function triangle(layer: Layer, a: Point, b: Point, c: Point, color: THREE.Color) {
@@ -398,7 +415,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       if (ys.some((y) => !validElevation(y)) || (options.groundSampler && points.some((p) => !validElevation(sampleGround(p.x, p.z))))) {
         stats.skippedNoDataTriangles++; return;
       }
-      tileTriangle(layer, { ...a, y: ys[0] as number }, { ...b, y: ys[1] as number }, { ...c, y: ys[2] as number }, color);
+      tileTriangle(layer, { ...a, y: ys[0] as number }, { ...b, y: ys[1] as number }, { ...c, y: ys[2] as number }, color, feature);
     });
   }
   // Order references only, never clone all geographic coordinates or allocate a mesh per feature.

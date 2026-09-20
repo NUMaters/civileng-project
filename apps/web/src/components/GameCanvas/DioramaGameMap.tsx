@@ -26,6 +26,7 @@ import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
+import { createRiverStageController } from "./riverStage";
 
 type Runtime = {
   renderer: T.WebGLRenderer;
@@ -243,6 +244,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         mesh.material = waterMaterial;
       }
       oldWaterMaterials.forEach(material => material.dispose());
+      const riverStage = createRiverStageController(world.waterMeshes);
       const inundation = createDioramaInundation(terrain.sampleGround);
       scene.add(inundation.group);
       const raycaster = new T.Raycaster(),
@@ -380,6 +382,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         notifyCameraFocus(controls.target.x, controls.target.z, now);
         if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
         const state = latest.current.getLatestFloodState?.();
+        riverStage.update(state?.riverLevelMeters ?? 2.2);
         for (const [id, model] of r.models) {
           const influence = state?.structureInfluences.find(item => item.placementId === id);
           const operation = resolveFacilityActivity(influence, state);
