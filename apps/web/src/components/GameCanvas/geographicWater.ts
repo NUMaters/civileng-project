@@ -35,9 +35,11 @@ export function riverFlowCoordinates(x: number, z: number) {
 export function createGeographicWaterMaterial() {
   const material = new THREE.ShaderMaterial({
     uniforms: { time: { value: 0 }, storm: { value: 0 } },
-    vertexShader: `varying vec2 flowUv;
-      void main(){ flowUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
-    fragmentShader: `varying vec2 flowUv; uniform float time; uniform float storm;
+    vertexShader: `varying vec2 flowUv; varying vec3 waterWorldPosition;
+      void main(){ flowUv=uv; waterWorldPosition=(modelMatrix*vec4(position,1.)).xyz;
+        gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }`,
+    fragmentShader: `varying vec2 flowUv; varying vec3 waterWorldPosition;
+      uniform float time; uniform float storm;
       void main(){
         // Increasing station is north/downstream. Speed is illustrative, not observed hydrology.
         float along=flowUv.y-time*7.;
@@ -48,7 +50,22 @@ export function createGeographicWaterMaterial() {
         float foam=smoothstep(.955-aa,.99+aa,ripple);
         foam*=smoothstep(.45,.92,sin(across*.29+along*.024));
         float distant=1.-smoothstep(1.5,5.,length(fwidth(flowUv)));
-        vec3 clear=mix(vec3(.018,.36,.68),vec3(.035,.66,.81),.5+.22*broad);
+        // Analytic shading normals add volume without changing the source river
+        // boundary or the raycast surface. Fade fine waves below pixel scale.
+        vec2 p=waterWorldPosition.xz;
+        float fineFade=1.-smoothstep(1.,4.,length(fwidth(p)));
+        vec2 slope=vec2(cos(p.x*.12+p.y*.07-time*1.3),
+          sin(p.y*.16-p.x*.05-time*1.7))*.075*fineFade;
+        slope+=vec2(cos(p.x*.025+p.y*.018-time*.5),
+          sin(p.y*.032-p.x*.021-time*.7))*.035;
+        vec3 normal=normalize(vec3(-slope.x,1.,-slope.y));
+        vec3 viewDirection=normalize(cameraPosition-waterWorldPosition);
+        vec3 halfDirection=normalize(viewDirection+normalize(vec3(-360.,650.,300.)));
+        float fresnel=pow(1.-clamp(dot(normal,viewDirection),0.,1.),4.);
+        float highlight=pow(max(dot(normal,halfDirection),0.),72.);
+        vec3 clear=mix(vec3(.008,.25,.49),vec3(.018,.54,.68),.5+.22*broad);
+        clear=mix(clear,vec3(.34,.69,.84),fresnel*.6);
+        clear+=vec3(.85,.94,1.)*highlight*.5;
         vec3 color=mix(clear,vec3(.12,.33,.39),clamp(storm,0.,1.)*.55);
         color=mix(color,vec3(.79,.95,1.),foam*.48*distant);
         gl_FragColor=vec4(color,1.);
@@ -57,6 +74,6 @@ export function createGeographicWaterMaterial() {
       }`,
   });
   material.name = "abukuma-flow-north";
-  material.userData.provenance = "Illustrative flow and color; source polygon boundary unchanged; no invented shoreline foam";
+  material.userData.provenance = "Illustrative flow, analytic wave normals and sky/sun highlights; not measured speed, depth or reflection capture. Source polygon boundary unchanged; no invented shoreline foam";
   return material;
 }

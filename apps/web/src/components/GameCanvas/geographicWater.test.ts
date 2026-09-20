@@ -26,4 +26,14 @@ describe("Abukuma water coordinates", () => {
     expect(material.transparent).toBe(false);
     material.dispose();
   });
+  it("shades waves without reflection textures or extra transparent passes", () => {
+    const material = createGeographicWaterMaterial();
+    expect(material.fragmentShader).toContain("cameraPosition-waterWorldPosition");
+    expect(material.fragmentShader).toContain("length(fwidth(p))");
+    expect(material.fragmentShader).not.toContain("sampler2D");
+    expect(material.depthWrite).toBe(true);
+    expect(Object.keys(material.uniforms)).toEqual(["time", "storm"]);
+    expect(material.userData.provenance).toContain("not measured speed, depth");
+    material.dispose();
+  });
 });
