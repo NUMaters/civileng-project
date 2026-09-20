@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-observations-not-yet-integrated",
+  "source": {
+    "provider": "Geospatial Information Authority of Japan",
+    "layer": "seamlessphoto",
+    "attribution": "地理院タイル（全国最新写真）を判読・加工して作成",
+    "catalogUrl": "https://maps.gsi.go.jp/development/ichiran.html",
+    "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+    "displayedCapturePeriod": "2022-07/2022-09",
+    "observedDate": "2026-09-21",
+    "referenceTile": { "z": 18, "x": 233294, "y": 101705, "sizePixels": 256 },
+    "tileUrlTemplate": "https://maps.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+    "pixelCoordinates": "Offsets from the reference tile top-left; offsets beyond 0..255 belong to adjacent tiles. Each entry is [eastPixels,southPixels,crownRadiusPixels].",
+    "positionMethod": "visual-crown-centre-inference",
+    "heightMethod": "unknown; any display height must be explicitly illustrative",
+    "limitations": [
+      "Not surveyed trunk positions, tree counts, species or heights.",
+      "Small initial sample of visually separable crowns; not complete campus or riverbank coverage.",
+      "Capture period is the GSI map display for this view, not independently verified per-tree metadata.",
+      "Continuous woodland not decomposed into invented individual trees.",
+      "Candidates must pass terrain, building, water, road, rail and existing-tree checks before rendering.",
+      "Imagery may be older than current buildings and tree conditions. No relocation to hide conflicts."
+    ]
+  },
+  "observations": [
+    [52,31,10], [73,54,8], [85,97,8], [105,128,8],
+    [-2,127,12], [-30,136,10],
+    [23,174,8], [44,175,8], [65,175,7], [86,175,7],
+    [106,175,8], [134,169,8], [168,169,8], [202,161,8],
+    [44,228,13], [75,230,10], [100,229,9], [122,226,8], [138,220,8],
+    [249,275,8], [273,297,10], [301,311,12], [341,293,12], [363,355,10],
+    [420,233,10], [447,243,9], [471,234,9], [493,232,9], [513,233,8], [534,233,8],
+    [459,151,8], [431,149,8], [505,80,7], [524,78,7]
+  ]
+}
