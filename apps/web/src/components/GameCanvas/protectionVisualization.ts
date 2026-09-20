@@ -1,5 +1,4 @@
 import {
-  Cartesian2,
   Cartesian3,
   Color,
   ColorMaterialProperty,
@@ -7,12 +6,10 @@ import {
   ConstantProperty,
   CornerType,
   HeightReference,
-  HorizontalOrigin,
   Math as CesiumMath,
   PolygonHierarchy,
   PolylineDashMaterialProperty,
   PolylineGlowMaterialProperty,
-  VerticalOrigin,
   Viewer,
 } from "cesium";
 import { getHazardMarkerColor } from "../../features/construction/structureVisuals";
@@ -25,15 +22,11 @@ import {
   stripCenterlineDegrees,
   type InfluenceZone,
 } from "../../features/disaster/services/influenceZones";
-import {
-  listOverflowCandidates,
-  type OverflowCandidate,
-} from "../../features/disaster/services/overflowBankSites";
+import { listOverflowCandidates } from "../../features/disaster/services/overflowBankSites";
 
 const ZONE_PREFIX = "protect-zone-";
 const ZONE_AXIS_PREFIX = "protect-zone-axis-";
 const BANK_PREFIX = "protect-bank-";
-const TARGET_PREFIX = "weakness-target-";
 const OUTCOME_PREFIX = "facility-outcome-";
 const OUTCOME_LINK_PREFIX = "facility-outcome-link-";
 const OUTCOME_WATER_PREFIX = "facility-water-effect-";
@@ -65,24 +58,12 @@ export function syncProtectionVisualization(
   bankSites: readonly ProtectedBankSite[],
   options: {
     showBankSites: boolean;
-    /**
-     * 弱点マーカー。準備／災害中かつ配置操作中のみ出す。
-     * 未開始・未配置時は出さない（決壊と紛らわしい）。
-     */
-    showWeaknessTargets: boolean;
   },
 ): void {
   const keepBankIds = new Set(
     options.showBankSites ? bankSites.map((site) => `${BANK_PREFIX}${site.id}`) : [],
   );
-  const coveredIds = new Set(influences.flatMap((item) => item.coveredSiteIds));
-  const adverseIds = new Set(influences.flatMap((item) => item.adverseSiteIds ?? []));
-  const staticVisualKey = buildStaticVisualKey(
-    influences,
-    options.showWeaknessTargets,
-    coveredIds,
-    adverseIds,
-  );
+  const staticVisualKey = buildStaticVisualKey(influences);
   const rebuildStaticVisuals = staticVisualKeys.get(viewer) !== staticVisualKey;
 
   for (const entity of [...viewer.entities.values]) {
@@ -91,20 +72,6 @@ export function syncProtectionVisualization(
     }
     if (entity.id.startsWith(BANK_PREFIX) && !keepBankIds.has(entity.id)) {
       viewer.entities.remove(entity);
-    }
-  }
-
-  if (rebuildStaticVisuals && options.showWeaknessTargets) {
-    for (const candidate of listOverflowCandidates()) {
-      addWeaknessTargetMarker(
-        viewer,
-        candidate,
-        adverseIds.has(candidate.id)
-          ? "adverse"
-          : coveredIds.has(candidate.id)
-            ? "covered"
-            : "idle",
-      );
     }
   }
 
@@ -178,7 +145,6 @@ function isStaticProtectionEntity(id: string): boolean {
   return (
     id.startsWith(ZONE_PREFIX) ||
     id.startsWith(ZONE_AXIS_PREFIX) ||
-    id.startsWith(TARGET_PREFIX) ||
     id.startsWith(OUTCOME_PREFIX) ||
     id.startsWith(OUTCOME_LINK_PREFIX) ||
     id.startsWith(OUTCOME_WATER_PREFIX)
@@ -192,7 +158,6 @@ export function clearProtectionVisualization(viewer: Viewer): void {
       entity.id.startsWith(ZONE_PREFIX) ||
       entity.id.startsWith(ZONE_AXIS_PREFIX) ||
       entity.id.startsWith(BANK_PREFIX) ||
-      entity.id.startsWith(TARGET_PREFIX) ||
       entity.id.startsWith(OUTCOME_PREFIX) ||
       entity.id.startsWith(OUTCOME_LINK_PREFIX) ||
       entity.id.startsWith(OUTCOME_WATER_PREFIX)
@@ -203,16 +168,8 @@ export function clearProtectionVisualization(viewer: Viewer): void {
   staticVisualKeys.delete(viewer);
 }
 
-function buildStaticVisualKey(
-  influences: readonly StructureInfluence[],
-  showWeaknessTargets: boolean,
-  coveredIds: ReadonlySet<string>,
-  adverseIds: ReadonlySet<string>,
-): string {
+function buildStaticVisualKey(influences: readonly StructureInfluence[]): string {
   return [
-    showWeaknessTargets ? "1" : "0",
-    [...coveredIds].sort().join(","),
-    [...adverseIds].sort().join(","),
     ...influences.map((influence) =>
       [
         influence.placementId,
@@ -222,55 +179,12 @@ function buildStaticVisualKey(
         influence.headingDegrees.toFixed(1),
         influence.effectiveness.toFixed(2),
         influence.coverageTone,
+        [...influence.coveredSiteIds].sort().join(","),
+        [...(influence.adverseSiteIds ?? [])].sort().join(","),
         influence.preview === true ? "1" : "0",
       ].join(":"),
     ),
   ].join("|");
-}
-
-/** 弱点の位置マーカー。影響圏に入ると強調する。 */
-function addWeaknessTargetMarker(
-  viewer: Viewer,
-  candidate: OverflowCandidate,
-  status: "idle" | "covered" | "adverse",
-): void {
-  const covered = status === "covered";
-  const adverse = status === "adverse";
-  const hazardColor = getHazardMarkerColor(candidate.primaryHazard);
-  const fill = adverse ? "#ef5b5b" : covered ? "#35c995" : hazardColor.fill;
-  const outline = adverse ? "#ffd8d1" : covered ? "#c5ffe7" : hazardColor.outline;
-  const icon = adverse ? "!" : covered ? "✓" : "!";
-  const size = adverse ? 52 : covered ? 48 : 44;
-
-  // 地面に寝かせた楕円は俯瞰時に潰れて、弱点の位置と状態が読みにくい。
-  // 画面正面を向くビーコンにして、地形の傾きに左右されず同じ視認性を保つ。
-  viewer.entities.add({
-    id: `${TARGET_PREFIX}${candidate.id}`,
-    position: Cartesian3.fromDegrees(candidate.longitude, candidate.latitude),
-    billboard: {
-      image: createWeaknessBeaconImage(fill, outline, icon),
-      width: size,
-      height: size,
-      heightReference: HeightReference.CLAMP_TO_GROUND,
-      verticalOrigin: VerticalOrigin.BOTTOM,
-      horizontalOrigin: HorizontalOrigin.CENTER,
-      pixelOffset: new Cartesian2(0, -4),
-      // 建物や地形を貫通させず、対象地点との前後関係を保つ。
-      disableDepthTestDistance: 0,
-    },
-  });
-}
-
-/** 弱点の状態を一目で伝える、地形に潰れないピン型ビーコン。 */
-function createWeaknessBeaconImage(fill: string, outline: string, icon: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
-  <path d="M48 91 22 55a31 31 0 1 1 52 0L48 91Z" fill="#061722" fill-opacity=".92" stroke="${outline}" stroke-width="4" stroke-linejoin="round"/>
-  <circle cx="48" cy="37" r="22" fill="${fill}" stroke="#f7ffff" stroke-opacity=".9" stroke-width="3"/>
-  <circle cx="48" cy="37" r="14" fill="#071c29" fill-opacity=".34"/>
-  <text x="48" y="44" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="23" font-weight="700">${icon}</text>
-  <path d="M35 67h26" stroke="#fff" stroke-opacity=".72" stroke-width="3" stroke-linecap="round"/>
-  </svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 /** 施設足元に判定色を置き、影響圏を見失っても良否が読めるようにする。 */
