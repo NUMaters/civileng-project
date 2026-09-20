@@ -4,6 +4,7 @@ import { loadRules, loadStructures } from "@civilcraft/game-data/load";
 import { resolveLegalPumpGuidance, type LegalGuidanceSurface } from "./legalPlacementGuidance";
 import { listOverflowCandidates } from "../../features/disaster/services/overflowBankSites";
 import { getDioramaGuidance } from "./dioramaGuidance";
+import { resolveFacilityActivity } from "./facilityActivity";
 import { geoToWorld, worldToGeo } from "./dioramaSpace";
 import { decodeKoriyamaTerrain, sampleKoriyamaTerrain } from "./koriyamaTerrain";
 import type { KoriyamaGeodata } from "./koriyamaGeodata";
@@ -135,6 +136,18 @@ describe("ordinary-budget guide strategy — model feasibility, not phone usabil
     expect(spent).toBe(17800); expect(minimum).toBeCloseTo(3445, 4);
     expect(state.phase).toBe("result"); expect(state.isClear).toBe(true);
     expect(state.damagePercent).toBeLessThan(rules.victory.clearThresholdPercent);
+    if (seed === 42601) {
+      // Actual successful normal-budget run, not fabricated rate fields: incoming
+      // water is removed while residual depth remains zero. Operation must persist.
+      expect(state.inflowPerSecond).toBeGreaterThan(0);
+      expect(state.drainageCapacityPerSecond).toBeGreaterThan(state.inflowPerSecond);
+      expect(state.floodDepthMeters).toBe(0);
+      const pump = state.structureInfluences.find(p => p.structureId === "drainage-pump");
+      expect(pump).toBeDefined();
+      const operation = resolveFacilityActivity(pump, state);
+      expect(operation.operationActivity).toBeGreaterThan(0);
+      expect(operation.waterActivity).toBe(0);
+    }
     console.info("ordinary-budget legal guides", JSON.stringify({ seed, spent, minimum, finalBudget: budget, damage: state.damagePercent }));
   }, 15000);
 });

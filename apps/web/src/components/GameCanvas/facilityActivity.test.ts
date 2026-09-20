@@ -11,16 +11,18 @@ const influence = (): StructureInfluence => ({ ...calculateStructureInfluences([
   coveredSiteIds: ["inland-campus"], adverseSiteIds: [], effectiveness: 0.8,
   positiveSiteContributions: [{ siteId: "inland-campus", strength: 0.6 }] });
 const storm = () => ({ ...createInitialFloodState(), phase: "disaster" as const, riverLevelMeters: 4.7,
-  floodDepthMeters: 0.7, protectedBankSites: [{ id: "inland-campus", longitude: 140.3791, latitude: 37.36035,
+  inflowPerSecond: 0.01737, drainageCapacityPerSecond: 0.01976, floodDepthMeters: 0.7, protectedBankSites: [{ id: "inland-campus", longitude: 140.3791, latitude: 37.36035,
     primaryHazard: "inlandPonding" as const, protectionStrength: 0.9, overflowing: false }] });
 
 it("keeps mixed positive/adverse activity with a separate warning", () => {
   const own = influence();
   const result = resolveFacilityActivity({ ...own, adverseSiteIds: ["campus-core"] }, storm());
   expect(result.activity).toBeCloseTo(0.48);
+  expect(result.operationActivity).toBeGreaterThan(0);
+  expect(result.waterActivity).toBeGreaterThan(0);
   expect(result.activity).toBe(resolveFacilityActivity(own, storm()).activity);
   expect(result.warning).toBe("相性注意1地点");
-  expect(result.label).toContain("排水中");
+  expect(result.label).toContain("排水");
   expect(result.label).not.toContain(result.warning!);
 });
 it("does not borrow another facility's aggregate protection", () => {
@@ -30,7 +32,7 @@ it("does not borrow another facility's aggregate protection", () => {
     expect(resolveFacilityActivity(own, state).activity).toBeCloseTo(0.48);
     expect(resolveFacilityActivity({ ...own, positiveSiteContributions: [] }, state).activity).toBe(0);
   }
-  expect(resolveFacilityActivity(own, { ...storm(), protectedBankSites: [] }).activity).toBeCloseTo(0.48);
+  expect(resolveFacilityActivity(own, { ...storm(), protectedBankSites: [] }).activity).toBeGreaterThan(0);
   expect(resolveFacilityActivity({ ...own, positiveSiteContributions: undefined }, storm()).activity).toBe(0);
 });
 it("keeps previews, missing state, idle and preparation inactive", () => {
@@ -43,10 +45,28 @@ it("keeps previews, missing state, idle and preparation inactive", () => {
 });
 it("keeps pumps dry without ponding and basins dry without river rise", () => {
   const own = influence();
-  expect(resolveFacilityActivity(own, { ...storm(), floodDepthMeters: 0 }).activity).toBe(0);
+  const prevented = resolveFacilityActivity(own, { ...storm(), floodDepthMeters: 0 });
+  expect(prevented.activity).toBe(0);
+  expect(prevented.operationActivity).toBeGreaterThan(0);
+  expect(prevented.waterActivity).toBe(0);
+  expect(prevented.label).toContain("稼働中");
   expect(resolveFacilityActivity({ ...own, structureId: "retention-basin" },
     { ...storm(), riverLevelMeters: 2.2 }).activity).toBe(0);
   expect(resolveFacilityActivity({ ...own, structureId: "retention-basin" }, storm()).activity).toBeGreaterThan(0);
+});
+it("does not start a pump from capacity when inflow and residual water are zero", () => {
+  const result = resolveFacilityActivity(influence(), {
+    ...storm(), inflowPerSecond: 0, drainageCapacityPerSecond: 1_000, floodDepthMeters: 0,
+  });
+  expect(result.operationActivity).toBe(0);
+  expect(result.waterActivity).toBe(0);
+  expect(result.activity).toBe(0);
+});
+it("falls back to residual water when legacy state has no inflow rate", () => {
+  const result = resolveFacilityActivity(influence(), {
+    ...storm(), inflowPerSecond: undefined, drainageCapacityPerSecond: 1_000, floodDepthMeters: 0.7,
+  });
+  expect(result.operationActivity).toBeGreaterThan(0);
 });
 it("fails closed for adverse-only, zero or invalid own contribution/effectiveness/demand", () => {
   for (const strength of [0, -1, NaN, Infinity]) {
@@ -58,7 +78,10 @@ it("fails closed for adverse-only, zero or invalid own contribution/effectivenes
     expect(resolveFacilityActivity({ ...influence(), effectiveness }, storm()).activity).toBe(0);
   }
   for (const floodDepthMeters of [-1, NaN, Infinity]) {
-    expect(resolveFacilityActivity(influence(), { ...storm(), floodDepthMeters }).activity).toBe(0);
+    const result = resolveFacilityActivity(influence(), { ...storm(), floodDepthMeters });
+    expect(result.waterActivity).toBe(0);
+    expect(result.operationActivity).toBeGreaterThan(0); // independently valid inflow
+    expect(resolveFacilityActivity(influence(), { ...storm(), floodDepthMeters, inflowPerSecond: NaN }).operationActivity).toBe(0);
   }
 });
 it("reports continuing flood only at sites receiving this facility's contribution", () => {
@@ -67,7 +90,7 @@ it("reports continuing flood only at sites receiving this facility's contributio
   state.protectedBankSites[0].id = "unrelated";
   expect(resolveFacilityActivity(influence(), state).label).not.toContain("浸水が継続");
   for (const phase of ["result", "review"]) {
-    expect(resolveFacilityActivity(influence(), { ...storm(), phase }).activity).toBeCloseTo(0.48);
+    expect(resolveFacilityActivity(influence(), { ...storm(), phase }).activity).toBeGreaterThan(0);
   }
 });
 it("matches real single-facility protection without mutating the original placement", () => {
