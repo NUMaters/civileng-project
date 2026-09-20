@@ -5,7 +5,7 @@ type TitleScreenProps = {
   onEnter: () => void;
 };
 
-/** 起動直後のタイトル。治水体験を上品に伝える。 */
+/** 起動直後のタイトル。川のジオラマから治水体験へ案内する。 */
 export function TitleScreen({ onEnter }: TitleScreenProps) {
   return (
     <section className="title-screen cc-lobby" aria-label="タイトル">
@@ -22,11 +22,11 @@ export function TitleScreen({ onEnter }: TitleScreenProps) {
           <h1 className="title-screen__logo" aria-label="CivilCraft">
             CivilCraft
           </h1>
-          <p className="title-screen__tagline">この街の明日を、つくる。</p>
+          <p className="title-screen__tagline">この街を、大雨から守ろう。</p>
           <p className="title-screen__description">
-            川を読み、治水の一手を。
+            堤防や遊水地を指で配置。
             <br />
-            堤防や遊水地を配置し、大雨から街を守ろう。
+            きみの工夫で、大雨から街を守ろう。
           </p>
         </div>
 

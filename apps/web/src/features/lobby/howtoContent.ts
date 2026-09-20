@@ -23,7 +23,7 @@ export const HOWTO_PURPOSE = {
 export const HOWTO_STEPS: { title: string; body: string }[] = [
   {
     title: "準備（60秒）",
-    body: "ドックから黄色い配置帯へドラッグ → 向きを合わせ →「配置を確定」。",
+    body: "下の施設を川や岸へドラッグ。施設をタップすると36°ずつ回転。✓で配置を確定しよう。",
   },
   {
     title: "大雨（90秒）",

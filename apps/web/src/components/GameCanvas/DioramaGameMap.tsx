@@ -8,6 +8,7 @@ import { suggestedStructureHeading } from "../../features/disaster/services/hydr
 import { resolvePlaceablePosition } from "./riverPlacement";
 import { geoToWorld, groundY, intersectDioramaSurface, riverX, worldToGeo } from "./dioramaSpace";
 import { createDioramaWorld } from "./dioramaWorld";
+import { createDioramaInundation } from "./dioramaInundation";
 import { createDioramaFacility } from "./dioramaFacilities";
 import { getDioramaGuidance, initialDioramaFocus } from "./dioramaGuidance";
 import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
@@ -73,24 +74,6 @@ function createWater() {
     }`,
   });
   return new T.Mesh(riverGeometry(), material);
-}
-
-function createFloodGeometry() {
-  const positions: number[] = [],
-    indices: number[] = [];
-  for (const side of [-1, 1])
-    for (let i = 0; i <= 320; i++) {
-      const z = -2400 + i * 15,
-        x = riverX(z) + side * 44,
-        n = positions.length / 3;
-      positions.push(x, 0.25, z, x, 0.25, z);
-      if (i < 320) indices.push(n, n + 2, n + 1, n + 1, n + 2, n + 3);
-    }
-  const geometry = new T.BufferGeometry();
-  geometry.setAttribute("position", new T.Float32BufferAttribute(positions, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
 }
 
 type Runtime = {
@@ -250,23 +233,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       scene.add(createDioramaWorld());
       const water = createWater();
       scene.add(water);
-      const floodGeometry = createFloodGeometry();
-      const floodPositions = floodGeometry.getAttribute("position") as T.BufferAttribute;
-      const floodTargets = new Float32Array(floodPositions.count);
-      for (let i = 0; i < floodTargets.length; i++) floodTargets[i] = floodPositions.getX(i);
-      const flood = new T.Mesh(
-        floodGeometry,
-        new T.MeshStandardMaterial({
-          color: "#45bedb",
-          transparent: true,
-          opacity: 0.58,
-          roughness: 0.3,
-          depthWrite: false,
-          side: T.DoubleSide,
-        }),
-      );
-      flood.visible = false;
-      scene.add(flood);
+      const inundation = createDioramaInundation();
+      scene.add(inundation.group);
       const raycaster = new T.Raycaster(),
         cursor = new T.Vector2();
       const pick = (x: number, y: number) => {
@@ -371,8 +339,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       resize();
       let frame = 0,
         last = performance.now(),
-        time = 0,
-        lastFlood = 0;
+        time = 0;
       const draw = (now: number) => {
         frame = requestAnimationFrame(draw);
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -405,46 +372,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         const state = latest.current.getLatestFloodState?.();
         water.material.uniforms.time!.value = time;
         water.material.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
-        if (now - lastFlood > 100) {
-          lastFlood = now;
-          const sites = state?.overflowSites ?? [];
-          flood.visible = sites.length > 0 && (state?.floodDepthMeters ?? 0) > 0.01;
-          if (flood.visible) {
-            const buffer = floodPositions;
-            for (let i = 0; i < buffer.count; i++) {
-              const vz = buffer.getZ(i),
-                side = i < 642 ? -1 : 1;
-              let spread = 0;
-              for (const site of sites) {
-                const p = geoToWorld(site.longitude, site.latitude);
-                const direction =
-                  Math.sin((site.outflowHeadingDegrees * Math.PI) / 180) >= 0 ? 1 : -1;
-                if (direction === side)
-                  spread = Math.max(
-                    spread,
-                    site.intensity *
-                      Math.exp(-Math.pow((vz - p.z) / 190, 2)) *
-                      Math.min(180, (state?.floodDepthMeters ?? 0) * 100),
-                  );
-              }
-              const floodX = riverX(vz) + side * (44 + (i % 2 === 0 ? 0 : spread));
-              floodTargets[i] = floodX;
-            }
-          }
-        }
-        if (flood.visible) {
-          // Hydraulic targets update at 10 Hz; the visible water edge moves every frame.
-          const blend = 1 - Math.exp(-dt * 9);
-          for (let i = 0; i < floodPositions.count; i++) {
-            const current = floodPositions.getX(i);
-            const next = current + (floodTargets[i]! - current) * blend;
-            floodPositions.setX(i, next);
-            floodPositions.setY(i, groundY(next, floodPositions.getZ(i)) + 0.25);
-          }
-          floodPositions.needsUpdate = true;
-          floodGeometry.computeVertexNormals();
-          floodGeometry.computeBoundingSphere();
-        }
+        if (state) inundation.update(state, dt, time);
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
           if (!model) {
@@ -539,6 +467,8 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         renderer.domElement.removeEventListener("pointercancel", pointerUp);
         renderer.domElement.removeEventListener("lostpointercapture", pointerUp);
         controls.dispose();
+        scene.remove(inundation.group);
+        inundation.dispose();
         disposeObject(scene);
         renderer.dispose();
         renderer.domElement.remove();

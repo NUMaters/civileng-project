@@ -231,6 +231,7 @@ export type CesiumGameMapProps = {
    */
   getLatestFloodState?: () => {
     phase: string;
+    disasterElapsedSeconds: number;
     rainfallIntensity: number;
     riverLevelMeters: number;
     overflowMeters: number;

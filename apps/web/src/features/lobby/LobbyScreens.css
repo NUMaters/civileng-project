@@ -12,9 +12,9 @@
   min-height: 100%;
   height: auto;
   overflow: visible;
-  padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
-  color: #172d3a;
-  background: #f5f1e8;
+  padding: max(16px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom));
+  color: #123f65;
+  background: #effbff;
   font-family: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
   text-align: left;
   animation: none;
@@ -34,7 +34,7 @@
   min-height: 240px;
   overflow: hidden;
   z-index: -1;
-  background: #173a45;
+  background: #43c8ed;
 }
 
 .cc-lobby.title-screen .title-screen__hero,
@@ -44,14 +44,14 @@
   height: 100%;
   object-fit: cover;
   object-position: center 48%;
-  opacity: 0.7;
+  opacity: 1;
 }
 
 .cc-lobby.title-screen .title-screen__gradient,
 .cc-lobby.game-menu .game-menu__gradient {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgb(16 39 52 / 28%) 10%, transparent 55%, #f5f1e8 100%);
+  background: linear-gradient(180deg, rgb(33 149 208 / 8%), transparent 48%, #effbff 100%);
 }
 
 .cc-lobby.title-screen .title-screen__content {
@@ -66,21 +66,28 @@
   align-self: flex-start;
   margin: 0 0 clamp(120px, 22vh, 220px);
   padding: 8px 12px;
-  border: 1px solid rgb(245 241 232 / 45%);
-  border-radius: 4px;
-  color: #fffaf0;
-  background: #173340;
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 999px;
+  color: #ffffff;
+  background: #125b87;
   font-size: 12px;
   letter-spacing: 0.12em;
 }
 
 .cc-lobby.title-screen .title-screen__brand {
   margin: 0 0 28px;
+  padding: 22px 18px;
+  border: 1px solid #fff;
+  border-radius: 28px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow:
+    0 6px 0 rgb(154 215 235 / 35%),
+    0 12px 28px rgb(22 111 155 / 10%);
 }
 
 .cc-lobby.title-screen .title-screen__eyebrow {
   margin: 0 0 8px;
-  color: #276b68;
+  color: #00779c;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
@@ -88,16 +95,16 @@
 
 .cc-lobby.title-screen .title-screen__logo {
   margin: 0;
-  color: #172d3a;
+  color: #123f65;
   font-family: "Sora", sans-serif;
   font-size: clamp(36px, 10vw, 52px);
-  font-weight: 650;
+  font-weight: 800;
   letter-spacing: -0.06em;
   line-height: 1.2;
 }
 
 .cc-lobby.title-screen .title-screen__tagline {
-  margin: 24px 0 12px;
+  margin: 16px 0 10px;
   font-size: clamp(20px, 5.5vw, 27px);
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -106,7 +113,7 @@
 
 .cc-lobby.title-screen .title-screen__description {
   margin: 0;
-  color: #52646c;
+  color: #47677f;
   font-size: 14px;
   line-height: 1.9;
 }
@@ -117,7 +124,7 @@
   gap: 12px 16px;
   margin: auto 0 24px;
   padding: 20px 0;
-  border-top: 1px solid #d4dcd5;
+  border-top: 1px solid #c4e7f2;
   list-style: none;
 }
 
@@ -128,7 +135,7 @@
   padding: 0;
   border: 0;
   background: none;
-  color: #52646c;
+  color: #47677f;
   font-size: 12px;
 }
 
@@ -137,9 +144,9 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border: 1px solid #98b5af;
+  border: 1px solid #77d6e9;
   border-radius: 50%;
-  color: #216c67;
+  color: #006ea5;
   background: none;
   font: inherit;
 }
@@ -153,11 +160,14 @@
   width: 100%;
   min-height: 56px;
   padding: 16px 20px;
-  border: 1px solid #216c67;
-  border-radius: 10px;
-  color: #fffaf0;
-  background: #216c67;
-  box-shadow: 0 6px 16px rgb(23 45 58 / 10%);
+  border: 1px solid #006ea5;
+  border-radius: 20px;
+  color: #ffffff;
+  background: linear-gradient(180deg, #008dc4, #006ea5);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 35%),
+    0 5px 0 #005785,
+    0 10px 20px rgb(0 135 189 / 22%);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -166,7 +176,7 @@
 .cc-lobby.title-screen .title-screen__foot {
   position: static;
   margin: 20px auto 0;
-  color: #52646c;
+  color: #47677f;
   font-size: 10px;
   letter-spacing: 0.04em;
   text-align: center;
@@ -186,17 +196,17 @@
   justify-content: space-between;
   gap: 8px;
   width: min(100%, 480px);
-  margin: 0 auto 32px;
+  margin: 0 auto 96px;
 }
 
 .cc-lobby.game-menu .game-menu__back,
 .cc-lobby.game-menu .game-menu__howto-btn {
   min-height: 44px;
   padding: 8px 10px;
-  border: 1px solid #d7ddd7;
-  border-radius: 8px;
-  color: #172d3a;
-  background: #f5f1e8;
+  border: 1px solid #c4e7f2;
+  border-radius: 16px;
+  color: #123f65;
+  background: #effbff;
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -212,7 +222,10 @@
 
 .cc-lobby.game-menu .game-menu__brand {
   margin: 0;
-  color: #fffaf0;
+  padding: 8px;
+  border-radius: 12px;
+  color: #123f65;
+  background: rgb(255 255 255 / 94%);
   font:
     600 16px "Sora",
     sans-serif;
@@ -226,15 +239,16 @@
 .cc-lobby.game-menu .game-menu__brief {
   width: min(100%, 480px);
   margin: 0 auto 24px;
-  padding: 24px 20px;
-  border: 1px solid #d4dcd5;
-  border-radius: 12px;
-  background: #f5f1e8;
+  padding: 20px;
+  border: 1px solid #c4e7f2;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(22 111 155 / 12%);
 }
 
 .cc-lobby.game-menu .game-menu__brief-kicker {
   margin: 0 0 12px;
-  color: #216c67;
+  color: #006ea5;
   font-size: 12px;
   letter-spacing: 0.12em;
 }
@@ -249,7 +263,7 @@
 .cc-lobby.game-menu .game-menu__availability {
   display: block;
   margin: 8px 0 0;
-  color: #52646c;
+  color: #47677f;
   font-size: 13px;
   line-height: 1.8;
 }
@@ -267,34 +281,41 @@
   gap: 14px;
   width: 100%;
   padding: 20px 16px;
-  border: 1px solid #a4b9b5;
-  border-radius: 12px;
-  color: #172d3a;
-  background: #fffcf5;
+  border: 1px solid #98d5e9;
+  border-radius: 24px;
+  color: #123f65;
+  background: #ffffff;
   font: inherit;
   text-align: left;
   cursor: pointer;
 }
 
 .cc-lobby.game-menu .game-menu__mode.is-selected {
-  border-color: #216c67;
-  box-shadow: inset 0 0 0 1px #216c67;
-  background: #e9f0e9;
+  border-color: #006ea5;
+  box-shadow:
+    inset 0 0 0 2px #00b8cf,
+    0 5px 0 #b2e5ef;
+  background: #e1faff;
 }
 
 .cc-lobby.game-menu .game-menu__mode:disabled {
-  color: #5b686b;
-  border-color: #d4dcd5;
-  background: #ebe9e1;
+  color: #536d80;
+  border-color: #c4e7f2;
+  background: #e9f3f8;
   cursor: not-allowed;
   opacity: 1;
 }
 
 .cc-lobby.game-menu .game-menu__mode-index {
-  flex: 0 0 36px;
-  padding-block: 8px;
-  border-bottom: 2px solid #216c67;
-  color: #216c67;
+  flex: 0 0 44px;
+  padding: 14px 4px;
+  border-radius: 16px;
+  background: linear-gradient(#e0fbff, #a2e7f5);
+  box-shadow:
+    inset 0 2px 0 white,
+    0 3px 0 #8ed2e3;
+  text-align: center;
+  color: #006ea5;
   font:
     600 18px "Sora",
     sans-serif;
@@ -318,16 +339,16 @@
 }
 
 .cc-lobby.game-menu .game-menu__mode-meta {
-  color: #52646c;
+  color: #47677f;
   font-size: 12px;
   line-height: 1.7;
 }
 
 .cc-lobby.game-menu .game-menu__status {
   width: min(100%, 480px);
-  min-height: 62px;
+  min-height: 48px;
   margin: 16px auto 0;
-  color: #52646c;
+  color: #47677f;
   font-size: 13px;
   line-height: 1.8;
 }
@@ -340,10 +361,10 @@
   min-height: 44px;
   margin-bottom: 16px;
   padding: 10px 16px;
-  border: 1px solid #216c67;
-  border-radius: 8px;
-  color: #216c67;
-  background: #fffcf5;
+  border: 1px solid #006ea5;
+  border-radius: 16px;
+  color: #006ea5;
+  background: #ffffff;
   font: inherit;
   cursor: pointer;
 }
@@ -354,15 +375,144 @@
 }
 
 .cc-lobby.game-menu .game-menu__start:disabled {
-  border-color: #d4dcd5;
-  color: #52646c;
-  background: #e0e5df;
+  border-color: #c4e7f2;
+  color: #47677f;
+  background: #dbeaf1;
   box-shadow: none;
   cursor: not-allowed;
 }
 
 .cc-lobby.title-screen button:focus-visible,
 .cc-lobby.game-menu button:focus-visible {
-  outline: 3px solid #b8742b;
+  outline: 3px solid #005388;
   outline-offset: 4px;
+}
+
+/* The guide can be opened independently of the menu. Never theme gameplay roots. */
+.cc-howto.howto-modal {
+  padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  font-family: "Zen Kaku Gothic New", "Hiragino Sans", sans-serif;
+}
+
+.cc-howto .howto-modal__backdrop {
+  background: rgb(13 76 113 / 58%);
+}
+
+.cc-howto .howto-modal__panel {
+  width: min(100%, 480px);
+  max-height: 100%;
+  max-height: calc(
+    100dvh - max(12px, env(safe-area-inset-top)) - max(12px, env(safe-area-inset-bottom))
+  );
+  min-height: 0;
+  padding: 20px 16px;
+  border: 2px solid white;
+  border-radius: 28px;
+  background: linear-gradient(180deg, white, #effbff);
+  color: #123f65;
+  box-shadow:
+    0 8px 0 rgb(16 108 155 / 20%),
+    0 24px 60px rgb(13 76 113 / 25%);
+}
+
+.cc-howto .howto-modal__kicker,
+.cc-howto .howto-facility__meta dt {
+  color: #006ea5;
+  font-family: inherit;
+}
+
+.cc-howto .howto-modal__head h2,
+.cc-howto .howto-modal__section h3,
+.cc-howto .howto-modal__steps strong,
+.cc-howto .howto-facility__titles strong {
+  color: #123f65;
+}
+
+.cc-howto .howto-modal__head button {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 1px solid #c4e7f2;
+  background: #e3f7ff;
+  color: #123f65;
+  box-shadow: 0 3px 0 #b9e1ee;
+}
+
+.cc-howto .howto-modal__body {
+  overscroll-behavior: contain;
+  color: #47677f;
+  scrollbar-color: #71c8df transparent;
+}
+
+.cc-howto .howto-modal__steps {
+  grid-template-columns: 1fr;
+}
+
+.cc-howto .howto-modal__steps li {
+  min-height: 0;
+  padding: 14px 12px 14px 48px;
+  border: 1px solid #c4e7f2;
+  background: #fff;
+  box-shadow: 0 3px 0 #d2edf5;
+}
+
+.cc-howto .howto-modal__steps li::before {
+  top: 14px;
+  background: #007eac;
+}
+
+.cc-howto .howto-modal__steps span,
+.cc-howto .howto-facility__meta dd {
+  color: #47677f;
+}
+
+.cc-howto .howto-facility {
+  border: 1px solid #c4e7f2;
+  box-shadow: 0 3px 0 #d2edf5;
+}
+
+.cc-howto .howto-facility__icon {
+  background: #e2f7ff;
+}
+
+.cc-howto .howto-facility__chip {
+  color: #005e85;
+  background: #ddf7ff;
+}
+
+.cc-howto .howto-facility__tip {
+  color: #82440e;
+  background: #fff1dd;
+}
+
+.cc-howto .howto-modal__ok {
+  min-height: 48px;
+  border: 1px solid #006ea5;
+  color: white;
+  background: linear-gradient(180deg, #008dc4, #006ea5);
+  box-shadow:
+    inset 0 2px 0 rgb(255 255 255 / 35%),
+    0 4px 0 #005785;
+}
+
+.cc-howto button:focus-visible {
+  outline: 3px solid #005388;
+  outline-offset: 3px;
+}
+
+.cc-lobby button:not(:disabled):active,
+.cc-howto button:not(.howto-modal__backdrop):active {
+  transform: translateY(2px);
+}
+
+@media (max-width: 360px) {
+  .cc-lobby.game-menu .game-menu__header {
+    flex-wrap: wrap;
+  }
+
+  .cc-lobby.game-menu .game-menu__brand {
+    order: -1;
+    flex-basis: 100%;
+    text-align: center;
+  }
 }

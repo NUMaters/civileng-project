@@ -418,7 +418,12 @@ async function main() {
       `document.querySelector('.result-panel__badge')?.textContent?.trim() === '成功'`,
       30_000,
     );
-    step("ミッションクリア", result.title ?? result.badge);
+    const resultTitle = await evaluate(
+      client,
+      `document.querySelector('.result-panel h2')?.textContent?.trim()`,
+    );
+    if (!resultTitle) throw new Error("結果状態には到達したが、結果の見出しが描画されていません");
+    step("ミッションクリア", resultTitle);
 
     await evaluate(client, `document.querySelector('.result-panel__retry')?.click()`);
     await waitFor(
