@@ -33,3 +33,33 @@ export function groundY(x: number, z: number): number {
   const d = Math.abs(x - riverX(z));
   return d < 44 ? 0 : Math.min(9, (d - 44) * 0.35);
 }
+
+/** Pick the visible bank/water surface, not an invisible plane below the banks. */
+export function intersectDioramaSurface(
+  origin: { x: number; y: number; z: number },
+  direction: { x: number; y: number; z: number },
+): { x: number; z: number } | null {
+  if (direction.y >= -0.000001 || origin.y < 9) return null;
+  const top = (9 - origin.y) / direction.y;
+  const bottom = (0.4 - origin.y) / direction.y;
+  const at = (t: number) => ({ x: origin.x + direction.x * t, z: origin.z + direction.z * t });
+  const above = (t: number) => {
+    const p = at(t);
+    return origin.y + direction.y * t - Math.max(0.4, groundY(p.x, p.z));
+  };
+  // Scan from the camera so a far bank cannot hide a nearer intersection.
+  let low = top;
+  for (let sample = 1; sample <= 32; sample++) {
+    let high = top + ((bottom - top) * sample) / 32;
+    if (above(high) <= 0) {
+      for (let iteration = 0; iteration < 20; iteration++) {
+        const middle = (low + high) / 2;
+        if (above(middle) > 0) low = middle;
+        else high = middle;
+      }
+      return at(high);
+    }
+    low = high;
+  }
+  return at(bottom);
+}

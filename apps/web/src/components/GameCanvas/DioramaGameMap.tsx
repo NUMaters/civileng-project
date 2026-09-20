@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import * as T from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import type { CesiumGameMapHandle, CesiumGameMapProps } from "./CesiumGameMap";
@@ -6,7 +6,7 @@ import type { PlacedStructure } from "../../features/construction";
 import { calculateStructureInfluences } from "../../features/disaster/services/floodSimulation";
 import { suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
 import { resolvePlaceablePosition } from "./riverPlacement";
-import { geoToWorld, groundY, riverX, worldToGeo } from "./dioramaSpace";
+import { geoToWorld, groundY, intersectDioramaSurface, riverX, worldToGeo } from "./dioramaSpace";
 import { createDioramaWorld } from "./dioramaWorld";
 import { createDioramaFacility } from "./dioramaFacilities";
 import "./diorama.css";
@@ -106,7 +106,11 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
     const [error, setError] = useState("");
     const labels = useRef(new Map<string, HTMLDivElement>());
     const pending = props.placements.find((p) => p.preview);
-    const influence = pending ? calculateStructureInfluences([pending])[0] : undefined;
+    const influences = useMemo(
+      () => calculateStructureInfluences(props.placements),
+      [props.placements],
+    );
+    const influence = pending ? influences[props.placements.indexOf(pending)] : undefined;
 
     useImperativeHandle(
       ref,
@@ -222,6 +226,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       const water = createWater();
       scene.add(water);
       const floodGeometry = createFloodGeometry();
+      const floodPositions = floodGeometry.getAttribute("position") as T.BufferAttribute;
+      const floodTargets = new Float32Array(floodPositions.count);
+      for (let i = 0; i < floodTargets.length; i++) floodTargets[i] = floodPositions.getX(i);
       const flood = new T.Mesh(
         floodGeometry,
         new T.MeshStandardMaterial({
@@ -236,16 +243,13 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       flood.visible = false;
       scene.add(flood);
       const raycaster = new T.Raycaster(),
-        cursor = new T.Vector2(),
-        plane = new T.Plane(new T.Vector3(0, 1, 0), 0);
+        cursor = new T.Vector2();
       const pick = (x: number, y: number) => {
         const rect = renderer.domElement.getBoundingClientRect();
         if (x < rect.left || y < rect.top || x > rect.right || y > rect.bottom) return null;
         cursor.set(((x - rect.left) / rect.width) * 2 - 1, 1 - ((y - rect.top) / rect.height) * 2);
         raycaster.setFromCamera(cursor, camera);
-        const hit = raycaster.ray.intersectPlane(plane, new T.Vector3());
-        if (!hit) return null;
-        return { x: hit.x, z: hit.z };
+        return intersectDioramaSurface(raycaster.ray.origin, raycaster.ray.direction);
       };
       const r: Runtime = {
         renderer,
@@ -259,9 +263,10 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         reset,
       };
       runtime.current = r;
-      let moving: string | null = null;
+      let moving: { id: string; pointerId: number; original: PlacedStructure["position"] } | null =
+        null;
       const pointerDown = (event: PointerEvent) => {
-        pick(event.clientX, event.clientY);
+        if (moving || !pick(event.clientX, event.clientY)) return;
         const intersections = raycaster.intersectObjects([...r.models.values()], true);
         const hit = intersections[0]?.object;
         let node: T.Object3D | null = hit ?? null;
@@ -269,28 +274,36 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
         const id = node?.userData.placementId as string | undefined;
         if (id) {
           latest.current.onSelectPlacement(id);
-          if (latest.current.placements.find((p) => p.id === id)?.preview) {
-            moving = id;
+          const placement = latest.current.placements.find((p) => p.id === id);
+          if (placement?.preview) {
+            moving = { id, pointerId: event.pointerId, original: { ...placement.position } };
             controls.enabled = false;
             renderer.domElement.setPointerCapture(event.pointerId);
           }
         }
       };
       const pointerMove = (event: PointerEvent) => {
-        if (!moving) return;
+        if (!moving || moving.pointerId !== event.pointerId) return;
         const point = pick(event.clientX, event.clientY);
         if (!point) return;
         const geo = resolvePlaceablePosition(worldToGeo(point.x, point.z));
-        if (geo) latest.current.onMovePendingPlacement(moving, geo);
+        if (geo) latest.current.onMovePendingPlacement(moving.id, geo);
       };
-      const pointerUp = () => {
+      const pointerUp = (event: PointerEvent) => {
+        if (!moving || moving.pointerId !== event.pointerId) return;
+        if (event.type !== "pointerup") {
+          latest.current.onMovePendingPlacement(moving.id, moving.original);
+        }
         moving = null;
         controls.enabled = true;
+        if (renderer.domElement.hasPointerCapture(event.pointerId))
+          renderer.domElement.releasePointerCapture(event.pointerId);
       };
       renderer.domElement.addEventListener("pointerdown", pointerDown);
       renderer.domElement.addEventListener("pointermove", pointerMove);
       renderer.domElement.addEventListener("pointerup", pointerUp);
       renderer.domElement.addEventListener("pointercancel", pointerUp);
+      renderer.domElement.addEventListener("lostpointercapture", pointerUp);
       const resize = () => {
         const { width, height } = container.getBoundingClientRect();
         renderer.setSize(width, height);
@@ -324,7 +337,7 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
           const sites = state?.overflowSites ?? [];
           flood.visible = sites.length > 0 && (state?.floodDepthMeters ?? 0) > 0.01;
           if (flood.visible) {
-            const buffer = floodGeometry.getAttribute("position") as T.BufferAttribute;
+            const buffer = floodPositions;
             for (let i = 0; i < buffer.count; i++) {
               const vz = buffer.getZ(i),
                 side = i < 642 ? -1 : 1;
@@ -342,13 +355,22 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
                   );
               }
               const floodX = riverX(vz) + side * (44 + (i % 2 === 0 ? 0 : spread));
-              buffer.setX(i, floodX);
-              buffer.setY(i, groundY(floodX, vz) + 0.25);
+              floodTargets[i] = floodX;
             }
-            buffer.needsUpdate = true;
-            floodGeometry.computeVertexNormals();
-            floodGeometry.computeBoundingSphere();
           }
+        }
+        if (flood.visible) {
+          // Hydraulic targets update at 10 Hz; the visible water edge moves every frame.
+          const blend = 1 - Math.exp(-dt * 9);
+          for (let i = 0; i < floodPositions.count; i++) {
+            const current = floodPositions.getX(i);
+            const next = current + (floodTargets[i]! - current) * blend;
+            floodPositions.setX(i, next);
+            floodPositions.setY(i, groundY(next, floodPositions.getZ(i)) + 0.25);
+          }
+          floodPositions.needsUpdate = true;
+          floodGeometry.computeVertexNormals();
+          floodGeometry.computeBoundingSphere();
         }
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
@@ -374,6 +396,11 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       return () => {
         cancelAnimationFrame(frame);
         observer.disconnect();
+        renderer.domElement.removeEventListener("pointerdown", pointerDown);
+        renderer.domElement.removeEventListener("pointermove", pointerMove);
+        renderer.domElement.removeEventListener("pointerup", pointerUp);
+        renderer.domElement.removeEventListener("pointercancel", pointerUp);
+        renderer.domElement.removeEventListener("lostpointercapture", pointerUp);
         controls.dispose();
         disposeObject(scene);
         renderer.dispose();
@@ -415,9 +442,10 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
       <div className="diorama-game-map" data-3d-buildings={ready ? "ready" : "loading"}>
         <div className="diorama-game-map__canvas" ref={host} />
         <div className="diorama-labels" aria-hidden="true">
-          {props.placements.map((p) => (
+          {props.placements.map((p, index) => (
             <div
               className={`diorama-label${p.preview ? " is-preview" : ""}`}
+              data-tone={influences[index]?.coverageTone ?? "warn"}
               key={p.id}
               ref={(el) => {
                 if (el) labels.current.set(p.id, el);
@@ -425,7 +453,9 @@ export const DioramaGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps
               }}
             >
               <strong>{labelFor(p)}</strong>
-              <small>{p.preview ? "位置を調整中" : "✓ 建設済み"}</small>
+              <small>
+                {p.preview ? "位置を調整中" : (influences[index]?.coverageHint ?? "建設済み")}
+              </small>
             </div>
           ))}
         </div>

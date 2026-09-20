@@ -38,6 +38,12 @@
   font-size: 10px;
   margin-top: 3px;
 }
+.diorama-label[data-tone="warn"] small {
+  color: #885412;
+}
+.diorama-label[data-tone="bad"] small {
+  color: #b43b2f;
+}
 .diorama-label:after {
   content: "";
   position: absolute;

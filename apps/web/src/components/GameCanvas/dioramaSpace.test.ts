@@ -6,6 +6,7 @@ import {
   groundY,
   riverX,
   RIVER_POINTS,
+  intersectDioramaSurface,
 } from "./dioramaSpace";
 
 describe("Abukuma diorama coordinates", () => {
@@ -23,5 +24,24 @@ describe("Abukuma diorama coordinates", () => {
       expect(groundY(x + 100, z)).toBe(9);
       expect(groundY(x - 100, z)).toBe(9);
     }
+  });
+  it("picks raised banks at their visible height rather than the river bed", () => {
+    const x = riverX(0) + 150;
+    const point = intersectDioramaSurface({ x, y: 100, z: 0 }, { x: 0.5, y: -1, z: 0 });
+    expect(point?.x).toBeCloseTo(x + 45.5, 4);
+  });
+  it("picks water and sloping banks at their respective surface heights", () => {
+    for (const offset of [0, 40, 50, -55, 100]) {
+      const x = riverX(0) + offset;
+      const point = intersectDioramaSurface({ x, y: 100, z: 0 }, { x: 0, y: -1, z: 0 });
+      expect(point?.x).toBeCloseTo(x, 5);
+      expect(point?.z).toBe(0);
+    }
+    const x = riverX(0) + 55;
+    const point = intersectDioramaSurface({ x: x - 48.075, y: 100, z: 0 }, { x: 0.5, y: -1, z: 0 });
+    expect(point?.x).toBeCloseTo(x, 4);
+  });
+  it("ignores rays toward the sky", () => {
+    expect(intersectDioramaSurface({ x: 0, y: 100, z: 0 }, { x: 1, y: 0, z: 0 })).toBeNull();
   });
 });
