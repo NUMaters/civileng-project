@@ -30,7 +30,8 @@ export function createDioramaFacility(structureId: string): THREE.Group {
   group.name = `diorama-facility:${structureId}`;
   group.userData.structureId = structureId;
   const sculpted = structureId === "drainage-pump" || structureId === "retention-basin";
-  if (sculpted) group.userData.modelProvenance = "illustrative-player-structure; not-surveyed";
+  const defense = ["levee", "revetment", "channel-dredging"].includes(structureId);
+  if (sculpted || defense) group.userData.modelProvenance = "illustrative-player-structure; not-surveyed";
   const batches = new Map<Color, THREE.BufferGeometry[]>();
   // Per-build cache only: baked output owns its resources independently of other
   // previews/placements. Repeated windows and collars reuse construction geometry.
@@ -110,9 +111,15 @@ export function createDioramaFacility(structureId: string): THREE.Group {
 
   switch (structureId) {
     case "levee": {
-      box([98, 2, 38], [0, 1, 0], "earth", 0.8);
+      box([98, 2, 38], [0, 1, 0], "earth", 0.8, 1);
       modelMesh("embankment", "grass");
       box([96, 1, 10], [0, 14.5, 0], "stone", 0.4);
+      // Land-side maintenance steps reach the crest without altering the river
+      // slope y + z = 20 used by the operational toe-water streaks.
+      for (let i = 0; i < 6; i++) {
+        box([5, 2, 2], [-34, 3 + i * 2, -17 + i * 2], "cream", 0.12, 1);
+      }
+      for (const z of [-4.7, 4.7]) box([94, 0.08, 0.35], [0, 15.04, z], "cream");
       // Broad inset paving joints remain legible from the overview camera.
       for (let x = -36; x <= 36; x += 12) box([0.45, 0.1, 9.2], [x, 15.05, 0], "cream");
       break;
@@ -211,17 +218,26 @@ export function createDioramaFacility(structureId: string): THREE.Group {
       break;
     }
     case "revetment": {
-      box([80, 2, 24], [0, 1, 0], "stone", 0.8);
-      box([80, 2.5, 8], [0, 3.2, -8], "grass", 0.5);
-      // Staggered, bevelled stone courses give an unmistakable masonry face.
-      for (let row = 0; row < 3; row++) {
-        const count = row % 2 ? 9 : 8;
-        for (let i = 0; i < count; i++) {
-          const width = 78 / count;
-          box([width - 0.45, 3.1, 7 - row], [-39 + width * (i + 0.5), 3.7 + row * 3.3, -row * 0.8], (i + row) % 3 === 0 ? "cream" : "stone", 0.4);
-        }
+      box([80, 2, 24], [0, 1, 0], "stone", 0.8, 1);
+      // Closed land-side bank behind the facing: +Z is the river, X runs along
+      // it. This is an illustrative placed protection segment, not map terrain.
+      const section = new THREE.Shape([
+        new THREE.Vector2(12, 2), new THREE.Vector2(12, 12),
+        new THREE.Vector2(5, 12), new THREE.Vector2(-3, 2),
+      ]);
+      const bank = new THREE.ExtrudeGeometry(section, { depth: 78, bevelEnabled: false, steps: 1 })
+        .rotateY(Math.PI / 2).translate(-39, 0, 0);
+      add(bank, "grass");
+      bank.dispose();
+      // Wide sloping concrete panels, separated by construction joints rather
+      // than masonry courses; rounded edges catch light at thumbnail scale.
+      const panel = new RoundedBoxGeometry(9.3, 12, 1.6, 1, 0.3)
+        .rotateX(-Math.atan(0.6));
+      for (let i = 0; i < 8; i++) {
+        add(panel, "cream", [-34.3 + i * 9.8, 7.1, -0.65]);
       }
-      box([80, 1.6, 6], [0, 12.7, -2], "cream", 0.5);
+      panel.dispose();
+      box([80, 1.6, 6], [0, 12.7, -5], "cream", 0.6);
       for (const x of [-32, -16, 0, 16, 32]) sphere([4.2, 2.3, 3.2], [x, 3, 7], "stone");
       break;
     }
@@ -231,21 +247,30 @@ export function createDioramaFacility(structureId: string): THREE.Group {
       for (const x of [-28, 28]) {
         for (const z of [-17, 17]) sphere([3.8, 2.2, 1.5], [x, 3, z], "dark");
       }
-      for (const z of [-7, 7]) box([24, 4.5, 5], [-12, 7.2, z], "dark", 1.5);
-      box([22, 5, 16], [-12, 11, 0], "yellow", 1);
-      box([10, 10, 12], [-18, 18, -1], "yellow", 1);
-      box([0.5, 6, 9], [-12.8, 19, -1], "blue", 0.2);
-      box([7, 6, 0.5], [-18, 19, 5.1], "blue", 0.2);
+      for (const z of [-7, 7]) {
+        box([24, 4.5, 5], [-12, 7.2, z], "dark", 2);
+        // Outboard roller discs and broad tread shoes read as tracked running
+        // gear, without separate meshes or changing the pontoon envelope.
+        const roller = new THREE.CylinderGeometry(1.4, 1.4, 0.35, 10).rotateX(Math.PI / 2);
+        for (const x of [-20, -16, -12, -8, -4]) add(roller, "stone", [x, 7.2, z + Math.sign(z) * 2.4]);
+        roller.dispose();
+        for (const x of [-20, -16, -12, -8, -4]) box([1.8, 0.18, 4.5], [x, 9.45, z], "stone");
+      }
+      box([22, 5, 16], [-12, 11, 0], "yellow", 2);
+      box([10, 10, 12], [-18, 18, -1], "yellow", 1.7);
+      box([0.5, 6, 9], [-12.8, 19, -1], "blue", 0.2, 1);
+      box([7, 6, 0.5], [-18, 19, 5.1], "blue", 0.2, 1);
+      box([0.6, 6, 0.55], [-12.45, 19, 0.8], "yellow", 0.15, 1);
       box([12, 1.5, 14], [-18, 23.7, -1], "yellow", 0.5);
       beam([-5, 13, 0], [7, 31, 0], 4.8, 5, "yellow");
       beam([7, 31, 0], [23, 14, 0], 3.7, 4, "yellow");
       beam([-4, 16, 3], [5, 28, 3], 1.1, 1.1, "stone");
       for (const p of [[-5, 13, 0], [7, 31, 0], [23, 14, 0]] as Point[]) sphere([2.7, 2.7, 3], p, "dark");
       // Open scoop: back, floor, cheeks and teeth, with its mouth facing east.
-      box([2.5, 8, 11], [24, 10, 0], "dark", 0.5);
-      box([10, 2, 11], [28, 6.5, 0], "dark", 0.5);
-      for (const z of [-4.7, 4.7]) box([9, 6, 1.6], [28, 9, z], "dark", 0.5);
-      for (const z of [-3.4, 0, 3.4]) box([4, 1.5, 1.7], [34, 6.2, z], "stone", 0.2);
+      box([2.5, 8, 11], [24, 10, 0], "dark", 1.1);
+      box([10, 2, 11], [28, 6.5, 0], "dark", 0.9);
+      for (const z of [-4.7, 4.7]) box([9, 6, 1.6], [28, 9, z], "dark", 0.7, 1);
+      for (const z of [-3.4, 0, 3.4]) box([4, 1.5, 1.7], [34, 6.2, z], "stone", 0.3, 1);
       break;
     }
     default:
