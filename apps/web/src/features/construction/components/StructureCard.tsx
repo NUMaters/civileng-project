@@ -56,6 +56,7 @@ export function StructureCard({
           window.removeEventListener("pointermove", onMove);
           window.removeEventListener("pointerup", onUp);
           window.removeEventListener("pointercancel", onUp);
+          target.style.touchAction = "";
         };
 
         const onMove = (moveEvent: PointerEvent) => {
@@ -79,7 +80,9 @@ export function StructureCard({
           } catch {
             // capture 非対応環境でも後続の window リスナーで追従できる
           }
-          cleanup();
+          // Keep the gesture alive until the global drag handler receives pointerup.
+          // cleanup() would remove the only reset path and leave touch-action: none stuck.
+          window.removeEventListener("pointermove", onMove);
           onDragStart(
             structure.id,
             startX,

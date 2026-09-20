@@ -151,6 +151,22 @@ const FALLBACK_GROUND_HEIGHT_M = 18;
 /** ドラッグ中の地形ピック／ゴースト再生成の上限。ポインターイベントは端末により120Hz以上で発火する。 */
 const DRAG_GHOST_UPDATE_INTERVAL_MS = 1000 / 20;
 
+function applyInitialCamera(viewer: Viewer): void {
+  // ゲーム画面への切り替え直後はコンテナのサイズが確定していないことがある。
+  // resize を先に行ってから視点を設定し、広域の既定カメラが残る競合を防ぐ。
+  viewer.resize();
+  viewer.camera.lookAt(
+    Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
+    new HeadingPitchRange(
+      CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
+      CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
+      INITIAL_VIEW.range,
+    ),
+  );
+  viewer.camera.lookAtTransform(Matrix4.IDENTITY);
+  viewer.scene.requestRender();
+}
+
 export type DragGhostStatus = {
   /** ポインタが地図キャンバス上にある。 */
   overMap: boolean;
@@ -163,8 +179,6 @@ type MapLoadStage = "loading" | "terrain" | "buildings" | "ready" | "degraded";
 export type CesiumGameMapHandle = {
   focusNpc: (position: GeoPosition) => void;
   tryDropStructure: (structureId: string, clientX: number, clientY: number) => boolean;
-  /** ドラッグできない利用者向けに、河道上の初期位置へ仮配置する。 */
-  placeStructureAtDefault: (structureId: string) => boolean;
   /** ドラッグ中に設置予定モデルをカーソル下の地表へ追従表示する。 */
   updateDragGhost: (structureId: string, clientX: number, clientY: number) => DragGhostStatus;
   /** ドラッグ終了時にゴーストモデルを消す。 */
@@ -469,25 +483,6 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         onDropPlaceRef.current(structureId, placeable, headingDegrees);
         return true;
       },
-      placeStructureAtDefault: (structureId: string) => {
-        if (interactionLockedRef.current) return false;
-        const viewer = viewerRef.current;
-        if (viewer === null || viewer.isDestroyed()) {
-          return false;
-        }
-        const anchor = ABUKUMA_RIVER_CENTERLINE[Math.floor(ABUKUMA_RIVER_CENTERLINE.length / 2)];
-        if (anchor === undefined) {
-          return false;
-        }
-        const position: GeoPosition = {
-          longitude: anchor.lon,
-          latitude: anchor.lat,
-          height: FALLBACK_GROUND_HEIGHT_M,
-        };
-        onDropPlaceRef.current(structureId, position, CesiumMath.toDegrees(viewer.camera.heading));
-        viewer.scene.requestRender();
-        return true;
-      },
       updateDragGhost: (structureId: string, clientX: number, clientY: number) => {
         if (interactionLockedRef.current) return { overMap: false, placeable: false };
         const viewer = viewerRef.current;
@@ -724,7 +719,13 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
         mapViewer.scene.globe.tileLoadProgressEvent.addEventListener((queuedTileCount) => {
           if (queuedTileCount === 0) {
             setIsMapReady(true);
-            setMapLoadStage(renderProfile.loadBuildings ? "buildings" : "ready");
+            // 建物Tilesetの読み込み完了後に地形タイルが空になると、完了表示を
+            // 「建物を読み込み中…」へ戻さない。建物がまだ無い場合だけ待機表示にする。
+            setMapLoadStage(
+              renderProfile.loadBuildings && buildingTilesetRef.current === null
+                ? "buildings"
+                : "ready",
+            );
             // 地形詳細が揃った時点で施設高度を再評価し、地中への埋没を防ぐ。
             for (const placement of placementsRef.current) {
               applyPlacementHeading(
@@ -769,19 +770,8 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
           });
         }
 
-        mapViewer.camera.lookAt(
-          Cartesian3.fromDegrees(INITIAL_VIEW.longitude, INITIAL_VIEW.latitude),
-          new HeadingPitchRange(
-            CesiumMath.toRadians(INITIAL_VIEW.headingDegrees),
-            CesiumMath.toRadians(INITIAL_VIEW.pitchDegrees),
-            INITIAL_VIEW.range,
-          ),
-        );
-        // lookAt のロックを解除し、以降は自由にパン／ズームできるようにする。
-        mapViewer.camera.lookAtTransform(Matrix4.IDENTITY);
+        applyInitialCamera(mapViewer);
         // タイル完了を待たず UI を出し、真っ黒のまま固まるのを防ぐ。
-        mapViewer.resize();
-        mapViewer.scene.requestRender();
         setIsMapReady(true);
 
         const canvas = mapViewer.scene.canvas;
@@ -1213,6 +1203,36 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
     }, [visibilityEpoch]);
 
     useEffect(() => {
+      if (!mapActive) {
+        return;
+      }
+
+      let cancelled = false;
+      let frame = 0;
+      let attempts = 0;
+      const resetAfterLayout = () => {
+        if (cancelled) {
+          return;
+        }
+        const viewer = viewerRef.current;
+        if (viewer !== null && !viewer.isDestroyed()) {
+          applyInitialCamera(viewer);
+          return;
+        }
+        if (attempts < 60) {
+          attempts += 1;
+          frame = window.requestAnimationFrame(resetAfterLayout);
+        }
+      };
+      frame = window.requestAnimationFrame(resetAfterLayout);
+
+      return () => {
+        cancelled = true;
+        window.cancelAnimationFrame(frame);
+      };
+    }, [mapActive]);
+
+    useEffect(() => {
       const viewer = viewerRef.current;
       if (viewer === null || viewer.isDestroyed()) {
         return;
@@ -1474,9 +1494,14 @@ export const CesiumGameMap = forwardRef<CesiumGameMapHandle, CesiumGameMapProps>
       }
       labelElementRefs.current.set(id, element);
     };
+    const buildingsLoadState = getCesiumRenderProfile().loadBuildings
+      ? mapLoadStage === "ready"
+        ? "ready"
+        : "loading"
+      : "disabled";
 
     return (
-      <div className="cesium-game-map">
+      <div className="cesium-game-map" data-3d-buildings={buildingsLoadState}>
         <div className="cesium-game-map__canvas" ref={containerRef} />
         {isMapReady && viewerRef.current && !viewerRef.current.isDestroyed() && npcMarkers && onSelectNpc ? (
           <NpcMapMarkers
