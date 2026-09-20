@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "visually-interpreted-canopy-envelopes-awaiting-rendering-validation",
+  "status": "visually-interpreted-envelopes-with-geographically-filtered-illustrative-trees",
   "source": {
     "provider": "Geospatial Information Authority of Japan",
     "layer": "seamlessphoto",

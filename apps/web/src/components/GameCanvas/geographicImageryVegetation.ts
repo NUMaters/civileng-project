@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createVegetationStyleResources, vegetationColor, VEGETATION_STYLE_PROVENANCE } from "./geographicVegetationStyle";
 import { koriyamaGeoToLocal } from "./koriyamaGeodata";
 import { imageryPixelToGeo, type ImageryTreeCandidate, type VegetationBounds, type VegetationExclusion, type VegetationPoint } from "./imageryVegetation";
 
@@ -28,12 +29,12 @@ export type ImageryVegetationRecord = {
   heightSource: "illustrative-not-measured";
 };
 
-function distanceToSegment(p: VegetationPoint, a: VegetationPoint, b: VegetationPoint) {
+export function distanceToVegetationSegment(p: VegetationPoint, a: VegetationPoint, b: VegetationPoint) {
   const dx = b.x - a.x, dz = b.z - a.z, length2 = dx * dx + dz * dz;
   const t = length2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.z - a.z) * dz) / length2)) : 0;
   return Math.hypot(p.x - a.x - t * dx, p.z - a.z - t * dz);
 }
-function insideRing(p: VegetationPoint, ring: readonly VegetationPoint[]) {
+export function insideVegetationRing(p: VegetationPoint, ring: readonly VegetationPoint[]) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
     const a = ring[i]!, b = ring[j]!;
@@ -41,17 +42,17 @@ function insideRing(p: VegetationPoint, ring: readonly VegetationPoint[]) {
   }
   return inside;
 }
-function intersects(p: VegetationPoint, radius: number, exclusion: VegetationExclusion) {
+export function intersectsVegetationExclusion(p: VegetationPoint, radius: number, exclusion: VegetationExclusion) {
   const g = exclusion.geometry;
   if (g.type === "disc") return Math.hypot(p.x - g.centre.x, p.z - g.centre.z) <= radius + g.radiusM + 1e-7;
   if (g.type === "corridor") {
-    for (let i = 1; i < g.points.length; i++) if (distanceToSegment(p, g.points[i - 1]!, g.points[i]!) <= g.halfWidthM + radius + 1e-7) return true;
+    for (let i = 1; i < g.points.length; i++) if (distanceToVegetationSegment(p, g.points[i - 1]!, g.points[i]!) <= g.halfWidthM + radius + 1e-7) return true;
     return false;
   }
-  if (insideRing(p, g.rings[0]!) && !g.rings.slice(1).some(ring => insideRing(p, ring))) return true;
+  if (insideVegetationRing(p, g.rings[0]!) && !g.rings.slice(1).some(ring => insideVegetationRing(p, ring))) return true;
   // Outer AND hole boundaries count as contact; a crown wholly within a courtyard is allowed.
   for (const ring of g.rings) for (let i = 0; i < ring.length; i++) {
-    if (distanceToSegment(p, ring[i]!, ring[(i + 1) % ring.length]!) <= radius + 1e-7) return true;
+    if (distanceToVegetationSegment(p, ring[i]!, ring[(i + 1) % ring.length]!) <= radius + 1e-7) return true;
   }
   return false;
 }
@@ -127,7 +128,7 @@ export function createGeographicImageryVegetation(candidates: readonly ImageryTr
     if (p.x - r < b.minX || p.x + r > b.maxX || p.z - r < b.minZ || p.z + r > b.maxZ) { record.reason = "outside-bounds"; continue; }
     const key = `${Math.floor(p.x / tileSize)}/${Math.floor(p.z / tileSize)}`;
     const radius = clearance + (mode === "crown" ? r : 0);
-    for (const e of [...global, ...(index.get(key) ?? [])]) if (intersects(p, radius, e)) record.exclusions.push({ sourceId: e.sourceId, kind: e.kind });
+    for (const e of [...global, ...(index.get(key) ?? [])]) if (intersectsVegetationExclusion(p, radius, e)) record.exclusions.push({ sourceId: e.sourceId, kind: e.kind });
     record.exclusions.sort((a, c) => a.sourceId < c.sourceId ? -1 : a.sourceId > c.sourceId ? 1 : 0);
     if (record.exclusions.length) { record.reason = "excluded"; continue; }
     if (rendered >= maxTrees) { record.reason = "capacity"; continue; }
@@ -139,9 +140,7 @@ export function createGeographicImageryVegetation(candidates: readonly ImageryTr
   }
   const group = new THREE.Group(); group.name = "imagery-inferred-vegetation";
   if (rendered) {
-    const trunk = new THREE.CylinderGeometry(0.15, 0.2, 1, 6), crown = new THREE.SphereGeometry(1, 8, 6);
-    const bark = new THREE.MeshStandardMaterial({ color: "#79614a", roughness: 1 });
-    const leaf = new THREE.MeshStandardMaterial({ color: "#528a49", roughness: 0.95 });
+    const { trunk, crown, bark, leaf } = createVegetationStyleResources();
     const dummy = new THREE.Object3D();
     for (const [key, trees] of [...tiles].sort(([a], [c]) => a < c ? -1 : a > c ? 1 : 0)) {
       for (let start = 0; start < trees.length; start += batchLimit) {
@@ -156,8 +155,10 @@ export function createGeographicImageryVegetation(candidates: readonly ImageryTr
             if (part === "trunk") dummy.scale.set(Math.min(1, r / 0.2), height * 0.5, Math.min(1, r / 0.2));
             else dummy.scale.set(r, height * 0.35, r);
             dummy.updateMatrix(); mesh.setMatrixAt(i, dummy.matrix);
+            if (part === "crown") mesh.setColorAt(i, vegetationColor(record.candidate.id));
           });
           mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingBox(); mesh.computeBoundingSphere();
+          if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
           mesh.frustumCulled = true; mesh.castShadow = false; mesh.receiveShadow = true;
           group.add(mesh);
         }
@@ -167,7 +168,7 @@ export function createGeographicImageryVegetation(candidates: readonly ImageryTr
   const counts: Record<ImageryVegetationReason, number> = { rendered: 0, "invalid-candidate": 0, "duplicate-id": 0, "outside-bounds": 0, excluded: 0, "no-ground-data": 0, capacity: 0 };
   for (const record of records) counts[record.reason]++;
   const stats = { candidates: candidates.length, counts, tiles: tiles.size, meshes: group.children.length };
-  group.userData = { records, stats, positionSource: "imagery-inferred", heightSource: "illustrative-not-measured",
+  group.userData = { records, stats, style: VEGETATION_STYLE_PROVENANCE, positionSource: "imagery-inferred", heightSource: "illustrative-not-measured",
     attributions: [...new Set(candidates.map(c => c.imagery?.attribution).filter(Boolean))].sort(),
     exclusionPolicy: { mode, clearanceM: clearance, corridorWidths: "caller-supplied-not-verified" },
     limitations: "Manually inspected crown centres/radii, not surveyed trunks. Heights, crown shape and color illustrative. No scatter, species inference or coordinate relocation." };

@@ -5,7 +5,7 @@ import { loadKoriyamaScene } from "./loadKoriyamaScene";
 const base = new URL("../../../public", import.meta.url);
 afterEach(() => vi.unstubAllGlobals());
 describe("bundled scene loading", () => {
-  it("loads all six source snapshots with one cancellation signal", async () => {
+  it("loads all seven source snapshots with one cancellation signal", async () => {
     const signal = new AbortController().signal;
     const fetcher = vi.fn(async (url: string, init: RequestInit) => {
       expect(init.signal).toBe(signal);
@@ -14,7 +14,8 @@ describe("bundled scene loading", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     const scene = await loadKoriyamaScene(signal);
-    expect(fetcher).toHaveBeenCalledTimes(6);
+    expect(fetcher).toHaveBeenCalledTimes(7);
+    expect(scene.canopyPatches).toHaveLength(4);
     expect(scene.imageryTrees).toHaveLength(34);
     expect(scene.imageryTrees[0]!.positionSource).toBe("imagery-inferred");
     expect(scene.landcover.features.filter(feature => feature.properties.kind === "tree")).toHaveLength(234);
