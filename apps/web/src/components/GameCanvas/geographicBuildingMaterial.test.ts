@@ -14,7 +14,7 @@ describe("geographic building decoration", () => {
       expect(material.displacementMap).toBeNull();
       expect(material.userData.decoration).toEqual(BUILDING_DECORATION_PROVENANCE);
       expect(material.userData.decoration.source).toBe("illustrative-not-surveyed");
-      expect(material.customProgramCacheKey()).toBe("geographic-building-decoration-v2");
+      expect(material.customProgramCacheKey()).toBe("geographic-building-decoration-v3-roof-mask");
     } finally { material.dispose(); }
   });
 
@@ -27,7 +27,9 @@ describe("geographic building decoration", () => {
       // Hook uses only shader sources/uniforms; renderer-owned compile parameters are not accessed.
       material.onBeforeCompile(shader as Parameters<typeof material.onBeforeCompile>[0], {} as THREE.WebGLRenderer);
       expect(shader.vertexShader).toContain("attribute vec2 facadeUv;");
-      expect(shader.vertexShader).toContain("vRoofMask = step(0.8, abs(normal.y));");
+      expect(shader.vertexShader).toContain("attribute float roofMask;");
+      expect(shader.vertexShader).toContain("vRoofMask = clamp(roofMask, 0.0, 1.0);");
+      expect(shader.vertexShader).not.toContain("abs(normal.y)");
       expect(shader.vertexShader).toContain("#include <project_vertex>");
       expect(shader.vertexShader).not.toMatch(/transformed\s*[+*\-/]?=/);
       expect(shader.fragmentShader).toContain("fwidth(facadeCell)");

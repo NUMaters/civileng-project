@@ -26,9 +26,14 @@
     "water": 5,
     "campus": 1
   },
+  "roofShapeCounts": {
+    "gabled": 22,
+    "hipped": 19
+  },
+  "roofHints": "OSM roof tags are source-attributed but unverified. Shape alone does not establish roof rise, ridge position/direction or pitch; never add guessed roof height to source building height.",
   "bridgeSegments": 62,
   "elevation": "none; all coordinates are 2D; no DEM or measured terrain",
   "skipped": [],
-  "dataSha256": "13e871bec7ed71d9867f6a85b442f74bc1f97461e311b6b733270fcc9c3396d9",
+  "dataSha256": "31dd20b5a60872096e18c71dd6034f8741f2689351349f941d8799aa542e905b",
   "sourceSha256": "d484ffea468dd090485d939cbef9d8f3c58a22cb4665f57658ce0a8be8637aa0"
 }
