@@ -91,6 +91,7 @@ describe("actual geographic world", () => {
     expect(hits(w, "water", 260, 210)[0]!.object.userData.riverStageEligible).toBe(false);
     expect(hits(w, "water", 290, 210)[0]!.object.userData.riverStageEligible).toBe(false);
     for (const mesh of w.waterMeshes) {
+      expect(mesh.receiveShadow).toBe(true);
       const ids = mesh.userData.sourceIds as string[];
       expect(ids.length).toBeGreaterThan(0);
       expect(ids.every(id => (id === river.id) === mesh.userData.riverStageEligible)).toBe(true);

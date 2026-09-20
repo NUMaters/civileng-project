@@ -390,7 +390,7 @@ export function createGeographicWorld(data: KoriyamaGeodata | KoriyamaPlateauGeo
       riverStageEligible: buffer.riverStageEligible, sourceIds: [...buffer.sourceIds],
       bridge: buffer.layer.startsWith("bridge-"), elevationSource: buffer.layer === "building" ? group.userData.groundSource : group.userData.surfaceSource };
     mesh.frustumCulled = true;
-    mesh.receiveShadow = !water; mesh.castShadow = buffer.layer === "building";
+    mesh.receiveShadow = true; mesh.castShadow = buffer.layer === "building";
     group.add(mesh);
     if (water) { group.waterGeometries.push(geometry); group.waterMeshes.push(mesh); }
     stats.batches++; stats.vertices += count; buffered -= count;

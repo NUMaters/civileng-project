@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>Water shader smoke check</title>
+<!-- Manual WebGL smoke check: run the web Vite development server and open
+     /e2e/fixtures/water-shadow.html. Not a production entry or mobile FPS test.
+     PASS requires all shader variants to compile, actual shadow pixels to differ,
+     and receiveShadow=false to restore the identical unshadowed rendering. -->
+<style>body{font:16px system-ui;background:#f0f6fa;color:#15364b;margin:16px}section{display:inline-block;margin:8px}canvas{display:block;width:320px;height:240px}pre{white-space:pre-wrap}</style>
+<h1>Water shader smoke check</h1><p>Existing water shader: disabled, enabled, and receiver disabled.</p><main></main><pre id="result">Running</pre>
+<script type="module">
+import * as THREE from 'three';
+import { createGeographicWaterMaterial } from '../../src/components/GameCanvas/geographicWater.ts';
+const results=[];
+for(const [name,shadows,receive] of [['Shadows off',false,true],['Shadows on',true,true],['Receiver off',true,false]]){
+ const section=document.createElement('section');section.append(name);document.querySelector('main').append(section);
+ const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(320,240);renderer.shadowMap.enabled=shadows;renderer.shadowMap.type=THREE.PCFShadowMap;section.append(renderer.domElement);
+ let error=null;renderer.debug.onShaderError=()=>{error='Shader compilation failed';};
+ const scene=new THREE.Scene();scene.background=new THREE.Color('#b4dff1');
+ const camera=new THREE.PerspectiveCamera(45,320/240,.1,100);camera.position.set(6,9,10);camera.lookAt(0,0,0);
+ const sun=new THREE.DirectionalLight(0xffffff,2.5);sun.position.set(-4,8,4);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:.1,far:40});scene.add(sun);scene.add(new THREE.HemisphereLight(0xffffff,0x608090,.6));
+ const waterMaterial=createGeographicWaterMaterial();
+ const water=new THREE.Mesh(new THREE.PlaneGeometry(20,20).rotateX(-Math.PI/2),waterMaterial);water.receiveShadow=receive;scene.add(water);
+ const bridge=new THREE.Mesh(new THREE.BoxGeometry(2,1,10),new THREE.MeshStandardMaterial({color:0xeee7c8}));bridge.position.set(0,2,0);bridge.castShadow=true;scene.add(bridge);
+ renderer.render(scene,camera);
+ const gl=renderer.getContext(), pixels=new Uint8Array(320*240*4);gl.readPixels(0,0,320,240,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+ const glError=gl.getError();results.push({name,error,glError,pixels});
+ scene.traverse(o=>{o.geometry?.dispose();if(o.material)o.material.dispose();});sun.shadow.dispose();renderer.dispose();
+}
+const changed=(a,b)=>{let n=0;for(let i=0;i<a.length;i+=4)if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>3)n++;return n;};
+const difference=changed(results[0].pixels,results[1].pixels),receiverOffDifference=changed(results[0].pixels,results[2].pixels);
+document.querySelector('#result').textContent=JSON.stringify({variants:results.map(({pixels,...r})=>r),difference,receiverOffDifference,pass:results.every(r=>!r.error&&!r.glError)&&difference>50&&receiverOffDifference===0},null,2);
+</script>
