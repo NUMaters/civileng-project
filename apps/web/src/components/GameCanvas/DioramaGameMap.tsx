@@ -31,6 +31,7 @@ import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
 import { FACILITY_LABEL_MARGIN, layoutFacilityLabel, type FacilityLabelLayout } from "./facilityLabelLayout";
+import { scoreGuidanceAnchor } from "./guidanceLabelLayout";
 import { createRiverStageController } from "./riverStage";
 import { createRiverSurfaceSampler } from "./riverSurface";
 import { createRiverBoundaryResolver } from "./riverBoundary";
@@ -494,10 +495,15 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       });
       labelSizeObserver.current = sizeObserver;
       for (const element of labels.current.values()) sizeObserver.observe(element);
+      // Keep guidance measurable even when phase/preview gates hide it.
+      if (guidanceLabel.current) sizeObserver.observe(guidanceLabel.current);
+      const guidanceTitle = guidanceLabel.current?.querySelector("strong");
+      const guidanceAdvice = guidanceLabel.current?.querySelector("small");
       const labelLayout: FacilityLabelLayout = {
         x: 0, y: 0, pointerSide: "bottom", pointerHeight: 7, pointerBaseX: 0, pointerTipX: 0,
         pointerLeft: 0, pointerWidth: 0,
       };
+      const candidateHintLayout = { ...labelLayout };
       let frame = 0,
         last = performance.now(),
         time = 0;
@@ -632,48 +638,44 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         }
         const hint = guidanceLabel.current;
         if (hint) {
-          let chosen: {
-            site: (typeof guidanceSites.current)[number];
-            x: number;
-            y: number;
-            score: number;
-          } | null = null;
+          let chosen: (typeof guidanceSites.current)[number] | undefined;
+          let bestScore = Infinity;
+          const size = labelSizes.current.get(hint);
           const preparing = !state || state.phase === "preparation" || state.phase === "idle";
-          if (preparing && !latest.current.placements.some((placement) => placement.preview)) {
+          if (size && preparing && !latest.current.placements.some((placement) => placement.preview)) {
             for (const site of guidanceSites.current) {
               const position = geoToWorld(site.longitude, site.latitude);
+              const ground = terrain.sampleGround(position.x, position.z);
+              if (ground === null) continue;
               const projected = projectedPoint.set(
                 position.x,
-                (terrain.sampleGround(position.x, position.z) ?? 0) + 12,
+                ground + 12,
                 position.z,
               ).project(camera);
               const px = (projected.x * 0.5 + 0.5) * viewportWidth;
               const py = (-projected.y * 0.5 + 0.5) * viewportHeight;
-              // Keep a single hint in the playable area, clear of the HUD and construction dock.
-              if (
-                projected.z < -1 ||
-                projected.z > 1 ||
-                px < 90 ||
-                px > viewportWidth - 90 ||
-                py < 290 ||
-                py > viewportHeight - 240
-              )
-                continue;
-              const score =
-                Math.abs(py - viewportHeight * 0.48) +
-                Math.abs(px - viewportWidth * 0.5) * 0.4;
-              if (!chosen || score < chosen.score) chosen = { site, x: px, y: py, score };
+              const score = scoreGuidanceAnchor(px, py, projected.z, viewportWidth, viewportHeight,
+                size.width, size.height, labelBounds, candidateHintLayout);
+              if (score < bestScore) {
+                chosen = site;
+                bestScore = score;
+                Object.assign(labelLayout, candidateHintLayout);
+              }
             }
           }
-          hint.style.display = chosen ? "" : "none";
+          hint.style.visibility = chosen ? "visible" : "hidden";
           if (chosen) {
-            hint.style.transform = `translate(${chosen.x}px,${chosen.y}px) translate(-50%,-100%)`;
-            const title = hint.querySelector("strong");
-            const advice = hint.querySelector("small");
-            if (title && title.textContent !== chosen.site.title)
-              title.textContent = chosen.site.title;
-            if (advice && advice.textContent !== chosen.site.advice)
-              advice.textContent = chosen.site.advice;
+            hint.style.transform = `translate(${labelLayout.x}px,${labelLayout.y}px)`;
+            hint.dataset.pointerSide = labelLayout.pointerSide;
+            hint.style.setProperty("--facility-pointer-height", `${labelLayout.pointerHeight}px`);
+            hint.style.setProperty("--facility-pointer-base-x", `${labelLayout.pointerBaseX}px`);
+            hint.style.setProperty("--facility-pointer-tip-x", `${labelLayout.pointerTipX}px`);
+            hint.style.setProperty("--facility-pointer-left", `${labelLayout.pointerLeft}px`);
+            hint.style.setProperty("--facility-pointer-width", `${labelLayout.pointerWidth}px`);
+            if (guidanceTitle && guidanceTitle.textContent !== chosen.title)
+              guidanceTitle.textContent = chosen.title;
+            if (guidanceAdvice && guidanceAdvice.textContent !== chosen.advice)
+              guidanceAdvice.textContent = chosen.advice;
           }
         }
         renderer.render(scene, camera);
@@ -770,7 +772,6 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           <div
             className="diorama-label diorama-guidance"
             ref={guidanceLabel}
-            style={{ display: "none" }}
           >
             <strong />
             <small />
