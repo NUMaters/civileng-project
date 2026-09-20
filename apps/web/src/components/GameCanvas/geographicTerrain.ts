@@ -3,6 +3,21 @@ import { geoToWorld, worldToGeo } from "./dioramaSpace";
 import { sampleKoriyamaTerrain, type KoriyamaTerrain } from "./koriyamaTerrain";
 import { createGeographicTerrainMaterial } from "./geographicTerrainMaterial";
 
+export type RenderedTerrainSurface = {
+  originX: number;
+  originZ: number;
+  maxX: number;
+  maxZ: number;
+  columns: number;
+  rows: number;
+  cellWidth: number;
+  cellHeight: number;
+  xCoordinates: Float32Array;
+  zCoordinates: Float32Array;
+  /** Samples the same piecewise-linear triangle surface emitted by the terrain mesh. */
+  sampleRenderedGround: (x: number, z: number) => number | null;
+};
+
 /** A measured ground surface, not bathymetry or bridge-deck geometry. */
 export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters = 12) {
   if (!Number.isFinite(spacingMeters) || spacingMeters < 5 || spacingMeters > 100)
@@ -14,6 +29,60 @@ export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters 
   const sampleGround = (x: number, z: number): number | null => {
     const p = worldToGeo(x, z);
     return sampleKoriyamaTerrain(terrain, p.longitude, p.latitude).localY;
+  };
+  const vertexColumns = columns + 1, vertexRows = rows + 1;
+  const vertexX = new Float32Array(vertexColumns * vertexRows);
+  const vertexY = new Float32Array(vertexColumns * vertexRows);
+  const vertexZ = new Float32Array(vertexColumns * vertexRows);
+  const gridX = new Float32Array(vertexColumns), gridZ = new Float32Array(vertexRows);
+  const vertexValid = new Uint8Array(vertexColumns * vertexRows);
+  const vertexIndex = (column: number, row: number) => row * vertexColumns + column;
+  for (let row = 0; row <= rows; row++) for (let column = 0; column <= columns; column++) {
+    const i = vertexIndex(column, row);
+    const worldX = a.x + (b.x - a.x) * column / columns;
+    const worldZ = a.z + (b.z - a.z) * row / rows;
+    gridX[column] = worldX; gridZ[row] = worldZ;
+    const y = sampleGround(worldX, worldZ);
+    vertexX[i] = worldX;
+    vertexZ[i] = worldZ;
+    if (y !== null && Number.isFinite(y)) { vertexY[i] = y; vertexValid[i] = 1; }
+  }
+  const findCell = (values: Float32Array, count: number, value: number) => {
+    if (!Number.isFinite(value) || value < values[0]! || value > values[count]!) return -1;
+    let low = 0, high = count;
+    while (high - low > 1) {
+      const middle = Math.floor((low + high) / 2);
+      if (values[middle]! <= value) low = middle;
+      else high = middle;
+    }
+    return Math.min(count - 1, low);
+  };
+  const interpolateTriangle = (x: number, z: number, ia: number, ib: number, ic: number): number | null => {
+    if (!vertexValid[ia] || !vertexValid[ib] || !vertexValid[ic]) return null;
+    const ax = vertexX[ia]!, az = vertexZ[ia]!, ay = vertexY[ia]!;
+    const bx = vertexX[ib]!, bz = vertexZ[ib]!, by = vertexY[ib]!;
+    const cx = vertexX[ic]!, cz = vertexZ[ic]!, cy = vertexY[ic]!;
+    const determinant = (bx - ax) * (cz - az) - (bz - az) * (cx - ax);
+    if (!Number.isFinite(determinant) || Math.abs(determinant) < 1e-12) return null;
+    const wb = ((x - ax) * (cz - az) - (z - az) * (cx - ax)) / determinant;
+    const wc = ((bx - ax) * (z - az) - (bz - az) * (x - ax)) / determinant;
+    return ay * (1 - wb - wc) + by * wb + cy * wc;
+  };
+  const sampleRenderedGround = (x: number, z: number): number | null => {
+    const column = findCell(gridX, columns, x), row = findCell(gridZ, rows, z);
+    if (column < 0 || row < 0) return null;
+    const p00 = vertexIndex(column, row), p01 = vertexIndex(column, row + 1);
+    const p10 = vertexIndex(column + 1, row), p11 = vertexIndex(column + 1, row + 1);
+    const fx = (x - vertexX[p00]!) / (vertexX[p10]! - vertexX[p00]!);
+    const fz = (z - vertexZ[p00]!) / (vertexZ[p01]! - vertexZ[p00]!);
+    return fx + fz <= 1
+      ? interpolateTriangle(x, z, p00, p01, p10)
+      : interpolateTriangle(x, z, p10, p01, p11);
+  };
+  const renderedSurface: RenderedTerrainSurface = {
+    originX: vertexX[0]!, originZ: vertexZ[0]!, maxX: gridX[columns]!, maxZ: gridZ[rows]!,
+    columns, rows, cellWidth: (gridX[columns]! - gridX[0]!) / columns,
+    cellHeight: (gridZ[rows]! - gridZ[0]!) / rows, xCoordinates: gridX, zCoordinates: gridZ, sampleRenderedGround,
   };
   const group = new THREE.Group();
   group.name = "gsi-measured-terrain";
@@ -37,11 +106,9 @@ export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters 
       const sums = new Float64Array(stride * haloRows * 3);
       const haloIndex = (x: number, z: number) => (z - startZ) * stride + x - startX;
       for (let z = startZ; z <= endZ; z++) for (let x = startX; x <= endX; x++) {
-        const worldX = a.x + (b.x - a.x) * x / columns;
-        const worldZ = a.z + (b.z - a.z) * z / rows;
-        const y = sampleGround(worldX, worldZ), i = haloIndex(x, z);
-        haloPositions[i * 3] = worldX; haloPositions[i * 3 + 1] = y ?? 0; haloPositions[i * 3 + 2] = worldZ;
-        haloValid[i] = y !== null ? 1 : 0;
+        const source = vertexIndex(x, z), i = haloIndex(x, z);
+        haloPositions[i * 3] = vertexX[source]!; haloPositions[i * 3 + 1] = vertexY[source]!; haloPositions[i * 3 + 2] = vertexZ[source]!;
+        haloValid[i] = vertexValid[source]!;
       }
       const addNormal = (i: number, nx: number, ny: number, nz: number) => {
         sums[i * 3] = sums[i * 3]! + nx;
@@ -96,6 +163,6 @@ export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters 
     }
   }
   if (!group.children.length) material.dispose();
-  return { group, sampleGround, bounds: { minX: a.x, minZ: a.z, maxX: b.x, maxZ: b.z },
+  return { group, sampleGround, sampleRenderedGround, renderedSurface, bounds: { minX: a.x, minZ: a.z, maxX: b.x, maxZ: b.z },
     stats: { triangles, missingTriangles, tiles: group.children.length } };
 }
