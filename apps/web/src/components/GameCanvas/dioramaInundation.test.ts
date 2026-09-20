@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -77,6 +78,106 @@ function connectedSetup(sample: SurfaceSampler = () => 0, water: SurfaceSampler 
 }
 
 describe("rendered flood patch snapshots", () => {
+  it("has continuous shared-node colors in the actual 80/90s flood without changing its geometry", () => {
+    const read = (file: string) => readFileSync(new URL(`../../../public/geodata/koriyama/${file}`, import.meta.url));
+    const osm = JSON.parse(read("features.geojson").toString()) as KoriyamaGeodata;
+    const metadata = JSON.parse(read("terrain-metadata.json").toString()) as KoriyamaTerrainMetadata;
+    const terrain = createGeographicTerrain(decodeKoriyamaTerrain(Uint8Array.from(read("terrain.bin")).buffer, metadata));
+    const world = createGeographicWorld({ ...osm, features: osm.features.filter(f => ["water", "waterway"].includes(f.properties.kind)) }, {
+      localBounds: terrain.bounds, groundSampler: terrain.sampleGround, surfaceGridSpacing: 12,
+      surfaceSampler: (x, z) => { const y = terrain.sampleGround(x, z); return y === null ? null : y + 0.35; },
+    });
+    const stage = createRiverStageController(world.waterMeshes);
+    const resolve = createRiverBoundaryResolver(osm, createRiverSurfaceSampler(world.waterMeshes));
+    const adapter = createDioramaInundation(terrain.sampleGround, resolve);
+    adapters.push(adapter);
+    const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
+    const reports: { elapsed: number; vertices: number; hash: string; shared: number; discontinuous: number; maxColorJump: number; constantTriangles: number; duplicateTriangles: number; neighborPairs: number; maxShadeJump: number; oppositeTriplets: number; alternatingTriplets: number }[] = [];
+    try {
+      let state = beginDisaster(createInitialFloodState(), { weatherSeed: DEFAULT_WEATHER_SEED });
+      stage.update(state.riverLevelMeters); adapter.update(state, 0, 0);
+      for (let step = 1; step <= 900; step++) {
+        state = advanceFloodSimulation(state, [], 0.1);
+        stage.update(state.riverLevelMeters); adapter.update(state, 0.1, step / 10);
+        if (step !== 800 && step !== 900) continue;
+        const p = geometry.getAttribute("position"), c = geometry.getAttribute("color");
+        let shared = 0, discontinuous = 0, maxColorJump = 0, constantTriangles = 0, duplicateTriangles = 0, start = 0;
+        let neighborPairs = 0, maxShadeJump = 0, oppositeTriplets = 0, alternatingTriplets = 0;
+        for (const patch of adapter.getRenderedPatches()) {
+          const nodes = new Map<string, number[]>(), triangles = new Set<string>();
+          const cells = new Map<string, number>();
+          const boundary = resolve(state.overflowSites.find(site => site.id === patch.id)!)!;
+          const length = Math.hypot(boundary.right.x - boundary.left.x, boundary.right.z - boundary.left.z);
+          const tx = (boundary.right.x - boundary.left.x) / length, tz = (boundary.right.z - boundary.left.z) / length;
+          const shallowRed = new THREE.Color("#65edfa").r;
+          for (let i = start; i < start + patch.vertexCount; i += 6) {
+            const x = [0, 1, 2, 5].reduce((sum, k) => sum + p.getX(i + k), 0) / 4 - boundary.anchor.x;
+            const z = [0, 1, 2, 5].reduce((sum, k) => sum + p.getZ(i + k), 0) / 4 - boundary.anchor.z;
+            const col = (x * tx + z * tz) / 4 - 0.5, row = (x * boundary.inland.x + z * boundary.inland.z) / 4 - 0.5;
+            // Exclude subdivided throat strips. Before the fix this scalar is
+            // exactly min(cell depth / 1.5, 1); afterwards it is mean nodal shade.
+            if (Math.abs(col - Math.round(col)) > 1e-4 || Math.abs(row - Math.round(row)) > 1e-4 || row < 1) continue;
+            cells.set(`${Math.round(col)},${Math.round(row)}`, 1 - [0, 1, 2, 5].reduce((sum, k) => sum + c.getX(i + k), 0) / (4 * shallowRed));
+          }
+          for (const [key, value] of cells) {
+            const [col, row] = key.split(",").map(Number) as [number, number];
+            for (const [dx, dz] of [[1, 0], [0, 1]] as const) {
+              const next = cells.get(`${col + dx},${row + dz}`), previous = cells.get(`${col - dx},${row - dz}`);
+              if (next !== undefined) { neighborPairs++; maxShadeJump = Math.max(maxShadeJump, Math.abs(value - next)); }
+              if (next !== undefined && previous !== undefined) {
+                oppositeTriplets++;
+                if ((value - next) * (value - previous) > 0 && Math.min(Math.abs(value - next), Math.abs(value - previous)) > 0.05) alternatingTriplets++;
+              }
+            }
+          }
+          for (let i = start; i < start + patch.vertexCount; i++) {
+            const key = `${p.getX(i)},${p.getY(i)},${p.getZ(i)}`, rgb = [c.getX(i), c.getY(i), c.getZ(i)];
+            expect(rgb.every(v => Number.isFinite(v) && v >= 0 && v <= 1)).toBe(true);
+            const previous = nodes.get(key);
+            if (previous) {
+              shared++;
+              const jump = Math.max(...rgb.map((v, k) => Math.abs(v - previous[k]!)));
+              maxColorJump = Math.max(maxColorJump, jump);
+              if (jump > 1e-6) discontinuous++;
+            } else nodes.set(key, rgb);
+            if ((i - start) % 3 === 0) {
+              const keys = [0, 1, 2].map(k => `${p.getX(i + k)},${p.getY(i + k)},${p.getZ(i + k)}`).sort().join(";");
+              if (triangles.has(keys)) duplicateTriangles++;
+              triangles.add(keys);
+              if ([1, 2].every(k => c.getX(i + k) === c.getX(i) && c.getY(i + k) === c.getY(i) && c.getZ(i + k) === c.getZ(i))) constantTriangles++;
+            }
+          }
+          start += patch.vertexCount;
+        }
+        const array = p.array;
+        reports.push({ elapsed: step / 10, vertices: geometry.drawRange.count,
+          hash: createHash("sha256").update(Buffer.from(array.buffer, array.byteOffset, geometry.drawRange.count * 12)).digest("hex"),
+          shared, discontinuous, maxColorJump, constantTriangles, duplicateTriangles, neighborPairs, maxShadeJump, oppositeTriplets, alternatingTriplets });
+      }
+      console.info("ACTUAL_FLOOD_COLOR", JSON.stringify(reports));
+      for (const report of reports) {
+        // Captured on 523d827 before nodal color changes: byte-exact positions
+        // prove that wet extent, surface head and triangulation are unchanged.
+        expect(report.hash).toBe(report.elapsed === 80 ? "1ed86c79391838c6d2612cc541a684acba297890e15d431576366aee1376e380" : "07d7180c17a1e0e94183144c57802d63d7defd8ae966821caf2599796db66dae");
+        expect(report.shared).toBeGreaterThan(100);
+        expect(report.duplicateTriangles).toBe(0);
+        expect(report.discontinuous).toBe(0);
+        expect(report.alternatingTriplets).toBe(0);
+      }
+      const color = geometry.getAttribute("color").array;
+      const frozen = color.slice();
+      adapter.update(state, 1, 91);
+      expectSameBuffer(color, frozen);
+    } finally {
+      const materials = new Set<THREE.Material>();
+      for (const root of [world, terrain.group]) root.traverse(child => {
+        if (!(child instanceof THREE.Mesh)) return;
+        child.geometry.dispose();
+        for (const m of Array.isArray(child.material) ? child.material : [child.material]) materials.add(m);
+      });
+      materials.forEach(m => m.dispose());
+    }
+  }, 60_000);
   it("removes an invalid replacement bank immediately even during upload throttling", () => {
     const fixture = connectedSetup();
     let boundary = fixture.resolveBoundary(fixture.state.overflowSites[0]!)!;
@@ -127,6 +228,22 @@ describe("rendered flood patch snapshots", () => {
     }
     expect(area).toBeCloseTo(15.8 * 4, 4);
     expect(sourceVertices).toBe((4 + (distribution === "cell-boundary" ? 27 : 30)) * 6);
+    // Split source strips must meet the unsplit next row with interpolated
+    // colors, not just agree at the original cell corners.
+    const colors = geometry.getAttribute("color");
+    const rearColor = (z: number) => {
+      for (let i = 0; i < adapter.getRenderedPatches()[0]!.vertexCount; i++) {
+        if (positions.getX(i) === 4 && Math.abs(positions.getZ(i) - z) < 1e-5) return [colors.getX(i), colors.getY(i), colors.getZ(i)];
+      }
+      throw new Error(`Missing rear-edge point ${z}`);
+    };
+    for (const z of interior) {
+      const edges = [-7.9, -4, 0, 4, 7.9];
+      const index = edges.findIndex((v, i) => i < edges.length - 1 && z >= v && z <= edges[i + 1]!);
+      const a = edges[index]!, b = edges[index + 1]!, t = (z - a) / (b - a);
+      const left = rearColor(a), right = rearColor(b), value = rearColor(z);
+      for (let k = 0; k < 3; k++) expect(value[k]).toBeCloseTo(left[k]! + (right[k]! - left[k]!) * t, 6);
+    }
     expect(positions.count).toBe(24 * (58 * 48 + MAX_RIVER_EDGE_POINTS) * 6);
   });
 

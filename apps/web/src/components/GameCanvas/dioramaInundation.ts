@@ -71,6 +71,7 @@ type BankGrid = {
   queue: Int32Array;
   source: Uint8Array;
   surface: Float32Array;
+  shade: Float32Array;
   weights: Uint8Array;
   flux: Float64Array;
   edgeFirst: Uint8Array;
@@ -159,7 +160,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
         const b = grid.bank;
         simulationBufferBytes += b.lateral.byteLength + b.x.byteLength + b.z.byteLength + b.bed.byteLength +
           b.depth.byteLength + b.next.byteLength + b.neighbors.byteLength + b.connected.byteLength + b.queue.byteLength +
-          b.source.byteLength + b.surface.byteLength + b.weights.byteLength + b.flux.byteLength + b.edgeFirst.byteLength + b.edgeEnd.byteLength;
+          b.source.byteLength + b.surface.byteLength + b.shade.byteLength + b.weights.byteLength + b.flux.byteLength + b.edgeFirst.byteLength + b.edgeEnd.byteLength;
         vertex = emitBankGrid(grid, positions, colors, vertex);
         const patch = renderedPatch(positions, vertexStart, vertex - vertexStart, grid.seed.id);
         if (patch) patches.push(patch);
@@ -588,7 +589,7 @@ function createBankGrid(b: RiverBoundary, sample: SurfaceSampler): BankGrid | un
   const bank: BankGrid = { columns, lateral: Float64Array.from(edges), x: new Float64Array(nodes), z: new Float64Array(nodes),
     bed: new Float32Array(cells), depth: new Float32Array(cells), next: new Float32Array(cells),
     neighbors: new Int32Array(cells * 4), connected: new Uint8Array(cells), queue: new Int32Array(cells),
-    source: new Uint8Array(cells), surface: new Float32Array(nodes), weights: new Uint8Array(nodes), flux: new Float64Array(4),
+    source: new Uint8Array(cells), surface: new Float32Array(nodes), shade: new Float32Array(nodes), weights: new Uint8Array(nodes), flux: new Float64Array(4),
     edgeFirst: new Uint8Array(columns), edgeEnd: new Uint8Array(columns) };
   for (let row = 0; row <= SUB_ROWS; row++) for (let col = 0; col <= columns; col++) {
     const i = row * (columns + 1) + col;
@@ -678,7 +679,7 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
     while (edgeIndex < (edge?.length ?? 0) && along(edgeIndex) < b.lateral[col + 1]! - 1e-6) edgeIndex++;
     b.edgeEnd[col] = edgeIndex;
   }
-  b.connected.fill(0); b.surface.fill(0); b.weights.fill(0);
+  b.connected.fill(0); b.surface.fill(0); b.shade.fill(0); b.weights.fill(0);
   let tail = 0;
   for (let i = 0; i < columns; i++) if (b.source[i] && b.depth[i]! >= WET) { b.connected[i] = 1; b.queue[tail++] = i; }
   for (let cursor = 0; cursor < tail; cursor++) {
@@ -689,28 +690,33 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
     }
     const row = Math.floor(i / columns), col = i % columns, node = row * stride + col;
     const y = b.bed[i]! + b.depth[i]!;
+    const shade = Math.min(1, b.depth[i]! / 1.5);
     for (let k = 0; k < 4; k++) {
       const n = node + (k % 2) + (k >= 2 ? stride : 0);
       b.surface[n]! += y; b.weights[n]!++;
+      b.shade[n]! += shade;
     }
   }
-  for (let i = 0; i < b.surface.length; i++) if (b.weights[i]) b.surface[i]! /= b.weights[i]!;
+  // Only connected wet cells contribute. Share the same bounded shading scalar
+  // at each node; never smooth simulation depths, heights, or wet/dry masks.
+  for (let i = 0; i < b.surface.length; i++) if (b.weights[i]) {
+    b.surface[i]! /= b.weights[i]!;
+    b.shade[i]! /= b.weights[i]!;
+  }
   for (let col = 0; col < columns; col++) if (b.source[col] && b.connected[col]) {
     b.surface[col] = edgeHeight(boundary, b.x[col]!, b.z[col]!);
     b.surface[col + 1] = edgeHeight(boundary, b.x[col + 1]!, b.z[col + 1]!);
   }
-  const emit = (x: number, y: number, z: number, depth: number) => {
+  const emit = (x: number, y: number, z: number, t: number) => {
     if (vertex >= positions.count || vertex >= colors.count) throw new RangeError("Flood vertex capacity exceeded");
     positions.setXYZ(vertex, x, y, z);
-    const t = Math.min(1, depth / 1.5);
     colors.setXYZ(vertex++, BANK_SHALLOW.r + (BANK_DEEP.r - BANK_SHALLOW.r) * t,
       BANK_SHALLOW.g + (BANK_DEEP.g - BANK_SHALLOW.g) * t, BANK_SHALLOW.b + (BANK_DEEP.b - BANK_SHALLOW.b) * t);
   };
-  const emitNode = (n: number, depth: number) => emit(b.x[n]!, b.surface[n]!, b.z[n]!, depth);
+  const emitNode = (n: number) => emit(b.x[n]!, b.surface[n]!, b.z[n]!, b.shade[n]!);
   for (let cursor = 0; cursor < tail; cursor++) {
     const i = b.queue[cursor]!, row = Math.floor(i / columns), col = i % columns;
     const a = row * stride + col, c = a + 1, d = a + stride + 1, e = a + stride;
-    const depth = b.depth[i]!;
     if (row === 0 && b.source[i]) {
       // Subdivide ONLY this wet cell's source edge at actual river triangle breaks.
       // There is no separate widened connector and no unsimulated 8m shore band.
@@ -725,13 +731,19 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
         const ly = b.surface[e]! + (b.surface[d]! - b.surface[e]!) * startT;
         const rx = b.x[e]! + (b.x[d]! - b.x[e]!) * t, rz = b.z[e]! + (b.z[d]! - b.z[e]!) * t;
         const ry = b.surface[e]! + (b.surface[d]! - b.surface[e]!) * t;
-        emit(x, y, z, depth); emit(nx, ny, nz, depth); emit(rx, ry, rz, depth);
-        emit(x, y, z, depth); emit(rx, ry, rz, depth); emit(lx, ly, lz, depth);
+        // Interpolate the nodal scalar at triangle-edge splits too, so the rear
+        // edge agrees with the neighboring unsplit cell (including saturation).
+        const frontStart = b.shade[a]! + (b.shade[c]! - b.shade[a]!) * startT;
+        const frontEnd = b.shade[a]! + (b.shade[c]! - b.shade[a]!) * t;
+        const backStart = b.shade[e]! + (b.shade[d]! - b.shade[e]!) * startT;
+        const backEnd = b.shade[e]! + (b.shade[d]! - b.shade[e]!) * t;
+        emit(x, y, z, frontStart); emit(nx, ny, nz, frontEnd); emit(rx, ry, rz, backEnd);
+        emit(x, y, z, frontStart); emit(rx, ry, rz, backEnd); emit(lx, ly, lz, backStart);
         x = nx; z = nz; y = ny;
       }
     } else {
-      emitNode(a, depth); emitNode(c, depth); emitNode(d, depth);
-      emitNode(a, depth); emitNode(d, depth); emitNode(e, depth);
+      emitNode(a); emitNode(c); emitNode(d);
+      emitNode(a); emitNode(d); emitNode(e);
     }
   }
   return vertex;
