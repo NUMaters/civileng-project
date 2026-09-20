@@ -1345,6 +1345,8 @@ a {
   font-weight: 800;
   letter-spacing: 0.02em;
   line-height: 1.25;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   pointer-events: none;
   white-space: nowrap;
   text-shadow: none;
