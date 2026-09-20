@@ -381,9 +381,10 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
 
       <RainOverlay
         active={
-          inGame && !paused &&
+          inGame &&
           (flood.phase === "disaster" || flood.phase === "result" || flood.phase === "review")
         }
+        paused={paused}
         getLatestState={flood.getLatestState}
       />
 
