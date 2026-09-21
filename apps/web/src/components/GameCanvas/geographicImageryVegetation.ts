@@ -159,7 +159,9 @@ export function createGeographicImageryVegetation(candidates: readonly ImageryTr
           });
           mesh.instanceMatrix.needsUpdate = true; mesh.computeBoundingBox(); mesh.computeBoundingSphere();
           if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-          mesh.frustumCulled = true; mesh.castShadow = false; mesh.receiveShadow = true;
+          // Reuse the game's cached directional shadow map. Only crowns cast:
+          // sub-pixel trunks add unstable thin shadows and another batch/pass.
+          mesh.frustumCulled = true; mesh.castShadow = part === "crown"; mesh.receiveShadow = true;
           group.add(mesh);
         }
       }

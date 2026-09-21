@@ -184,6 +184,8 @@ describe("bounded imagery canopy reconstruction", () => {
     expect(baseline.stats.evaluatedCells).toBeGreaterThan(1_000);
     expect(accepted.length).toBeGreaterThan(baseline.stats.counts.rendered);
     expect(r.stats.evaluatedCells).toBeGreaterThan(baseline.stats.evaluatedCells); expect(r.stats.meshes).toBeLessThanOrEqual(16);
+    expect(r.group.children.filter(m => m.castShadow)).toHaveLength(r.stats.meshes / 2);
+    for (const mesh of r.group.children) expect(mesh.castShadow).toBe(mesh.userData.part === "crown");
     expect(r.stats.skippedPatches).toEqual([]); expect(r.stats.counts.capacity).toBe(0);
     const campus = (record: { patchId: string }) => record.patchId.startsWith("campus-");
     expect(r.records.filter(campus)).toEqual(baseline.records.filter(campus));
