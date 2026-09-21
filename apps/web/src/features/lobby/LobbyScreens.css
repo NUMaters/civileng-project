@@ -1059,3 +1059,222 @@
     padding: 11px 18px;
   }
 }
+
+/* Phone layout: keep the main actions balanced inside one viewport. */
+@media (max-width: 760px) {
+  .cc-lobby.title-screen,
+  .cc-lobby.game-menu {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100dvh;
+    min-height: 100dvh;
+  }
+
+  .cc-lobby.title-screen {
+    justify-content: flex-end;
+    padding: 10px;
+  }
+
+  .cc-lobby.title-screen .title-screen__content {
+    align-self: center;
+    gap: 9px;
+    width: 100%;
+    max-width: 430px;
+    margin: auto 0 0;
+    padding: 17px 14px 14px;
+    border-radius: 26px;
+  }
+
+  .cc-lobby.title-screen .title-screen__locale {
+    justify-self: center;
+    padding: 7px 12px;
+  }
+
+  .cc-lobby.title-screen .title-screen__brand {
+    gap: 5px;
+  }
+
+  .cc-lobby.title-screen .title-screen__eyebrow {
+    font-size: 10px;
+  }
+
+  .cc-lobby.title-screen .title-screen__logo {
+    font-size: clamp(42px, 13vw, 54px);
+  }
+
+  .cc-lobby.title-screen .title-screen__wave {
+    height: 8px;
+    margin-bottom: 0;
+  }
+
+  .cc-lobby.title-screen .title-screen__headline {
+    margin-top: 3px;
+    font-size: clamp(19px, 5.35vw, 23px);
+    letter-spacing: 0;
+    white-space: nowrap;
+  }
+
+  .cc-lobby.title-screen .title-screen__tagline {
+    font-size: 10px;
+    line-height: 1.55;
+  }
+
+  .cc-lobby.title-screen .title-screen__steps {
+    padding-top: 9px;
+  }
+
+  .cc-lobby.title-screen .title-screen__cta {
+    min-height: 50px;
+  }
+
+  .cc-lobby.game-menu {
+    align-content: center;
+    width: calc(100% - 16px);
+    height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    min-height: 0;
+    margin: calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom));
+    padding: 13px 11px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .cc-lobby.game-menu .game-menu__header {
+    position: static;
+  }
+
+  .cc-lobby.game-menu .game-menu__back,
+  .cc-lobby.game-menu .game-menu__howto-btn {
+    min-height: 40px;
+    padding: 7px 9px;
+    font-size: 11px;
+  }
+
+  .cc-lobby.game-menu .game-menu__brand {
+    font-size: 18px;
+  }
+
+  .cc-lobby.game-menu .game-menu__brief-kicker {
+    font-size: 9px;
+  }
+
+  .cc-lobby.game-menu .game-menu__title {
+    margin: 2px 0;
+    font-size: clamp(25px, 7.4vw, 29px);
+  }
+
+  .cc-lobby.game-menu .game-menu__title::after {
+    height: 6px;
+    margin-top: 3px;
+  }
+
+  .cc-lobby.game-menu .game-menu__mode {
+    min-height: 82px;
+    padding: 10px;
+  }
+
+  .cc-lobby.game-menu .game-menu__mode-index {
+    align-self: center;
+  }
+
+  .cc-lobby.game-menu .game-menu__mode-body {
+    align-self: center;
+    gap: 3px;
+  }
+
+  .cc-lobby.game-menu .game-menu__mode-label {
+    font-size: 12px;
+  }
+
+  .cc-lobby.game-menu .game-menu__mode strong {
+    font-size: 14px;
+  }
+
+  .cc-lobby.game-menu .game-menu__mode-meta {
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .cc-lobby.game-menu .game-menu__status {
+    padding-block: 5px;
+  }
+
+  .cc-lobby.game-menu .game-menu__start {
+    min-height: 48px;
+  }
+
+  .cc-howto.howto-modal {
+    padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+  }
+
+  .cc-howto .howto-modal__panel {
+    width: 100%;
+    max-height: calc(
+      100dvh - max(8px, env(safe-area-inset-top)) - max(8px, env(safe-area-inset-bottom))
+    );
+    padding: 15px 12px 12px;
+    border-radius: 24px;
+    background:
+      radial-gradient(circle at 10% 0%, rgb(255 255 255 / 96%), transparent 38%),
+      linear-gradient(180deg, #f4fcff, #e6f7ff);
+  }
+
+  .cc-howto .howto-modal__kicker {
+    color: #168ed2;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+
+  .cc-howto .howto-modal__head h2 {
+    color: #064575;
+    font-size: 25px;
+  }
+
+  .cc-howto .howto-modal__body {
+    padding-right: 3px;
+  }
+
+  .cc-howto .howto-modal__section {
+    padding: 12px;
+    border: 1px solid rgb(35 139 196 / 15%);
+    border-radius: 18px;
+    background: rgb(255 255 255 / 72%);
+  }
+
+  .cc-howto .howto-modal__steps {
+    gap: 8px;
+  }
+
+  .cc-howto .howto-modal__steps li {
+    padding: 11px 10px 11px 44px;
+    border-color: rgb(35 139 196 / 18%);
+    border-radius: 14px;
+    box-shadow: none;
+  }
+
+  .cc-howto .howto-modal__steps li::before {
+    top: 11px;
+    background: linear-gradient(180deg, #36aae6, #0877c6);
+  }
+
+  .cc-howto .howto-modal__ok {
+    border: 2px solid rgb(73 199 240 / 78%);
+    border-radius: 999px;
+    background: linear-gradient(180deg, #36aae6, #0877c6);
+    box-shadow: 0 0 0 3px rgb(255 255 255 / 72%) inset;
+  }
+}
+
+@media (max-width: 760px) and (max-height: 700px) {
+  .cc-lobby.title-screen .title-screen__content {
+    gap: 6px;
+    padding-block: 12px;
+  }
+
+  .cc-lobby.title-screen .title-screen__tagline {
+    display: none;
+  }
+
+  .cc-lobby.game-menu {
+    align-content: start;
+  }
+}
