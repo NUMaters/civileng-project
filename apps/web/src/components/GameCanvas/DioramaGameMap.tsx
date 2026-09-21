@@ -23,6 +23,8 @@ import { createGeographicCanopy } from "./geographicCanopy";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
+import { createInlandPonding } from "./inlandPonding";
+import { createRenderedWaterMask } from "./renderedWaterMask";
 import { createDioramaFacility } from "./dioramaFacilities";
 import { getDioramaGuidance, initialDioramaFocus, isPreferredDioramaGuidanceCandidate } from "./dioramaGuidance";
 import { createGeographicGuidanceAnchors, selectGuidanceAdvice, selectGuidanceProjection } from "./geographicGuidanceAnchors";
@@ -312,6 +314,17 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       });
       const inundation = createDioramaInundation(terrain.sampleGround, riverBoundary);
       scene.add(inundation.group);
+      // Static XZ union of every water mesh, including small non-stage ribbons.
+      // Inland pressure remains separate from river-connected overtopping.
+      const inlandWaterMask = createRenderedWaterMask(world.waterMeshes, terrain.bounds);
+      const inlandPonding = createInlandPonding({
+        bounds: terrain.bounds,
+        renderedSurface: terrain.renderedSurface,
+        sampleGround: (x, z) => terrain.sampleGround(x, z) === null ? null : terrain.sampleRenderedGround(x, z),
+        classifyWater: inlandWaterMask.classify,
+        classifyFootprint: inlandWaterMask.classifyFootprint,
+      });
+      scene.add(inlandPonding.group);
       let lastFloodFocusKey = "";
       let cachedPatches: ReturnType<typeof inundation.getRenderedPatches> | null = null;
       let cachedViewport = "";
@@ -580,6 +593,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         waterMaterial.uniforms.time!.value = time;
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
         if (state) inundation.update(state, dt, time);
+        if (state) inlandPonding.update(state);
         const available = floodFraming() !== null;
         const viewing = floodReturnPose !== null;
         const focusKey = `${available}/${viewing}`;
@@ -749,6 +763,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls.dispose();
         scene.remove(inundation.group);
         inundation.dispose();
+        scene.remove(inlandPonding.group);
+        inlandPonding.dispose();
         disposeObject(scene);
         if (!world.waterMeshes.length) waterMaterial.dispose();
         renderer.dispose();
