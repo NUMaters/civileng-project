@@ -19,24 +19,24 @@
   "dependencies": {
     "@civilcraft/game-data": "workspace:*",
     "@civilcraft/game-schema": "workspace:*",
-    "cesium": "^1.143.0",
+    "cesium": "^1.145.0",
     "mersenne-twister": "1.1.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "three": "^0.186.0"
   },
   "devDependencies": {
     "@civilcraft/config": "workspace:*",
-    "@types/node": "^26.1.1",
-    "@types/react": "^19.1.6",
-    "@types/react-dom": "^19.1.5",
+    "@types/node": "^26.6.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/three": "^0.186.0",
-    "@vitejs/plugin-react-swc": "^4.3.1",
+    "@vitejs/plugin-react-swc": "^4.3.3",
     "eslint": "^9.28.0",
     "gensync": "1.0.0-beta.2",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vitest": "^3.2.0",
-    "wrangler": "^4.28.0"
+    "wrangler": "^4.134.0"
   }
 }

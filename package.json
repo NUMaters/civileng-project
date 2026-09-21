@@ -16,7 +16,7 @@
     "deploy:web": "pnpm --filter @civilcraft/web pages:deploy"
   },
   "devDependencies": {
-    "prettier": "^3.5.3"
+    "prettier": "^3.9.8"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
