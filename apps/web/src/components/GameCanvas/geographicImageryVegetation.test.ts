@@ -65,6 +65,9 @@ describe("imagery-inferred vegetation", () => {
     const overlap = { id: "overlap", observationRange: [34, 35] as [number, number] };
     expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: [...actual.inspectionBatches!, overlap] })).toThrow(/Overlapping/);
     expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: [{ ...overlap, observationRange: [34, 43] }] })).toThrow(RangeError);
+    for (const inspectionBatches of [null, {}, [null], [{ id: "missing" }], [{ id: "bad", observationRange: "34,42" }]]) {
+      expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches } as unknown as ImageryTreeObservations)).toThrow(RangeError);
+    }
   });
 
   it("renders only supplied centres and radii, with explicitly illustrative height and shared batched resources", () => {
