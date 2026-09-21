@@ -40,13 +40,17 @@ it("both actual inland fields stay above rendered terrain and cannot overlap any
         const mesh = object as THREE.Mesh, p = mesh.geometry.getAttribute("position");
         for (let i = 0; i < mesh.geometry.drawRange.count; i += 3) {
           const xs = [p.getX(i), p.getX(i + 1), p.getX(i + 2)], zs = [p.getZ(i), p.getZ(i + 1), p.getZ(i + 2)];
-          expect(mask.classifyFootprint(Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs))).toBe("dry");
+          // Keep every triangle/sample, but avoid hundreds of thousands of
+          // matcher allocations on the CI worker. Throw immediately with context.
+          const coverage = mask.classifyFootprint(Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs));
+          if (coverage !== "dry") throw new Error(`Water overlap/unknown at ${elapsed}s triangle ${i}: ${coverage}`);
           // Vertices, edge interiors and triangle interiors, not merely grid centres.
           for (let a = 0; a <= 4; a++) for (let b = 0; b <= 4 - a; b++) {
             const u = a / 4, v = b / 4, w = 1 - u - v;
             const x = xs[0]! * u + xs[1]! * v + xs[2]! * w, z = zs[0]! * u + zs[1]! * v + zs[2]! * w;
-            const ground = options.sampleGround(x, z); expect(ground).not.toBeNull();
-            minClearance = Math.min(minClearance, p.getY(i) - ground!); tested++;
+            const ground = options.sampleGround(x, z);
+            if (ground === null || !Number.isFinite(ground)) throw new Error(`Missing terrain at ${elapsed}s: ${x},${z}`);
+            minClearance = Math.min(minClearance, p.getY(i) - ground); tested++;
           }
         }
       }
