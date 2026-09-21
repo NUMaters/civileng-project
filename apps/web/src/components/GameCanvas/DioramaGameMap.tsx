@@ -19,7 +19,9 @@ import { createGeographicTrain } from "./geographicTrain";
 import { followGeographicShadows } from "./geographicShadows";
 import { createGeographicLandcover } from "./geographicLandcover";
 import { createGeographicImageryVegetation } from "./geographicImageryVegetation";
-import { createGeographicCanopy, GAME_CANOPY_DENSITY } from "./geographicCanopy";
+import { createGeographicCanopy } from "./geographicCanopy";
+import { createGeographicBoundaryMosaic } from "./geographicBoundaryMosaic";
+import { GAMEPLAY_MAP_BOUNDS } from "./gameplayMapBounds";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
@@ -173,7 +175,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
     useEffect(() => {
       const container = host.current;
       if (!container || !geography) return;
-      const terrain = createGeographicTerrain(geography.terrain);
+      const terrain = createGeographicTerrain(geography.terrain, 12, GAMEPLAY_MAP_BOUNDS);
+      const boundaryMosaic = createGeographicBoundaryMosaic(terrain.bounds, terrain.sampleGround);
       const bridges = createGeographicBridges(geography.osm, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
       });
@@ -190,7 +193,6 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const canopy = createGeographicCanopy(geography.canopyPatches, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
         exclusions: vegetationExclusions, observedCrowns: geography.imageryTrees,
-        ...GAME_CANOPY_DENSITY,
       });
       const world = createGeographicWorld({ ...geography.osm,
         features: geography.osm.features.filter(feature => !bridges.sourceIds.has(feature.id)),
@@ -260,7 +262,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       controls.enableDamping = true;
       controls.dampingFactor = 0.09;
       controls.minDistance = 190;
-      controls.maxDistance = 1500;
+      controls.maxDistance = 850;
       controls.maxPolarAngle = Math.PI * 0.4;
       controls.minPolarAngle = Math.PI * 0.15;
       controls.screenSpacePanning = false;
@@ -273,7 +275,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const reset = () => {
         floodReturnPose = null;
         lastFloodPatchId = null;
-        controls.maxDistance = 1500;
+        controls.maxDistance = 850;
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
         controls.target.set(riverX(focus.z), terrain.sampleGround(riverX(focus.z), focus.z) ?? 0, focus.z);
@@ -291,7 +293,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls.update();
       };
       reset();
-      scene.add(terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group, canopy.group);
+      scene.add(boundaryMosaic, terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group, canopy.group);
       const waterMaterial = createGeographicWaterMaterial();
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {

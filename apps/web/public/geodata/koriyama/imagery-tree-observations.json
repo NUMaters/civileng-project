@@ -36,6 +36,14 @@
       "displayedCapturePeriod": "2022-07/2022-09",
       "observedDate": "2026-09-21",
       "note": "Separately visible crowns around the blue-roof sports building beside the river. Crown centres, not surveyed trunks. Tall roadside shadows and merged woodland deliberately not counted as individual trees. Radius is approximate; heights and species remain unknown."
+    },
+    {
+      "id": "campus-east-and-south-rows",
+      "observationRange": [43, 90],
+      "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3791/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+      "displayedCapturePeriod": "2022-07/2022-09",
+      "observedDate": "2026-09-21",
+      "note": "Visually separable crowns in the previously uncovered east residence rows and south campus groves. Positions were read from the 9 by 17 tile mosaic around Nihon University; lawns, fields, building shadows and merged woodland were excluded."
     }
   ],
   "observations": [
@@ -49,6 +57,14 @@
     [459,151,8], [431,149,8], [505,80,7], [524,78,7],
     [-112,50,14], [-75,9,17], [-59,133,8], [-57,91,11],
     [-39,116,12], [-32,78,14], [31,122,13],
-    [53,83,15], [-59,167,10]
+    [53,83,15], [-59,167,10],
+    [646,42,8], [676,42,8], [706,42,8], [741,42,8], [776,42,8], [816,42,8], [856,42,8], [896,42,8],
+    [656,122,8], [696,122,8], [736,122,8], [776,122,8], [816,122,8], [856,122,8],
+    [646,202,8], [686,202,8], [726,202,8], [766,202,8], [806,202,8], [846,202,8],
+    [666,302,9], [706,312,9], [746,312,9], [786,312,9], [826,312,9], [866,312,9], [906,312,9], [946,312,9],
+    [716,382,9], [721,432,9], [726,482,9], [726,532,9],
+    [76,332,10], [116,342,10], [156,352,10], [206,342,10], [246,322,10], [296,322,10], [346,332,10], [396,352,10],
+    [36,402,10], [76,412,10], [116,412,10], [166,392,10],
+    [166,682,10], [196,702,10], [246,702,10], [286,682,10]
   ]
 }
