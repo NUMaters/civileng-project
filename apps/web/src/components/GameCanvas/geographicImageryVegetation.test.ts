@@ -32,20 +32,22 @@ const ring = (x: number, z: number, size: number) => [{ x, z }, { x: x + size, z
 afterEach(() => groups.splice(0).forEach(disposeDioramaObject));
 
 describe("imagery-inferred vegetation", () => {
-  it("normalizes the 34 inspected cross-tile observations with unchanged source period and no inferred height", () => {
+  it("normalizes inspected cross-tile observations while preserving the original campus sample", () => {
     const cs = convertImageryTreeObservations(actual);
-    expect(cs).toHaveLength(34);
+    expect(cs).toHaveLength(43);
     expect(cs[4]!.imagery.tile.x).toBe(233293);
     expect(cs[4]!.imagery.pixel.x).toBe(254);
     expect(cs[20]!.imagery.tile).toEqual({ z: 18, x: 233295, y: 101706 });
     expect(cs[20]!.imagery.pixel).toEqual({ x: 17, y: 41 });
-    for (const c of cs) {
+    for (const c of cs.slice(0, 34)) {
       expect(c.coordinates[0]).toBeGreaterThanOrEqual(140.38039);
       expect(c.coordinates[0]).toBeLessThanOrEqual(140.38342);
       expect(c.coordinates[1]).toBeGreaterThanOrEqual(37.35882);
       expect(c.coordinates[1]).toBeLessThanOrEqual(37.36021);
       expect(c.crownRadiusM).toBeGreaterThan(3.32);
       expect(c.crownRadiusM).toBeLessThan(6.18);
+    }
+    for (const c of cs) {
       expect(c.imagery.capturePeriod).toEqual({ start: "2022-07", end: "2022-09" });
       expect(c.imagery.captureDateScope).toBe("view-label-not-per-tree-verified");
       expect(c.coordinates).toEqual(imageryPixelToGeo(c.imagery.tile, c.imagery.pixel));
@@ -53,7 +55,19 @@ describe("imagery-inferred vegetation", () => {
     }
     expect(convertImageryTreeObservations({ ...actual, observations: [...actual.observations].reverse() }).map(c => c.id).sort()).toEqual(cs.map(c => c.id).sort());
     expect(() => imageryPixelToGeo({ z: 18, x: -1, y: 0 }, { x: 0, y: 0 })).toThrow(RangeError);
-    expect(() => convertImageryTreeObservations({ ...actual, observations: [[0, 0, NaN]] })).toThrow(RangeError);
+    expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: undefined, observations: [[0, 0, NaN]] })).toThrow(RangeError);
+  });
+
+  it("retains each inspection view and rejects ambiguous batch ranges", () => {
+    const cs = convertImageryTreeObservations(actual);
+    expect(cs.slice(0, 34).every(c => c.imagery.captureDateSourceUrl === actual.source.mapUrl)).toBe(true);
+    expect(cs.slice(34).every(c => c.imagery.captureDateSourceUrl === actual.inspectionBatches![1]!.mapUrl)).toBe(true);
+    const overlap = { id: "overlap", observationRange: [34, 35] as [number, number] };
+    expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: [...actual.inspectionBatches!, overlap] })).toThrow(/Overlapping/);
+    expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: [{ ...overlap, observationRange: [34, 43] }] })).toThrow(RangeError);
+    for (const inspectionBatches of [null, {}, [null], [{ id: "missing" }], [{ id: "bad", observationRange: "34,42" }]]) {
+      expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches } as unknown as ImageryTreeObservations)).toThrow(RangeError);
+    }
   });
 
   it("renders only supplied centres and radii, with explicitly illustrative height and shared batched resources", () => {
@@ -115,7 +129,7 @@ describe("imagery-inferred vegetation", () => {
     expect(() => create([], { exclusions: [{ sourceId: "bad", kind: "water", geometry: { type: "polygon", rings: [[]] } }] })).toThrow(RangeError);
   });
 
-  it("checks the actual 34 candidates against bundled buildings/roads/rails/water/trees and nullable DEM", () => {
+  it("checks all observed candidates against bundled buildings/roads/rails/water/trees and nullable DEM", () => {
     const osm: KoriyamaGeodata = JSON.parse(read("features.geojson").toString());
     const plateau: KoriyamaPlateauGeodata = JSON.parse(read("plateau-buildings.geojson").toString());
     const landcover: KoriyamaLandcover = JSON.parse(read("landcover.geojson").toString());
@@ -127,8 +141,27 @@ describe("imagery-inferred vegetation", () => {
       exclusions: createImageryVegetationExclusions(osm, plateau, landcover), groundSampler: (x, z) => {
         const p = worldToGeo(x, z); return sampleKoriyamaTerrain(terrain, p.longitude, p.latitude).localY;
       } });
-    expect(r.records).toHaveLength(34); expect(r.stats.counts["invalid-candidate"]).toBe(0);
-    expect(r.stats.counts.rendered).toBe(27); expect(r.stats.counts.excluded).toBe(7);
+    expect(r.records).toHaveLength(43); expect(r.stats.counts["invalid-candidate"]).toBe(0);
+    expect(r.stats.counts.rendered).toBe(34); expect(r.stats.counts.excluded).toBe(9);
+    const originalIds = new Set(cs.slice(0, 34).map(c => c.id));
+    const originalRecords = r.records.filter(t => originalIds.has(t.candidate.id));
+    expect(originalRecords.filter(t => t.reason === "rendered")).toHaveLength(27);
+    const additions = r.records.filter(t => !originalIds.has(t.candidate.id));
+    expect(additions).toHaveLength(9);
+    expect(additions.filter(t => t.reason === "rendered")).toHaveLength(7);
+    expect(additions.filter(t => t.reason === "excluded").map(t => t.exclusions)).toEqual([
+      [{ sourceId: "way/116068331", kind: "road" }],
+      [{ sourceId: "way/307995087", kind: "road" }],
+    ]);
+    for (const record of additions) {
+      expect(record.candidate.coordinates[0]).toBeGreaterThan(140.3798);
+      expect(record.candidate.coordinates[0]).toBeLessThan(140.381);
+      expect(record.candidate.coordinates[1]).toBeGreaterThan(37.3595);
+      expect(record.candidate.coordinates[1]).toBeLessThan(37.3603);
+      expect(record.candidate).toBe(cs.find(c => c.id === record.candidate.id));
+      if (record.reason === "rendered") expect(Number.isFinite(record.localPosition!.y)).toBe(true);
+      else expect(record.exclusions.length).toBeGreaterThan(0);
+    }
     expect(r.stats.tiles).toBe(2); expect(r.stats.meshes).toBe(4);
     expect(r.records.every(t => t.reason === "rendered" || t.reason === "excluded")).toBe(true);
     expect(r.group.userData.attributions).toEqual([actual.source.attribution]);

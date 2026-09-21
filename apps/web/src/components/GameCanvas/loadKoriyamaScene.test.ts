@@ -21,7 +21,7 @@ describe("bundled scene loading", () => {
       "riverbank-south-canopy-core", "riverbank-middle-canopy-core", "riverbank-north-canopy-core",
     ]);
     expect(scene.canopyPatches.slice(4).every(patch => patch.observationView?.layer === "seamlessphoto")).toBe(true);
-    expect(scene.imageryTrees).toHaveLength(34);
+    expect(scene.imageryTrees).toHaveLength(43);
     expect(scene.imageryTrees[0]!.positionSource).toBe("imagery-inferred");
     expect(scene.landcover.features.filter(feature => feature.properties.kind === "tree")).toHaveLength(234);
     expect(scene.plateau.features).toHaveLength(9561);

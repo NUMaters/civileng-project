@@ -11,6 +11,13 @@ export type ImageryTreeObservations = {
     attribution: string;
   };
   observations: [eastPixels: number, southPixels: number, crownRadiusPixels: number][];
+  inspectionBatches?: {
+    id: string;
+    /** Inclusive indices into observations in this snapshot. */
+    observationRange: [number, number];
+    mapUrl?: string;
+    displayedCapturePeriod?: string;
+  }[];
 };
 
 /** One manually inspected crown, not a surveyed trunk or an automatically scattered tree. */
@@ -63,8 +70,23 @@ export function convertImageryTreeObservations(data: ImageryTreeObservations): I
       typeof source.tileUrlTemplate !== "string" || !source.attribution || !source.mapUrl ||
       !/^\d{4}-\d{2}\/\d{4}-\d{2}$/.test(source.displayedCapturePeriod)) throw new RangeError("Invalid imagery observations metadata");
   imageryPixelToGeo(ref, { x: 0, y: 0 });
-  const [start, end] = source.displayedCapturePeriod.split("/") as [string, string];
-  return data.observations.map(observation => {
+  if (data.inspectionBatches !== undefined && !Array.isArray(data.inspectionBatches))
+    throw new RangeError("Invalid imagery inspection batches");
+  const batchByIndex = new Map<number, NonNullable<ImageryTreeObservations["inspectionBatches"]>[number]>();
+  for (const batch of data.inspectionBatches ?? []) {
+    if (!batch || !Array.isArray(batch.observationRange) || batch.observationRange.length !== 2)
+      throw new RangeError("Invalid imagery inspection batch range");
+    const [first, last] = batch.observationRange;
+    if (!batch.id || !Number.isInteger(first) || !Number.isInteger(last) || first < 0 || last < first || last >= data.observations.length ||
+        (batch.mapUrl !== undefined && (typeof batch.mapUrl !== "string" || !batch.mapUrl.startsWith("https://maps.gsi.go.jp/"))) ||
+        (batch.displayedCapturePeriod !== undefined && !/^\d{4}-\d{2}\/\d{4}-\d{2}$/.test(batch.displayedCapturePeriod)))
+      throw new RangeError("Invalid imagery inspection batch");
+    for (let i = first; i <= last; i++) {
+      if (batchByIndex.has(i)) throw new RangeError("Overlapping imagery inspection batches");
+      batchByIndex.set(i, batch);
+    }
+  }
+  return data.observations.map((observation, index) => {
     if (!Array.isArray(observation) || observation.length !== 3 || !observation.every(Number.isFinite) || observation[2] <= 0)
       throw new RangeError("Invalid crown observation");
     const [east, south, radius] = observation;
@@ -73,10 +95,12 @@ export function convertImageryTreeObservations(data: ImageryTreeObservations): I
     const pixel = { x: east - dx * 256, y: south - dy * 256 };
     const coordinates = imageryPixelToGeo(tile, pixel);
     const metresPerPixel = 2 * Math.PI * 6378137 * Math.cos(coordinates[1] * Math.PI / 180) / (256 * 2 ** ref.z);
+    const batch = batchByIndex.get(index);
+    const [start, end] = (batch?.displayedCapturePeriod ?? source.displayedCapturePeriod).split("/") as [string, string];
     return { id: `gsi-crown/${tile.z}/${tile.x}/${tile.y}/${pixel.x}/${pixel.y}`, coordinates,
       crownRadiusM: radius * metresPerPixel, positionSource: "imagery-inferred",
       imagery: { url: source.tileUrlTemplate.replace("{z}", String(tile.z)).replace("{x}", String(tile.x)).replace("{y}", String(tile.y)),
-        tile, pixel, capturePeriod: { start, end }, captureDateSourceUrl: source.mapUrl,
+        tile, pixel, capturePeriod: { start, end }, captureDateSourceUrl: batch?.mapUrl ?? source.mapUrl,
         captureDateScope: "view-label-not-per-tree-verified", attribution: source.attribution, manuallyInspected: true } };
   });
 }
