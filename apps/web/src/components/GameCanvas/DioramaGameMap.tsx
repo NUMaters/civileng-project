@@ -19,35 +19,23 @@ import { createGeographicTrain } from "./geographicTrain";
 import { followGeographicShadows } from "./geographicShadows";
 import { createGeographicLandcover } from "./geographicLandcover";
 import { createGeographicImageryVegetation } from "./geographicImageryVegetation";
-import { createGeographicCanopy, GAME_CANOPY_DENSITY } from "./geographicCanopy";
+import { createGeographicCanopy } from "./geographicCanopy";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
 import { createInlandPonding } from "./inlandPonding";
 import { createRenderedWaterMask } from "./renderedWaterMask";
 import { createDioramaFacility } from "./dioramaFacilities";
-import {
-  getDioramaGuidance,
-  initialDioramaFocus,
-  isPreferredDioramaGuidanceCandidate,
-} from "./dioramaGuidance";
-import {
-  createGeographicGuidanceAnchors,
-  selectGuidanceAdvice,
-  selectGuidanceProjection,
-} from "./geographicGuidanceAnchors";
+import { getDioramaGuidance, initialDioramaFocus, isPreferredDioramaGuidanceCandidate } from "./dioramaGuidance";
+import { createGeographicGuidanceAnchors, selectGuidanceAdvice, selectGuidanceProjection } from "./geographicGuidanceAnchors";
 import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
 import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
 import { FACILITY_LABEL_MARGIN, type FacilityLabelLayout } from "./facilityLabelLayout";
-import {
-  cacheFacilityLabelEnvelope,
-  projectFacilityBody,
-  layoutFacilityLabelOutsideBody,
-  type FacilityLabelEnvelope,
-} from "./facilityModelLabelLayout";
+import { cacheFacilityLabelEnvelope, projectFacilityBody, layoutFacilityLabelOutsideBody,
+  type FacilityLabelEnvelope } from "./facilityModelLabelLayout";
 import { scoreGuidanceAnchor } from "./guidanceLabelLayout";
 import { guidanceClearsFacilities, MAX_GUIDANCE_OBSTACLES } from "./guidanceFacilityClearance";
 import { createRiverStageController } from "./riverStage";
@@ -95,12 +83,10 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
     const [geography, setGeography] = useState<KoriyamaSceneData | null>(null);
     useEffect(() => {
       const controller = new AbortController();
-      loadKoriyamaScene(controller.signal)
-        .then(setGeography)
-        .catch((cause: unknown) => {
-          if (!controller.signal.aborted)
-            setError(cause instanceof Error ? cause.message : "地理データを読み込めませんでした");
-        });
+      loadKoriyamaScene(controller.signal).then(setGeography).catch((cause: unknown) => {
+        if (!controller.signal.aborted)
+          setError(cause instanceof Error ? cause.message : "地理データを読み込めませんでした");
+      });
       return () => controller.abort();
     }, []);
     const labels = useRef(new Map<string, HTMLDivElement>());
@@ -189,66 +175,41 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       if (!container || !geography) return;
       const terrain = createGeographicTerrain(geography.terrain);
       const bridges = createGeographicBridges(geography.osm, {
-        bounds: terrain.bounds,
-        groundSampler: terrain.sampleGround,
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
       });
       const train = createGeographicTrain(geography.osm, terrain.sampleGround);
       const landcover = createGeographicLandcover(geography.landcover, {
-        bounds: terrain.bounds,
-        groundSampler: terrain.sampleGround,
-        renderedTerrainSurface: terrain.renderedSurface,
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround, renderedTerrainSurface: terrain.renderedSurface,
       });
-      const vegetationExclusions = createImageryVegetationExclusions(
-        geography.osm,
-        geography.plateau,
-        geography.landcover,
-      );
+      const vegetationExclusions = createImageryVegetationExclusions(geography.osm, geography.plateau, geography.landcover);
       const imageryVegetation = createGeographicImageryVegetation(geography.imageryTrees, {
-        bounds: terrain.bounds,
-        groundSampler: terrain.sampleGround,
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
         exclusions: vegetationExclusions,
-        exclusionMode: "centre",
-        illustrativeHeightM: 7,
+        exclusionMode: "centre", illustrativeHeightM: 7,
       });
       const canopy = createGeographicCanopy(geography.canopyPatches, {
-        bounds: terrain.bounds,
-        groundSampler: terrain.sampleGround,
-        exclusions: vegetationExclusions,
-        observedCrowns: geography.imageryTrees,
-        ...GAME_CANOPY_DENSITY,
+        bounds: terrain.bounds, groundSampler: terrain.sampleGround,
+        exclusions: vegetationExclusions, observedCrowns: geography.imageryTrees,
       });
-      const world = createGeographicWorld(
-        {
-          ...geography.osm,
-          features: geography.osm.features.filter((feature) => !bridges.sourceIds.has(feature.id)),
+      const world = createGeographicWorld({ ...geography.osm,
+        features: geography.osm.features.filter(feature => !bridges.sourceIds.has(feature.id)),
+      }, {
+        plateau: geography.plateau,
+        localBounds: terrain.bounds,
+        groundSampler: terrain.sampleGround,
+        renderedTerrainSurface: terrain.renderedSurface,
+        surfaceGridSpacing: 12,
+        // Missing building heights remain explicitly provisional in source metadata.
+        provisionalBuildingHeight: 6,
+        surfaceSampler: (x, z, layer) => {
+          const usesRenderedGround = layer === "road" || layer === "rail" || layer === "campus";
+          const ground = usesRenderedGround ? terrain.sampleRenderedGround(x, z) : terrain.sampleGround(x, z);
+          if (ground === null) return null;
+          // DEM is ground, not water bathymetry or surveyed bridge decks.
+          // Small surface offsets avoid z-fighting; bridge clearance is provisional.
+          return ground + (layer.startsWith("bridge-") ? 3 : layer === "water" || layer === "waterway" ? 0.35 : 0.12);
         },
-        {
-          plateau: geography.plateau,
-          localBounds: terrain.bounds,
-          groundSampler: terrain.sampleGround,
-          renderedTerrainSurface: terrain.renderedSurface,
-          surfaceGridSpacing: 12,
-          // Missing building heights remain explicitly provisional in source metadata.
-          provisionalBuildingHeight: 6,
-          surfaceSampler: (x, z, layer) => {
-            const usesRenderedGround = layer === "road" || layer === "rail" || layer === "campus";
-            const ground = usesRenderedGround
-              ? terrain.sampleRenderedGround(x, z)
-              : terrain.sampleGround(x, z);
-            if (ground === null) return null;
-            // DEM is ground, not water bathymetry or surveyed bridge decks.
-            // Small surface offsets avoid z-fighting; bridge clearance is provisional.
-            return (
-              ground +
-              (layer.startsWith("bridge-")
-                ? 3
-                : layer === "water" || layer === "waterway"
-                  ? 0.35
-                  : 0.12)
-            );
-          },
-        },
-      );
+      });
       let renderer: T.WebGLRenderer;
       try {
         renderer = new T.WebGLRenderer({
@@ -277,22 +238,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       container.appendChild(renderer.domElement);
       const scene = new T.Scene();
       scene.background = new T.Color(GEOGRAPHIC_LIGHTING_STYLE.background);
-      scene.fog = new T.Fog(
-        GEOGRAPHIC_LIGHTING_STYLE.fog.color,
-        GEOGRAPHIC_LIGHTING_STYLE.fog.near,
-        GEOGRAPHIC_LIGHTING_STYLE.fog.far,
-      );
-      scene.add(
-        new T.HemisphereLight(
-          GEOGRAPHIC_LIGHTING_STYLE.hemisphere.sky,
-          GEOGRAPHIC_LIGHTING_STYLE.hemisphere.ground,
-          GEOGRAPHIC_LIGHTING_STYLE.hemisphere.intensity,
-        ),
-      );
-      const sun = new T.DirectionalLight(
-        GEOGRAPHIC_LIGHTING_STYLE.sun.color,
-        GEOGRAPHIC_LIGHTING_STYLE.sun.intensity,
-      );
+      scene.fog = new T.Fog(GEOGRAPHIC_LIGHTING_STYLE.fog.color, GEOGRAPHIC_LIGHTING_STYLE.fog.near, GEOGRAPHIC_LIGHTING_STYLE.fog.far);
+      scene.add(new T.HemisphereLight(GEOGRAPHIC_LIGHTING_STYLE.hemisphere.sky, GEOGRAPHIC_LIGHTING_STYLE.hemisphere.ground, GEOGRAPHIC_LIGHTING_STYLE.hemisphere.intensity));
+      const sun = new T.DirectionalLight(GEOGRAPHIC_LIGHTING_STYLE.sun.color, GEOGRAPHIC_LIGHTING_STYLE.sun.intensity);
       sun.position.set(-360, 650, 300);
       sun.castShadow = true;
       sun.shadow.mapSize.set(1024, 1024);
@@ -327,11 +275,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls.maxDistance = 1500;
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
-        controls.target.set(
-          riverX(focus.z),
-          terrain.sampleGround(riverX(focus.z), focus.z) ?? 0,
-          focus.z,
-        );
+        controls.target.set(riverX(focus.z), terrain.sampleGround(riverX(focus.z), focus.z) ?? 0, focus.z);
         followGeographicShadows(sun, controls.target, true);
         renderer.shadowMap.needsUpdate = true;
         const downstream = new T.Vector3(
@@ -346,20 +290,11 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls.update();
       };
       reset();
-      scene.add(
-        terrain.group,
-        world,
-        bridges.group,
-        train.group,
-        landcover.group,
-        imageryVegetation.group,
-        canopy.group,
-      );
+      scene.add(terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group, canopy.group);
       const waterMaterial = createGeographicWaterMaterial();
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {
-        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material])
-          oldWaterMaterials.add(material);
+        for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) oldWaterMaterials.add(material);
         const positions = mesh.geometry.getAttribute("position");
         const uv = new Float32Array(positions.count * 2);
         for (let i = 0; i < positions.count; i++) {
@@ -370,21 +305,16 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         mesh.geometry.setAttribute("uv", new T.BufferAttribute(uv, 2));
         mesh.material = waterMaterial;
       }
-      oldWaterMaterials.forEach((material) => material.dispose());
+      oldWaterMaterials.forEach(material => material.dispose());
       const riverStage = createRiverStageController(world.waterMeshes);
       const sampleRiverSurface = createRiverSurfaceSampler(world.waterMeshes);
       const riverBoundary = createRiverBoundaryResolver(geography.osm, sampleRiverSurface);
       // Static geography cache: never derive pump anchors in the animation loop.
       // Hazard/readiness positions remain separate from placement action pointers.
-      const guidanceAnchors = createGeographicGuidanceAnchors(
-        getDioramaGuidance([]),
-        geography.osm,
-        {
-          sampleGround: terrain.sampleGround,
-          sampleRenderedGround: terrain.sampleRenderedGround,
-          waterMeshes: world.waterMeshes,
-        },
-      );
+      const guidanceAnchors = createGeographicGuidanceAnchors(getDioramaGuidance([]), geography.osm, {
+        sampleGround: terrain.sampleGround, sampleRenderedGround: terrain.sampleRenderedGround,
+        waterMeshes: world.waterMeshes,
+      });
       const inundation = createDioramaInundation(terrain.sampleGround, riverBoundary);
       scene.add(inundation.group);
       // Static XZ union of every water mesh, including small non-stage ribbons.
@@ -393,8 +323,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const inlandPonding = createInlandPonding({
         bounds: terrain.bounds,
         renderedSurface: terrain.renderedSurface,
-        sampleGround: (x, z) =>
-          terrain.sampleGround(x, z) === null ? null : terrain.sampleRenderedGround(x, z),
+        sampleGround: (x, z) => terrain.sampleGround(x, z) === null ? null : terrain.sampleRenderedGround(x, z),
         classifyWater: inlandWaterMask.classify,
         classifyFootprint: inlandWaterMask.classifyFootprint,
       });
@@ -403,37 +332,20 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       let cachedPatches: ReturnType<typeof inundation.getRenderedPatches> | null = null;
       let cachedInlandPatches: ReturnType<typeof inlandPonding.getRenderedPatches> | null = null;
       let cachedViewport = "";
-      let cachedFraming:
-        (NonNullable<ReturnType<typeof frameRenderedFloodPatch>> & { patchId: string }) | null =
-        null;
+      let cachedFraming: (NonNullable<ReturnType<typeof frameRenderedFloodPatch>> & { patchId: string }) | null = null;
       const floodFraming = () => {
         const patches = inundation.getRenderedPatches();
         const inlandPatches = inlandPonding.getRenderedPatches();
         const review = latest.current.getLatestFloodState?.().phase === "review";
         const key = `${camera.fov}/${camera.aspect}/${viewportHeight}/${review}/${lastFloodPatchId}`;
-        if (
-          patches !== cachedPatches ||
-          inlandPatches !== cachedInlandPatches ||
-          key !== cachedViewport
-        ) {
+        if (patches !== cachedPatches || inlandPatches !== cachedInlandPatches || key !== cachedViewport) {
           cachedPatches = patches;
           cachedInlandPatches = inlandPatches;
           cachedViewport = key;
-          const ratio = Math.max(
-            0.1,
-            1 - (2 * Math.max(140, review ? 110 : 170)) / Math.max(1, viewportHeight),
-          );
-          const candidates = [
-            ...patches.map((p) => ({ ...p, id: `river:${p.id}` })),
-            ...inlandPatches,
-          ];
-          const patch = nextRenderedFloodPatch(
-            candidates.filter((p) => frameRenderedFloodPatch(p, camera.fov, camera.aspect, ratio)),
-            lastFloodPatchId,
-          );
-          const framing = patch
-            ? frameRenderedFloodPatch(patch, camera.fov, camera.aspect, ratio)
-            : null;
+          const ratio = Math.max(0.1, 1 - 2 * Math.max(140, review ? 110 : 170) / Math.max(1, viewportHeight));
+          const candidates = [...patches.map(p => ({ ...p, id: `river:${p.id}` })), ...inlandPatches];
+          const patch = nextRenderedFloodPatch(candidates.filter(p => frameRenderedFloodPatch(p, camera.fov, camera.aspect, ratio)), lastFloodPatchId);
+          const framing = patch ? frameRenderedFloodPatch(patch, camera.fov, camera.aspect, ratio) : null;
           cachedFraming = patch && framing ? { ...framing, patchId: patch.id } : null;
         }
         return cachedFraming;
@@ -464,10 +376,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         if (x < rect.left || y < rect.top || x > rect.right || y > rect.bottom) return null;
         cursor.set(((x - rect.left) / rect.width) * 2 - 1, 1 - ((y - rect.top) / rect.height) * 2);
         raycaster.setFromCamera(cursor, camera);
-        const hit = raycaster.intersectObjects(
-          [...terrain.group.children, ...world.waterMeshes],
-          false,
-        )[0];
+        const hit = raycaster.intersectObjects([...terrain.group.children, ...world.waterMeshes], false)[0];
         return hit ? { x: hit.point.x, z: hit.point.z } : null;
       };
       const r: Runtime = {
@@ -559,8 +468,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       renderer.domElement.addEventListener("pointerup", pointerUp);
       renderer.domElement.addEventListener("pointercancel", pointerUp);
       renderer.domElement.addEventListener("lostpointercapture", pointerUp);
-      let viewportWidth = 1,
-        viewportHeight = 1;
+      let viewportWidth = 1, viewportHeight = 1;
       const resize = () => {
         const { width, height } = container.getBoundingClientRect();
         viewportWidth = width;
@@ -575,8 +483,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       // Measure only on size/overlay changes, never after transform writes in draw().
       const labelBounds = { left: 0, top: 0, right: 0, bottom: 0 };
       const shell = container.closest(".game-shell") ?? container.parentElement!;
-      let hud: Element | null = null,
-        dock: Element | null = null;
+      let hud: Element | null = null, dock: Element | null = null;
       const measureLabelBounds = () => {
         const rect = container.getBoundingClientRect();
         labelBounds.left = FACILITY_LABEL_MARGIN;
@@ -588,30 +495,15 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           const style = getComputedStyle(element);
           if (style.display === "none" || style.visibility === "hidden") continue;
           const obstacle = element.getBoundingClientRect();
-          if (
-            obstacle.width <= 0 ||
-            obstacle.height <= 0 ||
-            obstacle.right <= rect.left ||
-            obstacle.left >= rect.right
-          )
-            continue;
-          if (element === hud)
-            labelBounds.top = Math.max(
-              labelBounds.top,
-              obstacle.bottom - rect.top + FACILITY_LABEL_MARGIN,
-            );
-          else
-            labelBounds.bottom = Math.min(
-              labelBounds.bottom,
-              obstacle.top - rect.top - FACILITY_LABEL_MARGIN,
-            );
+          if (obstacle.width <= 0 || obstacle.height <= 0 || obstacle.right <= rect.left || obstacle.left >= rect.right) continue;
+          if (element === hud) labelBounds.top = Math.max(labelBounds.top, obstacle.bottom - rect.top + FACILITY_LABEL_MARGIN);
+          else labelBounds.bottom = Math.min(labelBounds.bottom, obstacle.top - rect.top - FACILITY_LABEL_MARGIN);
         }
       };
       const boundsObserver = new ResizeObserver(measureLabelBounds);
       boundsObserver.observe(container);
       const refreshLabelObstacles = () => {
-        const nextHud = shell.querySelector(".river-hud"),
-          nextDock = shell.querySelector(".cmd-dock");
+        const nextHud = shell.querySelector(".river-hud"), nextDock = shell.querySelector(".cmd-dock");
         if (hud !== nextHud) {
           if (hud) boundsObserver.unobserve(hud);
           hud = nextHud;
@@ -627,18 +519,12 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       // Direct shell changes cover HUD/dock mount/unmount and preview's hidden dock.
       // Do not observe label attributes/text: those are intentionally updated in draw().
       const shellObserver = new MutationObserver(refreshLabelObstacles);
-      shellObserver.observe(shell, {
-        childList: true,
-        attributes: true,
-        attributeFilter: ["class"],
-      });
+      shellObserver.observe(shell, { childList: true, attributes: true, attributeFilter: ["class"] });
       refreshLabelObstacles();
-      const sizeObserver = new ResizeObserver((entries) => {
+      const sizeObserver = new ResizeObserver(entries => {
         for (const entry of entries) {
           const border = entry.borderBoxSize[0];
-          const size = border
-            ? { width: border.inlineSize, height: border.blockSize }
-            : entry.target.getBoundingClientRect();
+          const size = border ? { width: border.inlineSize, height: border.blockSize } : entry.target.getBoundingClientRect();
           labelSizes.current.set(entry.target, { width: size.width, height: size.height });
         }
       });
@@ -649,33 +535,16 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const guidanceTitle = guidanceLabel.current?.querySelector("strong");
       const guidanceAdvice = guidanceLabel.current?.querySelector("small");
       const labelLayout: FacilityLabelLayout = {
-        x: 0,
-        y: 0,
-        pointerSide: "bottom",
-        pointerHeight: 7,
-        pointerBaseX: 0,
-        pointerTipX: 0,
-        pointerLeft: 0,
-        pointerWidth: 0,
+        x: 0, y: 0, pointerSide: "bottom", pointerHeight: 7, pointerBaseX: 0, pointerTipX: 0,
+        pointerLeft: 0, pointerWidth: 0,
       };
       const candidateHintLayout = { ...labelLayout };
-      const projectedBody = {
-        left: 0,
-        top: 0,
-        right: 0,
-        bottom: 0,
-        topX: 0,
-        topY: 0,
-        bottomX: 0,
-        bottomY: 0,
-      };
+      const projectedBody = { left: 0, top: 0, right: 0, bottom: 0, topX: 0, topY: 0, bottomX: 0, bottomY: 0 };
       const labelClipMatrix = new T.Matrix4();
       const projectedBodyPoint = new T.Vector3();
       // Fixed storage: project visible placed facilities once per guidance update,
       // not once per candidate. Never allocate bodies or traverse geometry in draw().
-      const guidanceObstacles = Array.from({ length: MAX_GUIDANCE_OBSTACLES }, () => ({
-        ...projectedBody,
-      }));
+      const guidanceObstacles = Array.from({ length: MAX_GUIDANCE_OBSTACLES }, () => ({ ...projectedBody }));
       const guidanceFrustum = new T.Frustum();
       const guidanceLocalBox = new T.Box3();
       let frame = 0,
@@ -697,45 +566,26 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         train.update(time);
         controls.update();
         const margin = floodReturnPose ? 0 : 150;
-        const z = T.MathUtils.clamp(
-          controls.target.z,
-          terrain.bounds.minZ + margin,
-          terrain.bounds.maxZ - margin,
-        );
-        const x = T.MathUtils.clamp(
-          controls.target.x,
-          terrain.bounds.minX + margin,
-          terrain.bounds.maxX - margin,
-        );
+        const z = T.MathUtils.clamp(controls.target.z, terrain.bounds.minZ + margin, terrain.bounds.maxZ - margin);
+        const x = T.MathUtils.clamp(controls.target.x, terrain.bounds.minX + margin, terrain.bounds.maxX - margin);
         cameraCorrection.set(x - controls.target.x, 0, z - controls.target.z);
         controls.target.add(cameraCorrection);
         camera.position.add(cameraCorrection);
         notifyCameraFocus(controls.target.x, controls.target.z, now);
         if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
         const state = latest.current.getLatestFloodState?.();
-        if (
-          state &&
-          (state.phase === "idle" ||
-            state.phase === "preparation" ||
-            (focusElapsed !== undefined && state.disasterElapsedSeconds < focusElapsed))
-        )
-          lastFloodPatchId = null;
+        if (state && (state.phase === "idle" || state.phase === "preparation" ||
+          (focusElapsed !== undefined && state.disasterElapsedSeconds < focusElapsed))) lastFloodPatchId = null;
         focusElapsed = state?.disasterElapsedSeconds;
         riverStage.update(state?.riverLevelMeters ?? 2.2);
         for (const [id, model] of r.models) {
-          const influence = state?.structureInfluences.find((item) => item.placementId === id);
+          const influence = state?.structureInfluences.find(item => item.placementId === id);
           const operation = resolveFacilityActivity(influence, state);
-          r.operations
-            .get(id)
-            ?.update(
-              model.userData.preview ? 0 : operation.activity,
-              state?.disasterElapsedSeconds ?? 0,
-              reducedMotion.matches,
-              model.userData.preview ? 0 : operation.operationActivity,
-            );
+          r.operations.get(id)?.update(model.userData.preview ? 0 : operation.activity,
+            state?.disasterElapsedSeconds ?? 0, reducedMotion.matches,
+            model.userData.preview ? 0 : operation.operationActivity);
           const operationText = labels.current.get(id)?.querySelector("[data-operation]");
-          if (operationText && operationText.textContent !== operation.label)
-            operationText.textContent = operation.label;
+          if (operationText && operationText.textContent !== operation.label) operationText.textContent = operation.label;
           const delta =
             T.MathUtils.euclideanModulo(
               model.userData.targetRotation - model.rotation.y + Math.PI,
@@ -758,17 +608,14 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         if (state) inlandPonding.update(state);
         const framing = floodFraming();
         const available = framing !== null;
-        const next =
-          lastFloodPatchId !== null && framing !== null && framing.patchId !== lastFloodPatchId;
+        const next = lastFloodPatchId !== null && framing !== null && framing.patchId !== lastFloodPatchId;
         const viewing = floodReturnPose !== null;
         const focusKey = `${available}/${viewing}/${next}`;
         if (lastFloodFocusKey !== focusKey) {
           lastFloodFocusKey = focusKey;
           latest.current.onFloodFocusChange?.({ available, viewing, next });
         }
-        const activeLabelId =
-          latest.current.placements.find((placement) => placement.preview)?.id ??
-          selectedFacilityLabel.current;
+        const activeLabelId = latest.current.placements.find(placement => placement.preview)?.id ?? selectedFacilityLabel.current;
         camera.updateMatrixWorld();
         for (const [id, element] of labels.current) {
           const model = r.models.get(id);
@@ -781,38 +628,19 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           // Update this transform only, not its children. Cached local geometry follows
           // placement, heading and pop scale with the cached static hull boundary.
           model.updateWorldMatrix(true, false);
-          labelClipMatrix
-            .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-            .multiply(model.matrixWorld);
-          const visible =
-            size !== undefined &&
-            envelope !== undefined &&
-            projectFacilityBody(
-              envelope,
-              labelClipMatrix,
-              viewportWidth,
-              viewportHeight,
-              projectedBody,
-              projectedBodyPoint,
-            ) &&
+          labelClipMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(model.matrixWorld);
+          const visible = size !== undefined && envelope !== undefined &&
+            projectFacilityBody(envelope, labelClipMatrix, viewportWidth, viewportHeight, projectedBody, projectedBodyPoint) &&
             layoutFacilityLabelOutsideBody(
-              projectedBody,
-              size.width,
-              size.height,
-              viewportWidth,
-              viewportHeight,
-              labelBounds,
-              labelLayout,
+              projectedBody, size.width, size.height, viewportWidth, viewportHeight,
+              labelBounds, labelLayout,
             );
           // visibility preserves measurement while hidden, unlike display:none.
           element.style.visibility = visible ? "visible" : "hidden";
           if (visible) {
             element.style.transform = `translate(${labelLayout.x}px,${labelLayout.y}px)`;
             element.dataset.pointerSide = labelLayout.pointerSide;
-            element.style.setProperty(
-              "--facility-pointer-height",
-              `${labelLayout.pointerHeight}px`,
-            );
+            element.style.setProperty("--facility-pointer-height", `${labelLayout.pointerHeight}px`);
             element.style.setProperty("--facility-pointer-base-x", `${labelLayout.pointerBaseX}px`);
             element.style.setProperty("--facility-pointer-tip-x", `${labelLayout.pointerTipX}px`);
             element.style.setProperty("--facility-pointer-left", `${labelLayout.pointerLeft}px`);
@@ -827,9 +655,11 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             continue;
           }
           const position = geoToWorld(npc.position.longitude, npc.position.latitude);
-          const point = projectedPoint
-            .set(position.x, (terrain.sampleGround(position.x, position.z) ?? 0) + 18, position.z)
-            .project(camera);
+          const point = projectedPoint.set(
+            position.x,
+            (terrain.sampleGround(position.x, position.z) ?? 0) + 18,
+            position.z,
+          ).project(camera);
           const px = (point.x * 0.5 + 0.5) * viewportWidth;
           const py = (-point.y * 0.5 + 0.5) * viewportHeight;
           const visible =
@@ -840,7 +670,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             py >= 185 &&
             py <= viewportHeight - 175;
           element.style.display = visible ? "" : "none";
-          if (visible) element.style.transform = `translate(${px}px,${py}px) translate(-50%,-100%)`;
+          if (visible)
+            element.style.transform = `translate(${px}px,${py}px) translate(-50%,-100%)`;
         }
         const actions = placementActions.current;
         const preview = latest.current.placements.find((placement) => placement.preview);
@@ -866,92 +697,49 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           let bestScore = Infinity;
           const size = labelSizes.current.get(hint);
           const preparing = !state || state.phase === "preparation" || state.phase === "idle";
-          if (
-            size &&
-            preparing &&
-            !latest.current.placements.some((placement) => placement.preview)
-          ) {
+          if (size && preparing && !latest.current.placements.some((placement) => placement.preview)) {
             let obstacleCount = 0;
             let obstaclesReady = true;
             for (const model of r.models.values()) {
               if (!model.visible || model.userData.preview) continue;
               const envelope = labelEnvelopes.current.get(model);
-              if (!envelope || envelope.corners.length !== 8) {
-                obstaclesReady = false;
-                break;
-              }
+              if (!envelope || envelope.corners.length !== 8) { obstaclesReady = false; break; }
               model.updateWorldMatrix(true, false);
-              labelClipMatrix
-                .multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
-                .multiply(model.matrixWorld);
+              labelClipMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(model.matrixWorld);
               // Local cached min/max corners suffice for frustum culling. A model
               // crossing a clip plane is uncertain, not an obstacle we may ignore.
               guidanceLocalBox.set(envelope.corners[0], envelope.corners[7]);
               guidanceFrustum.setFromProjectionMatrix(labelClipMatrix);
               if (!guidanceFrustum.intersectsBox(guidanceLocalBox)) continue;
-              if (
-                obstacleCount === MAX_GUIDANCE_OBSTACLES ||
-                !projectFacilityBody(
-                  envelope,
-                  labelClipMatrix,
-                  viewportWidth,
-                  viewportHeight,
-                  guidanceObstacles[obstacleCount],
-                  projectedBodyPoint,
-                )
-              ) {
+              if (obstacleCount === MAX_GUIDANCE_OBSTACLES ||
+                !projectFacilityBody(envelope, labelClipMatrix, viewportWidth, viewportHeight,
+                  guidanceObstacles[obstacleCount], projectedBodyPoint)) {
                 obstaclesReady = false;
                 break;
               }
               obstacleCount++;
             }
-            if (obstaclesReady)
-              for (const site of guidanceSites.current) {
-                const position = selectGuidanceProjection(
-                  guidanceAnchors.get(site.id),
-                  site.hasContribution,
-                );
-                if (!position) continue; // No legal land anchor: hide this action hint.
-                const projected = projectedPoint
-                  .set(position.x, position.groundY + 12, position.z)
-                  .project(camera);
-                const px = (projected.x * 0.5 + 0.5) * viewportWidth;
-                const py = (-projected.y * 0.5 + 0.5) * viewportHeight;
-                const score = scoreGuidanceAnchor(
-                  px,
-                  py,
-                  projected.z,
-                  viewportWidth,
-                  viewportHeight,
-                  size.width,
-                  size.height,
-                  labelBounds,
-                  candidateHintLayout,
-                );
-                if (
-                  score < Infinity &&
-                  guidanceClearsFacilities(
-                    candidateHintLayout,
-                    size.width,
-                    size.height,
-                    guidanceObstacles,
-                    obstacleCount,
-                  )
-                ) {
-                  if (
-                    !isPreferredDioramaGuidanceCandidate(
-                      site.hasContribution,
-                      score,
-                      chosen?.hasContribution,
-                      bestScore,
-                    )
-                  )
-                    continue;
-                  chosen = site;
-                  bestScore = score;
-                  Object.assign(labelLayout, candidateHintLayout);
-                }
+            if (obstaclesReady) for (const site of guidanceSites.current) {
+              const position = selectGuidanceProjection(guidanceAnchors.get(site.id), site.hasContribution);
+              if (!position) continue; // No legal land anchor: hide this action hint.
+              const projected = projectedPoint.set(
+                position.x,
+                position.groundY + 12,
+                position.z,
+              ).project(camera);
+              const px = (projected.x * 0.5 + 0.5) * viewportWidth;
+              const py = (-projected.y * 0.5 + 0.5) * viewportHeight;
+              const score = scoreGuidanceAnchor(px, py, projected.z, viewportWidth, viewportHeight,
+                size.width, size.height, labelBounds, candidateHintLayout);
+              if (score < Infinity && guidanceClearsFacilities(candidateHintLayout, size.width, size.height,
+                guidanceObstacles, obstacleCount)) {
+                if (!isPreferredDioramaGuidanceCandidate(site.hasContribution, score,
+                  chosen?.hasContribution, bestScore)) continue;
+                chosen = site;
+                bestScore = score;
+                Object.assign(labelLayout, candidateHintLayout);
               }
+            }
           }
           hint.style.visibility = chosen ? "visible" : "hidden";
           if (chosen) {
@@ -1063,39 +851,40 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       <div className="diorama-game-map" data-3d-buildings={ready ? "ready" : "loading"}>
         <div className="diorama-game-map__canvas" ref={host} />
         <div className="diorama-labels" aria-hidden="true">
-          <div className="diorama-label diorama-guidance" ref={guidanceLabel}>
+          <div
+            className="diorama-label diorama-guidance"
+            ref={guidanceLabel}
+          >
             <strong />
             <small />
           </div>
-          {props.placements.map((p, index) =>
-            p.preview || p.id === selectedLabelId ? (
-              <div
-                className={`diorama-label${p.preview ? " is-preview" : ""}`}
-                data-heading={p.headingDegrees}
-                data-tone={
-                  influences[index]?.adverseSiteIds.length
-                    ? "warn"
-                    : (influences[index]?.coverageTone ?? "warn")
-                }
-                key={p.id}
-                ref={(el) => {
-                  const previous = labels.current.get(p.id);
-                  if (previous) labelSizeObserver.current?.unobserve(previous);
-                  if (el) {
-                    labels.current.set(p.id, el);
-                    labelSizeObserver.current?.observe(el);
-                  } else labels.current.delete(p.id);
-                }}
-              >
-                <strong>{labelFor(p)}</strong>
-                <small>{influences[index]?.coverageHint ?? "タップで回転"}</small>
-                {!p.preview ? <small data-operation>大雨に備えて待機</small> : null}
-                {(influences[index]?.adverseSiteIds.length ?? 0) > 0 ? (
-                  <small>相性注意 {influences[index]!.adverseSiteIds.length}地点</small>
-                ) : null}
-              </div>
-            ) : null,
-          )}
+          {props.placements.map((p, index) => p.preview || p.id === selectedLabelId ? (
+            <div
+              className={`diorama-label${p.preview ? " is-preview" : ""}`}
+              data-heading={p.headingDegrees}
+              data-tone={
+                influences[index]?.adverseSiteIds.length
+                  ? "warn"
+                  : (influences[index]?.coverageTone ?? "warn")
+              }
+              key={p.id}
+              ref={(el) => {
+                const previous = labels.current.get(p.id);
+                if (previous) labelSizeObserver.current?.unobserve(previous);
+                if (el) {
+                  labels.current.set(p.id, el);
+                  labelSizeObserver.current?.observe(el);
+                } else labels.current.delete(p.id);
+              }}
+            >
+              <strong>{labelFor(p)}</strong>
+              <small>{influences[index]?.coverageHint ?? "タップで回転"}</small>
+              {!p.preview ? <small data-operation>大雨に備えて待機</small> : null}
+              {(influences[index]?.adverseSiteIds.length ?? 0) > 0 ? (
+                <small>相性注意 {influences[index]!.adverseSiteIds.length}地点</small>
+              ) : null}
+            </div>
+          ) : null)}
         </div>
         {!props.interactionLocked && props.npcMarkers && props.onSelectNpc ? (
           <div className="diorama-npc-markers" aria-label="会話できる人物">
@@ -1149,39 +938,15 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           <p role="alert" className="diorama-error">
             {error}
           </p>
-        ) : !ready ? (
-          <p role="status" className="diorama-error">
-            阿武隈川の地形と街を読み込み中…
-          </p>
-        ) : null}
+        ) : !ready ? <p role="status" className="diorama-error">阿武隈川の地形と街を読み込み中…</p> : null}
         <details className="diorama-attribution">
           <summary>地図出典</summary>
-          <p>
-            航空写真で判読した4つの樹林範囲内は、個々の木の位置・本数・密度・大きさを仮に再構成しています。実測や個別樹木の観測ではありません。
-          </p>
-          <p>
-            一部の樹冠位置・半径は地理院タイル（画面表示の撮影期間：2022年7〜9月）から目視推定しています。各木の撮影日は未検証で、幹位置・樹高の実測ではありません。高さ・樹形は仮表現です。
-          </p>
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">
-            © OpenStreetMap contributors
-          </a>
-          <a
-            href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020"
-            target="_blank"
-            rel="noreferrer"
-          >
-            PLATEAU 郡山市（2020年度）を加工
-          </a>
-          <a
-            href="https://maps.gsi.go.jp/development/ichiran.html"
-            target="_blank"
-            rel="noreferrer"
-          >
-            地理院タイル（国土地理院）標高タイルを加工
-          </a>
-          <p>
-            建物はLOD1等の位置・高さを使用。屋根の形・勾配・色は一部推定したゲーム用表現です。未収録の高さ・橋面・樹木の大きさは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。
-          </p>
+          <p>航空写真で判読した4つの樹林範囲内は、個々の木の位置・本数・密度・大きさを仮に再構成しています。実測や個別樹木の観測ではありません。</p>
+          <p>一部の樹冠位置・半径は地理院タイル（画面表示の撮影期間：2022年7〜9月）から目視推定しています。各木の撮影日は未検証で、幹位置・樹高の実測ではありません。高さ・樹形は仮表現です。</p>
+          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
+          <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
+          <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル（国土地理院）標高タイルを加工</a>
+          <p>建物はLOD1等の位置・高さを使用。屋根の形・勾配・色は一部推定したゲーム用表現です。未収録の高さ・橋面・樹木の大きさは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。</p>
         </details>
       </div>
     );
