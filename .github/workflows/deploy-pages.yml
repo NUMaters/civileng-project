@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - develop
+      - main
     paths:
       - "apps/web/**"
       - "packages/game-data/**"
@@ -24,9 +25,9 @@ jobs:
   deploy:
     name: Build and deploy web
     runs-on: ubuntu-24.04
-    # Repository variable と develop ref の両方が一致したときだけ実行する。
-    # workflow_dispatch も develop 以外の ref からはデプロイしない。
-    if: ${{ vars.ENABLE_CLOUDFLARE_PAGES == 'true' && github.ref == 'refs/heads/develop' }}
+    # develop はプレビュー、main は本番として同じ検証済み成果物を配信する。
+    # workflow_dispatch もこの2ブランチ以外の ref からはデプロイしない。
+    if: ${{ vars.ENABLE_CLOUDFLARE_PAGES == 'true' && (github.ref == 'refs/heads/develop' || github.ref == 'refs/heads/main') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
