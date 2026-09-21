@@ -1,0 +1,34 @@
+{
+  "name": "@civilcraft/game-schema",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./common/*": "./common/*.ts",
+    "./rest/*": "./rest/*.ts",
+    "./websocket/*": "./websocket/*.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "common/*": [
+        "common/*"
+      ],
+      "rest/*": [
+        "rest/*"
+      ],
+      "websocket/*": [
+        "websocket/*"
+      ]
+    }
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@civilcraft/config": "workspace:*",
+    "eslint": "^9.28.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

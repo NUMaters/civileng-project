@@ -1,0 +1,5 @@
+{
+  "extends": "@civilcraft/config/typescript",
+  "include": ["**/*.ts"],
+  "exclude": ["node_modules"]
+}

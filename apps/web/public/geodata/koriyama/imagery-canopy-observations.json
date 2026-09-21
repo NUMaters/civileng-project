@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "status": "visually-interpreted-envelopes-with-geographically-filtered-illustrative-trees",
+  "source": {
+    "provider": "Geospatial Information Authority of Japan",
+    "layer": "seamlessphoto",
+    "attribution": "地理院タイル（全国最新写真）を判読・加工して作成",
+    "catalogUrl": "https://maps.gsi.go.jp/development/ichiran.html",
+    "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+    "displayedCapturePeriod": "2022-07/2022-09",
+    "observedDate": "2026-09-21",
+    "referenceTile": { "z": 18, "x": 233294, "y": 101705, "sizePixels": 256 },
+    "tileUrlTemplate": "https://maps.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg",
+    "pixelCoordinates": "Offsets from the reference tile top-left; negative and >255 offsets address adjacent tiles.",
+    "positionMethod": "visual-canopy-envelope-inference",
+    "limitations": [
+      "These are envelopes of visibly wooded patches, not surveyed canopy edges or continuous leaf coverage.",
+      "Individual tree positions, counts, species and heights inside each envelope are unknown.",
+      "Any generated internal tree placement is an illustrative reconstruction, not individually observed trees.",
+      "Building, water, road, rail and existing-tree exclusions must be applied without moving their source geometry.",
+      "Small initial campus sample; not complete woodland coverage of the university or river corridor.",
+      "Capture period is the GSI map display, not independently verified per-patch acquisition metadata."
+    ]
+  },
+  "patches": [
+    {
+      "id": "campus-north-grove-core",
+      "rings": [[[211,-227],[243,-239],[272,-223],[278,-187],[259,-155],[223,-155],[205,-184],[211,-227]]]
+    },
+    {
+      "id": "campus-west-grove-core",
+      "rings": [[[106,-130],[137,-140],[172,-116],[207,-70],[182,-40],[125,-45],[105,-85],[106,-130]]]
+    },
+    {
+      "id": "campus-central-grove-core",
+      "rings": [[[203,-63],[235,-83],[270,-73],[283,-39],[270,21],[233,35],[196,12],[188,-22],[203,-63]]]
+    },
+    {
+      "id": "campus-south-building-grove",
+      "rings": [[[416,313],[458,285],[495,288],[527,297],[562,295],[592,279],[616,301],[629,330],[598,348],[543,352],[476,353],[442,341],[416,313]]]
+    },
+    {
+      "id": "riverbank-south-canopy-core",
+      "rings": [[[-504,24],[-487,2],[-460,-12],[-444,2],[-452,22],[-483,43],[-504,24]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.360206/140.378269/&ls=seamlessphoto&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1066,367],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred bank-side canopy core; not a surveyed boundary or individual-tree observation. Broad grass and dark river shadows were excluded.",
+        "screenVerticesPx": [[562,391],[579,369],[606,355],[622,369],[614,389],[583,410],[562,391]]
+      }
+    },
+    {
+      "id": "riverbank-middle-canopy-core",
+      "illustrativeProfile": "riverbank-detail-v1",
+      "rings": [[[-409,-60],[-367,-81],[-344,-99],[-339,-73],[-372,-46],[-406,-31],[-409,-60]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.360206/140.378269/&ls=seamlessphoto&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1066,367],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred bank-side canopy core; not a surveyed boundary or individual-tree observation. Broad grass and dark river shadows were excluded.",
+        "screenVerticesPx": [[657,307],[699,286],[722,268],[727,294],[694,321],[660,336],[657,307]]
+      }
+    },
+    {
+      "id": "riverbank-north-canopy-core",
+      "illustrativeProfile": "riverbank-detail-v1",
+      "rings": [[[-318,-115],[-304,-133],[-277,-140],[-269,-125],[-284,-104],[-306,-90],[-318,-115]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.360206/140.378269/&ls=seamlessphoto&disp=1&vs=c1g1j0h0k0l0u0t0z0r0s0m0f1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1066,367],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred bank-side canopy core; not a surveyed boundary or individual-tree observation. Broad grass and dark river shadows were excluded.",
+        "screenVerticesPx": [[748,252],[762,234],[789,227],[797,242],[782,263],[760,277],[748,252]]
+      }
+    }
+  ]
+}

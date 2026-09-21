@@ -1,0 +1,265 @@
+/* Scoped above legacy HUD rules, including the provisional-placement variants. */
+.game-shell .cmd-dock.cmd-dock {
+  left: max(8px, env(safe-area-inset-left));
+  right: max(8px, env(safe-area-inset-right));
+  bottom: calc(8px + env(safe-area-inset-bottom));
+  gap: 8px;
+  color: #123c64;
+  font-family: "Noto Sans JP", system-ui, sans-serif;
+}
+
+.game-shell .cmd-dock.cmd-dock .cmd-dock__bar {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0 6px 8px;
+  border: 1px solid rgb(255 255 255 / 80%);
+  border-radius: 22px;
+  background: rgb(234 249 255 / 95%);
+  box-shadow: 0 8px 32px rgb(8 78 126 / 20%);
+  backdrop-filter: blur(18px);
+}
+
+.game-shell .cmd-dock.cmd-dock .cmd-dock__label {
+  min-height: 44px;
+  gap: 6px;
+  margin: 0;
+  padding-left: 6px;
+  align-items: center;
+}
+
+.game-shell .cmd-dock .cmd-dock__label > span {
+  color: #123c64;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.game-shell .cmd-dock .cmd-dock__hint {
+  display: block;
+  max-width: none;
+  margin-right: auto;
+  color: #487596;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  min-width: 44px;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #087fb8;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.game-shell .cmd-dock.cmd-dock .cmd-dock__list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(60px, 1fr);
+  gap: 4px;
+  padding: 2px;
+  perspective: none;
+  touch-action: pan-x;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 60px;
+  max-width: none;
+  min-height: 88px;
+  padding: 6px 2px;
+  gap: 3px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #177eae;
+  box-shadow: none;
+  transform: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+  touch-action: pan-x;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card.is-selected {
+  border-color: #00bfd7;
+  background: #e4fcff;
+  box-shadow:
+    inset 0 0 0 1px #00bfd7,
+    0 3px 8px rgb(0 165 210 / 22%);
+  transform: none;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card:hover:not(:disabled),
+.game-shell .cmd-dock.cmd-dock .structure-card:active:not(:disabled) {
+  transform: none;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card:disabled {
+  opacity: 0.55;
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card__thumb {
+  width: 100%;
+  height: 34px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card__image {
+  width: 36px;
+  height: 36px;
+  filter: drop-shadow(0 3px 2px rgb(0 136 190 / 12%));
+  image-rendering: auto;
+  pointer-events: none;
+}
+
+.game-shell .cmd-dock .structure-card__body {
+  gap: 3px;
+  min-width: 0;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card__body strong {
+  color: #123c64;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.game-shell .cmd-dock .structure-card__purpose {
+  display: none;
+  color: #487596;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.game-shell .cmd-dock.cmd-dock .structure-card__body small {
+  color: #087f83;
+  font-family: inherit;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+.game-shell .cmd-dock .structure-card__check {
+  top: 6px;
+  right: 6px;
+  width: 5px;
+  height: 5px;
+  background: #00bace;
+  box-shadow: none;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: min(42dvh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  border: 1px solid #bee8f7;
+  border-radius: 18px;
+  background: #f6fcff;
+  box-shadow: 0 8px 32px rgb(8 78 126 / 16%);
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip[hidden] {
+  display: none;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-head strong {
+  color: #123c64;
+  font-family: inherit;
+  font-size: 15px;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-head span {
+  color: #087f83;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-desc,
+.game-shell .cmd-dock .cmd-dock__tooltip-zone {
+  color: #487596;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-meta div {
+  border: 0;
+  background: #e6f6ff;
+  padding: 8px;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-meta dt {
+  color: #487596;
+  font-size: 11px;
+}
+
+.game-shell .cmd-dock .cmd-dock__tooltip-meta dd {
+  color: #123c64;
+  font-size: 12px;
+}
+
+.game-shell .cmd-dock button:focus-visible {
+  outline: 3px solid #048cce;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-shell .cmd-dock.cmd-dock .structure-card {
+    transition: none;
+  }
+}
+
+/* Reserved for the runtime facility renderer; pointer handling stays on the card. */
+.game-shell .cmd-dock.cmd-dock .structure-card__model {
+  display: block;
+  width: 100%;
+  height: 64px;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.game-shell .cmd-dock .cmd-dock__label > span {
+  font-size: 14px;
+  font-weight: 800;
+}
+.game-shell .cmd-dock .cmd-dock__tooltip-toggle {
+  color: #fff;
+  background: #0789c9;
+  border-radius: 22px;
+}
+.game-shell .cmd-dock .structure-card__body small {
+  font-size: 12px;
+  font-weight: 750;
+}

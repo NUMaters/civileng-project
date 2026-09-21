@@ -1,0 +1,248 @@
+{
+  "schemaVersion": 1,
+  "bounds": [
+    140.37,
+    37.351,
+    140.398,
+    37.379
+  ],
+  "dataset": "PLATEAU Koriyama 2020 LOD1, CityGML v9 distribution",
+  "sourceCapturedAt": "2026-09-20T13:33:15.462Z",
+  "reuseLicense": "CC-BY-4.0",
+  "licensePolicyUrl": "https://www.mlit.go.jp/plateau/site-policy/",
+  "rootUrl": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/tileset.json",
+  "rootSha256": "a93d624ad48ff7fc5e42ba017d10dcca5e0677f894cb5b1e0d149b4a79635b02",
+  "catalogUrl": "https://www.geospatial.jp/ckan/api/3/action/package_show?id=plateau-07203-koriyama-shi-2020",
+  "catalogSha256": "4738828bc9248362ea599646191a1c00a33c77d32a6538b2875c41863a3ef02e",
+  "licenseId": "plateau",
+  "licenseTitle": "PLATEAU Site Policy 「３．著作権について」に拠る",
+  "licenseUrl": "https://www.mlit.go.jp/plateau/site-policy/",
+  "attribution": "3D都市モデル（Project PLATEAU）郡山市（2020年度）を加工して作成",
+  "buildingCount": 9561,
+  "withHeightCount": 9561,
+  "lod1HeightMethods": {
+    "点群から取得_中央値": 9076,
+    "航空写真図化_最高高さ": 485
+  },
+  "tileSources": [
+    {
+      "uri": "data/data266.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data266.b3dm",
+      "bytes": 900312,
+      "sha256": "5f3d66ce8471e44eb383c723aceb7cacd2ef63244cc44af50e1b2b5ae58c25c9"
+    },
+    {
+      "uri": "data/data272.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data272.b3dm",
+      "bytes": 1191260,
+      "sha256": "1b28635e03cb6dafc45f2ab968d04bad427c44af44c2fc5077c11fe72d1155ba"
+    },
+    {
+      "uri": "data/data274.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data274.b3dm",
+      "bytes": 2242740,
+      "sha256": "3c2be608ca95631705bd5c233954439423b94a1d1ea1e6fa567d776bdcecd1d5"
+    },
+    {
+      "uri": "data/data322.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data322.b3dm",
+      "bytes": 1899296,
+      "sha256": "f8281123d6c847a347810aaeff01e0957b206d538f7df2e8ca3603a2720fcd50"
+    },
+    {
+      "uri": "data/data323.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data323.b3dm",
+      "bytes": 4974856,
+      "sha256": "9e65aacd49b490c0ea0223a4668e665df8ed399b347062d3237d9ebb289be281"
+    },
+    {
+      "uri": "data/data327.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data327.b3dm",
+      "bytes": 4065152,
+      "sha256": "11086f4dcb042ea9d99589318e96023a36a7b3b8f7a2bf83e93eb3da0224c594"
+    },
+    {
+      "uri": "data/data328.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data328.b3dm",
+      "bytes": 3686788,
+      "sha256": "4e88eb4bf76997b8b501832a2a4edbfc413866981d3f9ecc149146b0d7706be1"
+    },
+    {
+      "uri": "data/data330.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data330.b3dm",
+      "bytes": 1352012,
+      "sha256": "f27db0a768a49fe831baa0bcb3db6a580677eb4030a58047fddee0f5bc879b2e"
+    },
+    {
+      "uri": "data/data331.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data331.b3dm",
+      "bytes": 1742368,
+      "sha256": "175d5a0a4b30fd8a8f40f493c0daa2703aa184951147bbcbcd1bed8553f53a91"
+    },
+    {
+      "uri": "data/data332.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data332.b3dm",
+      "bytes": 3293312,
+      "sha256": "a8daba02100b778356688e31791eb17f2e042c13b8ac8b94ee7caa54d9b44963"
+    },
+    {
+      "uri": "data/data333.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data333.b3dm",
+      "bytes": 1965756,
+      "sha256": "969282f5840a1769e35da841778491b8533b6f6973373d65e8bfc2895f7ab933"
+    },
+    {
+      "uri": "data/data335.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data335.b3dm",
+      "bytes": 3392580,
+      "sha256": "8e81308fd642b6c0a0ecd4d4de45315798370aa79c620a6c69aa91a13d8aa087"
+    },
+    {
+      "uri": "data/data336.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data336.b3dm",
+      "bytes": 1901224,
+      "sha256": "46f84c067bdf700860c182e90f8897822c415b1106357e2c7799dbd8978de0db"
+    },
+    {
+      "uri": "data/data337.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data337.b3dm",
+      "bytes": 3142132,
+      "sha256": "696512732f82e21c5ffe6902e0ed9c3eef04d3a0acf105db040c3d208ab30ee9"
+    },
+    {
+      "uri": "data/data338.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data338.b3dm",
+      "bytes": 933708,
+      "sha256": "38c3ae61cf601286f21deb7a4767310dc8cadbb2be860c59023961618381a53e"
+    },
+    {
+      "uri": "data/data343.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data343.b3dm",
+      "bytes": 3891908,
+      "sha256": "4348de361a5d99c10a6c8d0a22d886c284a20445cabae002cbb9b2c338bee571"
+    },
+    {
+      "uri": "data/data351.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data351.b3dm",
+      "bytes": 4577716,
+      "sha256": "a34b0c2d8f70b1c67ba3665e752224808d549a6b1828967969d5c2e4340b03c8"
+    },
+    {
+      "uri": "data/data353.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data353.b3dm",
+      "bytes": 4490820,
+      "sha256": "f16d16e4725547029ff57eeb137fc0a0a539c452c3f26b76802db74d434b6510"
+    },
+    {
+      "uri": "data/data364.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data364.b3dm",
+      "bytes": 1754004,
+      "sha256": "5e78110d876d104eb5eca20a73c97f2dc4033932a3508b6e1adffc2a4c16319d"
+    },
+    {
+      "uri": "data/data365.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data365.b3dm",
+      "bytes": 2053576,
+      "sha256": "b4db045401e3bad17c7f1bce3f9af66310392d27e937a26396a017e735b67092"
+    },
+    {
+      "uri": "data/data380.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data380.b3dm",
+      "bytes": 3893080,
+      "sha256": "f2a2470f099a970b7319e4d35164dd8c589cf7f7b6f808b970305ecdffe442b4"
+    },
+    {
+      "uri": "data/data381.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data381.b3dm",
+      "bytes": 3961372,
+      "sha256": "ad4d6a96cfeebda489966561a79dc3994bcd589e62ca54cd328605161325beae"
+    },
+    {
+      "uri": "data/data382.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data382.b3dm",
+      "bytes": 1696200,
+      "sha256": "232b1b759ccfa0b16f7df63bd07d299f3882457d0c21f0c3e5b3180d6f7f5595"
+    },
+    {
+      "uri": "data/data383.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data383.b3dm",
+      "bytes": 1696960,
+      "sha256": "7505b07f63d780f323ed66a319f14b89c0ca327940c879b91f4e39a4d07c104f"
+    },
+    {
+      "uri": "data/data385.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data385.b3dm",
+      "bytes": 1931864,
+      "sha256": "93f6ff3ca5cad18ba1b8dbc483cf848e93e6db310446f10c67d64d9a51717a3d"
+    },
+    {
+      "uri": "data/data386.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data386.b3dm",
+      "bytes": 1790244,
+      "sha256": "bc119cf3979035b07a4175625f3d762ddc0386a6e7265ec9650388fa2667a4bc"
+    },
+    {
+      "uri": "data/data387.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data387.b3dm",
+      "bytes": 1512256,
+      "sha256": "dd655c14a71b76ad12aeb3e93baf3dd5f458125a00732060027156de80a8c316"
+    },
+    {
+      "uri": "data/data388.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data388.b3dm",
+      "bytes": 2417472,
+      "sha256": "1ddb3c2c994508eab4dd78cf66c506e49f05bbc96d08ab2a8df74caa0596abff"
+    },
+    {
+      "uri": "data/data390.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data390.b3dm",
+      "bytes": 9012,
+      "sha256": "16479194c99eb772d095e8f24acf5d3be6ed6d553f2b1ad6c1c9d755095b2f8b"
+    },
+    {
+      "uri": "data/data391.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data391.b3dm",
+      "bytes": 111280,
+      "sha256": "7c1877e32aaa97c991aec872d2f0ce7cfbf2b13ddae700402f30b58d4c57ac07"
+    },
+    {
+      "uri": "data/data394.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data394.b3dm",
+      "bytes": 2027840,
+      "sha256": "ed27cf12e72e01a23648b6dfc4819b778c2f09409d1c866646806152545e24a5"
+    },
+    {
+      "uri": "data/data395.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data395.b3dm",
+      "bytes": 2286880,
+      "sha256": "4fe347d3af0d0f46e68936e0d4758d0ee6c118fe0c8b891a7e2dfcdcaa590721"
+    },
+    {
+      "uri": "data/data397.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data397.b3dm",
+      "bytes": 1105596,
+      "sha256": "f47e365bbd3a818fb756d49aa3632933b1952d03cee1089d9d635a3cf02d966a"
+    },
+    {
+      "uri": "data/data400.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data400.b3dm",
+      "bytes": 3206840,
+      "sha256": "26ba08422cdfbbd7e63ed8e7b10eac3530448d6884be8d5bff15c98f3683bdb7"
+    },
+    {
+      "uri": "data/data402.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data402.b3dm",
+      "bytes": 3132692,
+      "sha256": "3baff3026427767363b3b2c7b8343f2fec71961194eb8c164f278bb120b4c68e"
+    },
+    {
+      "uri": "data/data410.b3dm",
+      "url": "https://assets.cms.plateau.reearth.io/assets/f0/d3db95-842d-45d8-8548-47d684c5a554/07203_koriyama-shi_city_2020_citygml_9_op_bldg_3dtiles_lod1/data/data410.b3dm",
+      "bytes": 2913928,
+      "sha256": "0ad042a7ff3c3269a0bcd71620e471beb62d78e55534e0e4fcefd0b6055ad3fd"
+    }
+  ],
+  "dataSha256": "156066824679b77b310dc66cd9366b5f92c26c6151c197dc0ac63ba4281a0b65",
+  "elevation": "No DEM; source building Z bounds retained separately; adapter uses arbitrary flat datum",
+  "precision": "LOD1 representative height from source, not a surveyed exact roof or current building guarantee"
+}

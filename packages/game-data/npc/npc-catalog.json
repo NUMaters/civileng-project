@@ -1,0 +1,1103 @@
+{
+  "version": "koriyama-mvp-3",
+  "scenarioId": "abukuma-koriyama",
+  "enabled": true,
+  "knowledge": [
+    {
+      "id": "FACT-R01",
+      "area": "郡山市",
+      "canonicalFact": "郡山市の洪水ハザードマップには、想定される浸水の範囲・深さ、避難所等が掲載されている。",
+      "limitations": "現在の浸水や個別ゲーム座標の安全性を表さない。",
+      "sourceIds": ["koriyama-hazard"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-R02",
+      "area": "郡山市・1986年8月5日",
+      "canonicalFact": "1986年の洪水では郡山市の阿久津観測所で計画高水位を超え、県管理の逢瀬川・谷田川でも破堤があった。",
+      "limitations": "広域の被害総数を郡山市の被害数にしない。NPC本人の体験としない。",
+      "sourceIds": ["flood-1986"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-R03",
+      "area": "郡山市・1998年8月末",
+      "canonicalFact": "1998年8月末豪雨では郡山市の河川が増水し、内水等による工場・住居の浸水、道路冠水、河川護岸崩壊が記録されている。",
+      "limitations": "原因を堤防決壊だけとしない。NPC本人の体験としない。",
+      "sourceIds": ["flood-1998"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-R06",
+      "area": "地形の一般知識",
+      "canonicalFact": "氾濫平野は川の堆積作用でできた起伏の小さい低地で、河川氾濫や内水氾濫が起きやすい。",
+      "limitations": "ゲーム内の特定地点を氾濫平野・旧河道と断定しない。",
+      "sourceIds": ["gsi-landform"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-R07",
+      "area": "郡山市",
+      "canonicalFact": "郡山市は洪水ハザードマップとは別に内水ハザードマップを公開している。",
+      "limitations": "ゲリラ豪雨版の想定雨量74mm/hと、2026年公表の雨水出水浸水想定区域図120mm/hを混同しない。",
+      "sourceIds": ["koriyama-inland"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-T01",
+      "area": "技術の一般知識",
+      "canonicalFact": "堤防は河川沿いに設け、計画高水位以下の流水を安全に流すことを目的とする。",
+      "limitations": "あらゆる洪水への安全を保証しない。最適な配置座標は示さない。",
+      "sourceIds": ["mlit-levee"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-T02",
+      "area": "技術の一般知識",
+      "canonicalFact": "護岸は流水の侵食作用から河岸や堤防の斜面を守るための施設である。",
+      "limitations": "洪水を貯留する施設や堤防と同一視しない。",
+      "sourceIds": ["mlit-revetment"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-T03",
+      "area": "技術の一般知識",
+      "canonicalFact": "遊水地・調節池は洪水を一時的にため、洪水の最大流量を小さくする区域である。",
+      "limitations": "単独で全ての洪水を防げるとしない。",
+      "sourceIds": ["mlit-storage-pump"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-T04",
+      "area": "技術の一般知識",
+      "canonicalFact": "洪水時に樋門などを閉じると堤内地の雨水が川へ出にくくなるため、排水機場のポンプで川へ排出する。",
+      "limitations": "あらゆる雨量を排水できるとしない。現存施設の能力・運転条件は追加確認が必要。",
+      "sourceIds": ["mlit-storage-pump"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-T05",
+      "area": "技術の一般知識",
+      "canonicalFact": "土砂堆積で流下能力が減った場所では維持管理の河床掘削を行う。十分な拡幅をせず掘り下げると河床低下や護岸被災につながる場合がある。",
+      "limitations": "深く掘るほど安全とはしない。資料は災害復旧時の河道計画の文脈である。",
+      "sourceIds": ["mlit-channel"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-D01",
+      "area": "現実の防災情報",
+      "canonicalFact": "国土交通省の川の防災情報で雨量、水位、河川カメラ、洪水予報等を確認できる。",
+      "limitations": "ゲームの水位や被害を公的観測値にしない。",
+      "sourceIds": ["river-info"],
+      "approved": true,
+      "confidence": "A"
+    },
+    {
+      "id": "FACT-D02",
+      "area": "現実の防災情報",
+      "canonicalFact": "危険な場所にいる人は警戒レベル4までに避難し、避難に時間のかかる人は警戒レベル3で避難する。",
+      "limitations": "現実の安全な経路を保証しない。ゲームのヒント段階とは別の尺度。",
+      "sourceIds": ["evacuation"],
+      "approved": true,
+      "confidence": "A"
+    }
+  ],
+  "additionalNpcs": [
+    {
+      "id": "resident-mika",
+      "name": "みかさん",
+      "occupation": "土地の高低を観察する商店主",
+      "kind": "resident",
+      "introduction": "店の周りの土地の高さや、水が集まりやすい場所を地図で見ているよ。",
+      "persona": "土地の高低とハザードマップを担当する住民。地形と想定浸水の読み方を話し、対策技術は遊水地の経験者へ案内する。",
+      "locationLabel": "マップ西側・住宅地寄り（仮）",
+      "position": {
+        "longitude": 140.3786,
+        "latitude": 37.3688,
+        "height": 260
+      },
+      "referralNpcId": "builder-retention",
+      "questions": [
+        {
+          "id": "floodplain",
+          "text": "低く平らな土地はどう見ればいい？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-R06"],
+              "answers": [
+                "川が運んだ土砂でできた低く平らな土地は、氾濫や内水に気をつけたい地形だよ。"
+              ],
+              "childAnswers": ["かわのそばのひくくてたいらなとちは、みずにきをつけたいばしょだよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-R06"],
+              "answers": [
+                "氾濫平野は起伏の小さい低地で、河川氾濫や内水氾濫が起きやすいとされているよ。"
+              ],
+              "childAnswers": [
+                "ひくくてたいらなとちは、かわからのしんすいや、まちにたまるみずがおこりやすいことがあるよ。"
+              ]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["低い土地で洪水を一時的にためる考え方なら、たくみさんに聞いてみてね。"],
+              "childAnswers": [
+                "たくみさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "hazard-map",
+          "text": "洪水ハザードマップでは何を見ればいい？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-R01"],
+              "answers": ["洪水ハザードマップでは、想定される浸水の範囲や深さを見られるよ。"],
+              "childAnswers": [
+                "このちずでは、みずがくるかもしれないばしょと、みずのふかさがわかるよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-R01"],
+              "answers": [
+                "洪水ハザードマップには避難所なども載っているよ。ただし、今の水深を示す地図ではないんだ。"
+              ],
+              "childAnswers": [
+                "ひなんじょのばしょも、ちずでたしかめられるよ。いまのみずのふかさをしめすちずではないよ。"
+              ]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["地図で見た低地に遊水地をどう使うかは、たくみさんが詳しいよ。"],
+              "childAnswers": [
+                "たくみさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "map-limit",
+          "text": "地図の色だけで安全か分かるの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-R01"],
+              "answers": ["地図の色は想定浸水の情報で、今その場所が水に浸かっている印ではないよ。"],
+              "childAnswers": [
+                "このちずでは、みずがくるかもしれないばしょと、みずのふかさがわかるよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-R01"],
+              "answers": [
+                "ハザードマップは想定範囲や深さを知る手がかりで、個別の場所の安全を保証するものではないよ。"
+              ],
+              "childAnswers": [
+                "ひなんじょのばしょも、ちずでたしかめられるよ。いまのみずのふかさをしめすちずではないよ。"
+              ]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["地図と洪水をためる場所の関係なら、たくみさんに聞いてみてね。"],
+              "childAnswers": [
+                "たくみさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-R01", "FACT-R06"]
+    },
+    {
+      "id": "resident-sota",
+      "name": "そうたさん",
+      "occupation": "雨と水位を気にする農地近くの住民",
+      "kind": "resident",
+      "introduction": "雨量や川の水位を確認して、雨が強くなったときの変化を見ているよ。",
+      "persona": "現実の雨量・水位と内水情報を担当する住民。防災情報の確認方法を話し、排水技術は排水機場の経験者へ案内する。",
+      "locationLabel": "マップ南東側・農地寄り（仮）",
+      "position": {
+        "longitude": 140.3895,
+        "latitude": 37.3718,
+        "height": 260
+      },
+      "referralNpcId": "builder-drainage",
+      "questions": [
+        {
+          "id": "river-info",
+          "text": "雨量や水位はどこで確かめるの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-D01"],
+              "answers": ["現実の川の雨量や水位は、国土交通省の「川の防災情報」で確認できるよ。"],
+              "childAnswers": [
+                "ほんとうのかわのあめやみずのたかさは、かわのぼうさいじょうほうでみられるよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-D01"],
+              "answers": [
+                "「川の防災情報」では、雨量や水位のほか河川カメラや洪水予報も確認できるよ。"
+              ],
+              "childAnswers": ["あめのりょう、かわのみずのたかさ、かわのかめらもたしかめられるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["雨水をどう外へ出すかの技術なら、ゆうじさんに聞いてみてね。"],
+              "childAnswers": [
+                "ゆうじさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "water-change",
+          "text": "雨が強くなったら何を見ればいい？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-D01"],
+              "answers": ["雨の強さだけでなく、川の水位も一緒に確認すると変化を追いやすいよ。"],
+              "childAnswers": [
+                "ほんとうのかわのあめやみずのたかさは、かわのぼうさいじょうほうでみられるよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-D01"],
+              "answers": ["雨量や水位、河川カメラ、洪水予報を同じ防災情報で確かめられるよ。"],
+              "childAnswers": ["あめのりょう、かわのみずのたかさ、かわのかめらもたしかめられるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["街の雨水をポンプで出す仕組みなら、ゆうじさんが詳しいよ。"],
+              "childAnswers": [
+                "ゆうじさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "inland-map",
+          "text": "街にたまる水はどの地図で見るの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-R07"],
+              "answers": ["街にたまる水を見るなら、郡山市の内水ハザードマップが手がかりになるよ。"],
+              "childAnswers": ["まちにたまるみずは、ないすいはざーどまっぷでしらべられるよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-R07"],
+              "answers": ["内水ハザードマップは、川の洪水ハザードマップとは別に用意されているよ。"],
+              "childAnswers": ["ないすいのちずは、かわのこうずいのちずとはべつにあるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["内水と排水機場の関係を知りたいなら、ゆうじさんに聞いてみてね。"],
+              "childAnswers": [
+                "ゆうじさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-D01", "FACT-R07"]
+    },
+    {
+      "id": "builder-drainage",
+      "name": "ゆうじさん",
+      "occupation": "排水機場の工事経験者",
+      "kind": "experienced",
+      "introduction": "排水機場は、川へ自然に出にくい街の雨水をポンプで出す施設だよ。",
+      "persona": "排水機場だけを担当する実務家。街の雨水をポンプ排水する使いどころと、川の水位による条件を説明する。",
+      "locationLabel": "マップ東側・排水路寄り（仮）",
+      "position": {
+        "longitude": 140.392,
+        "latitude": 37.3668,
+        "height": 260
+      },
+      "referralNpcId": null,
+      "questions": [
+        {
+          "id": "pump-role",
+          "text": "排水機場は何をする施設なの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T04"],
+              "answers": ["排水機場は、川へ出にくい街の雨水をポンプで川へ出す施設だよ。"],
+              "childAnswers": ["はいすいきじょうは、まちのあめみずをぽんぷでかわへだすしせつだよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T04"],
+              "answers": [
+                "洪水時に樋門などを閉じると雨水が川へ出にくくなるため、排水機場のポンプで排出するんだ。"
+              ],
+              "childAnswers": ["かわへみずがでにくいときに、ぽんぷであめみずをだすよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T04"],
+              "answers": [
+                "街の雨水を川へ自然に出せないとき、排水機場が候補になるよ。洪水をためる遊水地とは役割が違うんだ。"
+              ],
+              "childAnswers": [
+                "はいすいきじょうがあっても、みずのようすをみながらかんがえることがたいせつだよ。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "pump-use",
+          "text": "排水機場はどんなときに使うの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T04"],
+              "answers": [
+                "川へ自然に出にくくなった街の雨水を、ポンプで出す必要があるときに使うよ。"
+              ],
+              "childAnswers": ["はいすいきじょうは、まちのあめみずをぽんぷでかわへだすしせつだよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T04"],
+              "answers": [
+                "洪水時に樋門などを閉じているとき、堤内地の雨水を川へ出すために排水機場を使うんだ。"
+              ],
+              "childAnswers": ["かわへみずがでにくいときに、ぽんぷであめみずをだすよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T04"],
+              "answers": [
+                "排水機場は雨水を出す技術だよ。川の水位や排水先の条件も見ながら考える必要があるんだ。"
+              ],
+              "childAnswers": [
+                "はいすいきじょうがあっても、みずのようすをみながらかんがえることがたいせつだよ。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "pump-limit",
+          "text": "排水機場があれば内水はなくなるの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T04"],
+              "answers": ["排水機場は、川へ出にくい雨水をポンプで出すための施設だよ。"],
+              "childAnswers": ["はいすいきじょうは、まちのあめみずをぽんぷでかわへだすしせつだよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T04"],
+              "answers": [
+                "排水機場には雨水を排出する役割があるけれど、川の水位や排水先の条件も関係するよ。"
+              ],
+              "childAnswers": ["かわへみずがでにくいときに、ぽんぷであめみずをだすよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T04"],
+              "answers": [
+                "排水機場は内水対策の候補だけれど、設置すれば必ず内水がなくなるとは考えないよ。"
+              ],
+              "childAnswers": [
+                "はいすいきじょうがあっても、みずのようすをみながらかんがえることがたいせつだよ。"
+              ]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-T04"]
+    },
+    {
+      "id": "builder-maintenance",
+      "name": "あきらさん",
+      "occupation": "河道掘削の経験者",
+      "kind": "experienced",
+      "introduction": "土砂で川の通り道が狭くなったとき、河道掘削を検討することがあるよ。",
+      "persona": "河道掘削だけを担当する維持管理の経験者。掘削の使いどころと、川底や護岸への影響を説明する。",
+      "locationLabel": "マップ北西側・河岸寄り（仮）",
+      "position": {
+        "longitude": 140.377,
+        "latitude": 37.377,
+        "height": 260
+      },
+      "referralNpcId": null,
+      "questions": [
+        {
+          "id": "dredging-role",
+          "text": "河道掘削は何をする工事なの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T05"],
+              "answers": ["河道掘削は、土砂で減った川の流す力を確保するために川底を掘る工事だよ。"],
+              "childAnswers": [
+                "かどうくっさくは、かわにたまったつちをとって、みずのとおりみちをつくるこうじだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T05"],
+              "answers": ["土砂堆積で流下能力が減った場所では、維持管理として河床掘削を行うんだ。"],
+              "childAnswers": [
+                "つちがたまってみずがながれにくいときに、かわぞこをほることがあるよ。"
+              ]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T05"],
+              "answers": [
+                "土砂で水を流しにくくなった場所では河道掘削が候補だよ。深く掘るだけではよくないんだ。"
+              ],
+              "childAnswers": ["ふかくほるだけではだめで、かわぎしへのえいきょうもかんがえるよ。"]
+            }
+          ]
+        },
+        {
+          "id": "dredging-use",
+          "text": "河道掘削はどんなときに使うの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T05"],
+              "answers": ["川に土砂がたまって、水を流せる量が減ったときに考える工事だよ。"],
+              "childAnswers": [
+                "かどうくっさくは、かわにたまったつちをとって、みずのとおりみちをつくるこうじだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T05"],
+              "answers": [
+                "土砂堆積で流下能力が減った場所では、川底を掘って水の通り道を確保することがあるよ。"
+              ],
+              "childAnswers": [
+                "つちがたまってみずがながれにくいときに、かわぞこをほることがあるよ。"
+              ]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T05"],
+              "answers": [
+                "河道掘削は土砂対策の候補だけれど、川幅も考えずに掘り下げると影響が出る場合があるよ。"
+              ],
+              "childAnswers": ["ふかくほるだけではだめで、かわぎしへのえいきょうもかんがえるよ。"]
+            }
+          ]
+        },
+        {
+          "id": "dredging-limit",
+          "text": "深く掘れば水を流しやすくなるの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T05"],
+              "answers": ["深く掘るほどよいわけではなく、川底や護岸への影響も考える必要があるよ。"],
+              "childAnswers": [
+                "かどうくっさくは、かわにたまったつちをとって、みずのとおりみちをつくるこうじだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T05"],
+              "answers": [
+                "十分に川幅を確保せずに掘り下げると、河床低下や護岸被災につながる場合があるよ。"
+              ],
+              "childAnswers": [
+                "つちがたまってみずがながれにくいときに、かわぞこをほることがあるよ。"
+              ]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T05"],
+              "answers": [
+                "河道掘削では流下能力だけでなく、川幅・川底・護岸への影響を一緒に考えるんだ。"
+              ],
+              "childAnswers": ["ふかくほるだけではだめで、かわぎしへのえいきょうもかんがえるよ。"]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-T05"]
+    },
+    {
+      "id": "builder-revetment",
+      "name": "なおさん",
+      "occupation": "護岸工事の経験者",
+      "kind": "experienced",
+      "introduction": "護岸は、川の流れで岸や堤防の斜面が削られるのを防ぐ施設だよ。",
+      "persona": "護岸工事を専門に話す経験者。侵食から岸を守る役割と、洪水をためる施設ではないという限界を説明する。",
+      "locationLabel": "マップ北東側・河岸寄り（仮）",
+      "position": {
+        "longitude": 140.386,
+        "latitude": 37.378,
+        "height": 260
+      },
+      "referralNpcId": null,
+      "questions": [
+        {
+          "id": "revetment-role",
+          "text": "護岸は何を守る工事なの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T02"],
+              "answers": ["護岸は川の流れで岸や堤防の斜面が削られるのを防ぐ施設だよ。"],
+              "childAnswers": [
+                "ごがんは、かわのながれでかわぎしがけずられないようにまもるものだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T02"],
+              "answers": ["護岸は流水の侵食から河岸や堤防の斜面を守るために設けるんだ。"],
+              "childAnswers": ["ごがんは、かわぎしやどてのしゃめんがこわれにくくなるようにするよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T02"],
+              "answers": [
+                "岸が削られることが課題なら護岸が候補だよ。ただし、洪水をためたり水位を下げたりする施設ではないんだ。"
+              ],
+              "childAnswers": ["ごがんはかわぎしをまもるしくみで、みずをためるしくみではないよ。"]
+            }
+          ]
+        },
+        {
+          "id": "revetment-use",
+          "text": "護岸はどんなときに使うの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T02"],
+              "answers": ["流れで岸が削られる場所では、護岸で侵食を抑えることを考えるよ。"],
+              "childAnswers": [
+                "ごがんは、かわのながれでかわぎしがけずられないようにまもるものだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T02"],
+              "answers": ["護岸は、川の流れが岸や堤防の斜面を削ることへの対策として使うんだ。"],
+              "childAnswers": ["ごがんは、かわぎしやどてのしゃめんがこわれにくくなるようにするよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T02"],
+              "answers": [
+                "侵食対策には護岸が候補だけれど、洪水そのものを安全に流す堤防とは役割が違うよ。"
+              ],
+              "childAnswers": ["ごがんはかわぎしをまもるしくみで、みずをためるしくみではないよ。"]
+            }
+          ]
+        },
+        {
+          "id": "revetment-limit",
+          "text": "護岸だけで洪水を防げるの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T02"],
+              "answers": ["護岸の主な役割は岸を侵食から守ることで、洪水をためることではないよ。"],
+              "childAnswers": [
+                "ごがんは、かわのながれでかわぎしがけずられないようにまもるものだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T02"],
+              "answers": [
+                "護岸と堤防は役割が違うよ。護岸は岸を守り、堤防は計画した水位以下の水を流すためのものなんだ。"
+              ],
+              "childAnswers": ["ごがんは、かわぎしやどてのしゃめんがこわれにくくなるようにするよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T02"],
+              "answers": [
+                "護岸は岸の侵食対策にはなるけれど、それだけでどんな洪水も防げるとは考えないよ。"
+              ],
+              "childAnswers": ["ごがんはかわぎしをまもるしくみで、みずをためるしくみではないよ。"]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-T02"]
+    },
+    {
+      "id": "builder-retention",
+      "name": "たくみさん",
+      "occupation": "遊水地・調節池の計画経験者",
+      "kind": "experienced",
+      "introduction": "遊水地や調節池は、洪水を一時的にためて流量のピークを小さくする仕組みだよ。",
+      "persona": "遊水地・調節池を専門に話す経験者。洪水を一時的にためる使いどころと、排水機場とは役割が違うことを説明する。",
+      "locationLabel": "マップ南西側・開けた土地寄り（仮）",
+      "position": {
+        "longitude": 140.394,
+        "latitude": 37.378,
+        "height": 260
+      },
+      "referralNpcId": null,
+      "questions": [
+        {
+          "id": "retention-role",
+          "text": "遊水地は何をする場所なの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T03"],
+              "answers": ["遊水地や調節池は洪水を一時的にためる場所だよ。"],
+              "childAnswers": ["ゆうすいちは、おおみずをしばらくためるばしょだよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T03"],
+              "answers": ["洪水を一時的にためることで、川へ流れる洪水の最大流量を小さくするんだ。"],
+              "childAnswers": ["みずをためることで、かわにいちどにながれるみずをへらすよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T03"],
+              "answers": [
+                "洪水のピークを小さくしたいときに遊水地が候補になるよ。水を外へ出す排水機場とは役割が違うんだ。"
+              ],
+              "childAnswers": [
+                "ゆうすいちはみずをためるしくみで、ぽんぷでみずをだすしくみとはちがうよ。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "retention-use",
+          "text": "遊水地はどんなときに使うの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T03"],
+              "answers": [
+                "一度に流れる洪水の量を抑えたいとき、遊水地に一時的にためる考え方があるよ。"
+              ],
+              "childAnswers": ["ゆうすいちは、おおみずをしばらくためるばしょだよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T03"],
+              "answers": [
+                "洪水の最大流量を小さくすることが目的なら、遊水地や調節池が候補になるんだ。"
+              ],
+              "childAnswers": ["みずをためることで、かわにいちどにながれるみずをへらすよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T03"],
+              "answers": [
+                "遊水地は洪水のピークを抑える仕組みで、街の雨水をポンプで出す排水機場とは使いどころが違うよ。"
+              ],
+              "childAnswers": [
+                "ゆうすいちはみずをためるしくみで、ぽんぷでみずをだすしくみとはちがうよ。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "retention-limit",
+          "text": "遊水地があれば安心なの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T03"],
+              "answers": [
+                "遊水地は洪水の量を一時的に抑える仕組みで、すべての水害をなくすものではないよ。"
+              ],
+              "childAnswers": ["ゆうすいちは、おおみずをしばらくためるばしょだよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T03"],
+              "answers": [
+                "遊水地にはためられる規模があるから、想定を超える洪水まで安全にできるとは限らないんだ。"
+              ],
+              "childAnswers": ["みずをためることで、かわにいちどにながれるみずをへらすよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T03"],
+              "answers": [
+                "遊水地は洪水のピークを小さくする候補だけれど、容量や周囲の土地の条件と合わせて考える必要があるよ。"
+              ],
+              "childAnswers": [
+                "ゆうすいちはみずをためるしくみで、ぽんぷでみずをだすしくみとはちがうよ。"
+              ]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-T03"]
+    }
+  ],
+  "sources": [
+    {
+      "id": "koriyama-hazard",
+      "agency": "郡山市",
+      "title": "郡山市洪水ハザードマップ",
+      "url": "https://www.city.koriyama.lg.jp/soshiki/126/2177.html",
+      "section": "本文・対象河川",
+      "year": "2024",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "flood-1986",
+      "agency": "国土交通省 東北地方整備局 福島河川国道事務所",
+      "title": "昭和61年8月5日洪水の概要",
+      "url": "https://www.thr.mlit.go.jp/fukushima/abukuma_gensai/pdf/20161005shiryou1.pdf#page=2",
+      "section": "PDF 2ページ（紙面1）",
+      "year": "2016",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "flood-1998",
+      "agency": "郡山市",
+      "title": "郡山市制施行100周年記念 防災講演会資料",
+      "url": "https://www.city.koriyama.lg.jp/uploaded/attachment/90344.pdf#page=3",
+      "section": "別紙2・PDF 3ページ",
+      "year": "2024",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "gsi-landform",
+      "agency": "国土地理院",
+      "title": "治水地形分類図の内容",
+      "url": "https://www.gsi.go.jp/bousaichiri/bousaichiri41051.html",
+      "section": "氾濫平野・後背湿地・微高地",
+      "year": "発行年記載なし",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "koriyama-inland",
+      "agency": "郡山市上下水道局",
+      "title": "郡山市内水ハザードマップ（ゲリラ豪雨）",
+      "url": "https://www.city.koriyama.lg.jp/site/jougesuidou/5632.html",
+      "section": "本文・雨水出水浸水想定区域図への案内",
+      "year": "2026年4月1日更新",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "mlit-levee",
+      "agency": "国土交通省",
+      "title": "河川に関する用語：堤防",
+      "url": "https://www.mlit.go.jp/river/pamphlet_jirei/kasen/jiten/yougo/03_04.htm",
+      "section": "堤防",
+      "year": "発行年記載なし",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "mlit-revetment",
+      "agency": "国土交通省",
+      "title": "河川に関する用語：護岸",
+      "url": "https://www.mlit.go.jp/river/pamphlet_jirei/kasen/jiten/yougo/12.htm",
+      "section": "護岸・根固工",
+      "year": "発行年記載なし",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "mlit-storage-pump",
+      "agency": "国土交通省",
+      "title": "河川に関する用語：遊水地・調節池・排水機場",
+      "url": "https://www.mlit.go.jp/river/pamphlet_jirei/kasen/jiten/yougo/05_06.htm",
+      "section": "遊水地・調節池／排水機場",
+      "year": "発行年記載なし",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "mlit-channel",
+      "agency": "国土交通省",
+      "title": "美しい山河を守る災害復旧：河道計画上の工夫・流速",
+      "url": "https://www.mlit.go.jp/river/bousai/hukkyu/shinsei/4/kadou_02.html",
+      "section": "河積の拡大は河道拡幅を基本とする",
+      "year": "発行年記載なし",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "river-info",
+      "agency": "国土交通省",
+      "title": "川の防災情報",
+      "url": "https://www.river.go.jp/",
+      "section": "雨量・水位・河川カメラ・洪水予報",
+      "year": "発行年記載なし",
+      "checkedOn": "2026-09-13"
+    },
+    {
+      "id": "evacuation",
+      "agency": "内閣府",
+      "title": "避難情報に関するガイドライン",
+      "url": "https://www.bousai.go.jp/oukyu/hinanjouhou/r3_hinanjouhou_guideline/",
+      "section": "警戒レベルの一覧表・避難行動等",
+      "year": "2026年3月改定",
+      "checkedOn": "2026-09-13"
+    }
+  ],
+  "npcs": [
+    {
+      "id": "resident",
+      "name": "はるさん",
+      "occupation": "水害の記録を調べる住民",
+      "kind": "resident",
+      "introduction": "こんにちは。昔の水害記録なら、いつ何が起きたかを一緒に見てみよう。",
+      "persona": "地域の過去の水害記録を調べる住民。史実を本人の体験として語らず、治水技術の判断は堤防工事の経験者へ案内する。",
+      "locationLabel": "川の西側",
+      "position": {
+        "longitude": 140.3824,
+        "latitude": 37.3651,
+        "height": 260
+      },
+      "referralNpcId": "builder",
+      "questions": [
+        {
+          "id": "past",
+          "text": "1986年にはどんな水害があったの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-R02"],
+              "answers": ["1986年の洪水では、郡山市の逢瀬川や谷田川で堤防が切れた記録があるよ。"],
+              "childAnswers": ["1986ねんに、こおりやまでおおきなこうずいがあったよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-R03"],
+              "answers": ["1998年の記録には、川の増水だけでなく内水による浸水や護岸崩壊もあるよ。"],
+              "childAnswers": ["かわのみにずがふえるだけでなく、まちにみずがたまることもあるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["昔の水害と堤防の役割をつなげて知りたいなら、けんさんに聞いてみてね。"],
+              "childAnswers": [
+                "けんさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "land",
+          "text": "1998年の大雨では何が起きたの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-R03"],
+              "answers": [
+                "1998年の大雨では、郡山市で家や工場の浸水、道路冠水などが記録されているよ。"
+              ],
+              "childAnswers": [
+                "1998ねんのおおあめで、いえやこうじょうにみずがはいったきろくがあるよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-R03"],
+              "answers": ["1998年の記録には、川の増水だけでなく内水による浸水や護岸崩壊もあるよ。"],
+              "childAnswers": ["かわのみにずがふえるだけでなく、まちにみずがたまることもあるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["1998年の記録を工事の考え方につなげるなら、けんさんに聞いてみてね。"],
+              "childAnswers": [
+                "けんさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "observe",
+          "text": "水害の記録は何に役立つの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-R02"],
+              "answers": ["過去にどの川でどんな被害があったかを知る手がかりになるよ。"],
+              "childAnswers": ["1986ねんに、こおりやまでおおきなこうずいがあったよ。"]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-R03"],
+              "answers": [
+                "昔の記録を見ると、川の増水だけでなく内水など複数の起こり方を考えられるよ。"
+              ],
+              "childAnswers": ["かわのみにずがふえるだけでなく、まちにみずがたまることもあるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": [],
+              "answers": ["水害記録をもとに堤防をどう考えるかは、けんさんが詳しいよ。"],
+              "childAnswers": [
+                "けんさんさんは、このことをもっとくわしくしっているよ。きいてみよう。"
+              ]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-R02", "FACT-R03"]
+    },
+    {
+      "id": "builder",
+      "name": "けんさん",
+      "occupation": "堤防工事の経験者",
+      "kind": "experienced",
+      "introduction": "堤防は川の水を安全に流すための施設だよ。使いどころと限界を考えてみよう。",
+      "persona": "堤防工事だけを担当する経験者。堤防の役割、使いどころ、想定を超える洪水への限界を説明する。",
+      "locationLabel": "川の東側",
+      "position": {
+        "longitude": 140.3847,
+        "latitude": 37.3648,
+        "height": 260
+      },
+      "referralNpcId": null,
+      "questions": [
+        {
+          "id": "bank",
+          "text": "堤防は何をする施設なの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T01"],
+              "answers": ["堤防は、河川沿いで計画高水位以下の水を安全に流すための施設だよ。"],
+              "childAnswers": [
+                "ていぼうは、かわのみずがまちにあふれないようにするためのたかいどてだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T01"],
+              "answers": [
+                "堤防は川の水をあふれさせずに流すことを目的として、河川沿いに設けるんだ。"
+              ],
+              "childAnswers": ["ていぼうは、かわのみずをあんぜんにながすためにつくるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T01"],
+              "answers": [
+                "川の水を流すことが課題なら堤防が候補だよ。ただし、想定を超える洪水まで安全を保証するものではないんだ。"
+              ],
+              "childAnswers": ["ていぼうがあっても、どんなおおあめでもだいじょうぶとはいえないよ。"]
+            }
+          ]
+        },
+        {
+          "id": "levee-use",
+          "text": "堤防はどんなときに使うの？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T01"],
+              "answers": ["川の水を計画した高さまで安全に流す必要があるとき、堤防を考えるよ。"],
+              "childAnswers": [
+                "ていぼうは、かわのみずがまちにあふれないようにするためのたかいどてだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T01"],
+              "answers": [
+                "堤防は河川沿いに設けて、計画高水位以下の流水を安全に流すためのものだよ。"
+              ],
+              "childAnswers": ["ていぼうは、かわのみずをあんぜんにながすためにつくるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T01"],
+              "answers": [
+                "堤防は水を流す技術で、岸の侵食を守る護岸や水をためる遊水地とは役割が違うんだ。"
+              ],
+              "childAnswers": ["ていぼうがあっても、どんなおおあめでもだいじょうぶとはいえないよ。"]
+            }
+          ]
+        },
+        {
+          "id": "levee-limit",
+          "text": "堤防があればどんな洪水でも大丈夫？",
+          "hints": [
+            {
+              "level": 1,
+              "factIds": ["FACT-T01"],
+              "answers": ["堤防は計画高水位以下の水を安全に流すための施設だよ。"],
+              "childAnswers": [
+                "ていぼうは、かわのみずがまちにあふれないようにするためのたかいどてだよ。"
+              ]
+            },
+            {
+              "level": 2,
+              "factIds": ["FACT-T01"],
+              "answers": [
+                "堤防には計画した水位まで水を流す役割があるので、どんな洪水にも対応するとは限らないよ。"
+              ],
+              "childAnswers": ["ていぼうは、かわのみずをあんぜんにながすためにつくるよ。"]
+            },
+            {
+              "level": 3,
+              "factIds": ["FACT-T01"],
+              "answers": [
+                "堤防は大切な施設だけれど、想定を超える洪水まで安全を保証するものではないんだ。"
+              ],
+              "childAnswers": ["ていぼうがあっても、どんなおおあめでもだいじょうぶとはいえないよ。"]
+            }
+          ]
+        }
+      ],
+      "topicFactIds": ["FACT-T01"]
+    }
+  ],
+  "disaster": {
+    "nearbyRadiusMeters": 350,
+    "activeIntensity": 0.04,
+    "messages": {
+      "calm": "今のゲームでは、近くに被害の発生表示は出ていないね。これからの雨と水の変化を見ていよう。",
+      "overflow": "今のゲームでは、近くの川で水があふれる表示が出ているよ。地図の水の広がりを確かめよう。",
+      "erosion": "今のゲームでは、近くの岸で侵食の被害表示が出ているよ。岸が削られる場所を地図で確かめよう。",
+      "inland": "今のゲームでは、近くで内水の被害表示が出ているよ。街にたまる水にも目を向けよう。",
+      "capacity": "今のゲームでは、近くで川の流す力が不足する被害表示が出ているよ。水の通り道を地図で確かめよう。"
+    },
+    "tips": {
+      "resident": {
+        "text": "現実の川の情報は、国土交通省の「川の防災情報」で水位や雨量を確認できるよ。",
+        "factIds": ["FACT-D01"]
+      },
+      "experienced": {
+        "text": "現実には、危険な場所にいる人は警戒レベル4までに避難するんだ。避難に時間のかかる人はレベル3で行動しよう。",
+        "factIds": ["FACT-D02"]
+      }
+    }
+  }
+}
