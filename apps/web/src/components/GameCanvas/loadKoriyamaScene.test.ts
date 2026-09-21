@@ -5,7 +5,7 @@ import { loadKoriyamaScene } from "./loadKoriyamaScene";
 const base = new URL("../../../public", import.meta.url);
 afterEach(() => vi.unstubAllGlobals());
 describe("bundled scene loading", () => {
-  it("loads all seven source snapshots with one cancellation signal", async () => {
+  it("loads all bundled source snapshots with one cancellation signal", async () => {
     const signal = new AbortController().signal;
     const fetcher = vi.fn(async (url: string, init: RequestInit) => {
       expect(init.signal).toBe(signal);
@@ -19,6 +19,9 @@ describe("bundled scene loading", () => {
       "campus-north-grove-core", "campus-west-grove-core",
       "campus-central-grove-core", "campus-south-building-grove",
       "riverbank-south-canopy-core", "riverbank-middle-canopy-core", "riverbank-north-canopy-core",
+      "riverbank-upper-confluence-grove", "riverbank-east-upper-tree-line",
+      "riverbank-east-middle-grove", "riverbank-west-middle-grove",
+      "riverbank-west-south-tree-line", "riverbank-east-south-tree-line",
     ]);
     expect(scene.canopyPatches.slice(4).every(patch => patch.observationView?.layer === "seamlessphoto")).toBe(true);
     expect(scene.imageryTrees).toHaveLength(91);
