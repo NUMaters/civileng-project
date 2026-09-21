@@ -167,7 +167,7 @@ describe("bounded imagery canopy reconstruction", () => {
     }
   });
 
-  it("checks actual DEM, source exclusions and all 34 observed crowns with bounded draw calls", () => {
+  it("checks actual DEM, source exclusions and all observed crowns with bounded draw calls", () => {
     const patches = convertImageryCanopyObservations(source), observedCrowns = convertImageryTreeObservations(observed);
     const exclusions = createImageryVegetationExclusions(JSON.parse(read("features.geojson").toString()), JSON.parse(read("plateau-buildings.geojson").toString()), JSON.parse(read("landcover.geojson").toString()));
     const terrain = decodeKoriyamaTerrain(Uint8Array.from(read("terrain.bin")).buffer, JSON.parse(read("terrain-metadata.json").toString()));
