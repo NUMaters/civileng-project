@@ -5,6 +5,7 @@ import { distanceToVegetationSegment, insideVegetationRing, intersectsVegetation
 import { createVegetationStyleResources, vegetationColor, vegetationHashUnit, VEGETATION_STYLE_PROVENANCE } from "./geographicVegetationStyle";
 
 export const IMAGERY_CANOPY_URL = "/geodata/koriyama/imagery-canopy-observations.json";
+export const GAME_CANOPY_DENSITY = { spacingM: 3.2, radiusRangeM: [1.1, 1.65] as const, maxTrees: 2000 };
 type IllustrativeCanopyProfile = "riverbank-detail-v1";
 const RIVERBANK_DETAIL_IDS = new Set(["riverbank-south-canopy-core", "riverbank-middle-canopy-core", "riverbank-north-canopy-core"]);
 /** Artistic sampling profile, NOT a density/size measurement from the source photograph. */

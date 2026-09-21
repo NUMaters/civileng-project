@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { canopyContainsCrown, convertImageryCanopyObservations, createGeographicCanopy, type CanopyOptions, type CanopyPatch, type ImageryCanopyObservations } from "./geographicCanopy";
+import { canopyContainsCrown, convertImageryCanopyObservations, createGeographicCanopy, GAME_CANOPY_DENSITY, type CanopyOptions, type CanopyPatch, type ImageryCanopyObservations } from "./geographicCanopy";
 import { convertImageryTreeObservations, type ImageryTreeObservations, type VegetationPoint } from "./imageryVegetation";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { intersectsVegetationExclusion } from "./geographicImageryVegetation";
@@ -185,6 +185,9 @@ describe("bounded imagery canopy reconstruction", () => {
     expect(accepted.length).toBe(73);
     expect(r.stats.evaluatedCells).toBe(448); expect(r.stats.meshes).toBeLessThanOrEqual(10);
     expect(r.stats.skippedPatches).toEqual([]); expect(r.stats.counts.capacity).toBe(0);
+    const gameCanopy = create(patches, { ...options, ...GAME_CANOPY_DENSITY });
+    expect(gameCanopy.stats.counts.rendered).toBeGreaterThan(accepted.length * 1.5);
+    expect(gameCanopy.stats.skippedPatches).toEqual([]); expect(gameCanopy.stats.counts.capacity).toBe(0);
     const campus = (record: { patchId: string }) => record.patchId.startsWith("campus-");
     expect(r.records.filter(campus)).toEqual(baseline.records.filter(campus));
     expect(r.records.filter(c => c.patchId === "riverbank-south-canopy-core")).toEqual(baseline.records.filter(c => c.patchId === "riverbank-south-canopy-core"));
