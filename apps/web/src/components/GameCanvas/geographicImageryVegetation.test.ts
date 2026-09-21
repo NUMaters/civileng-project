@@ -55,7 +55,16 @@ describe("imagery-inferred vegetation", () => {
     }
     expect(convertImageryTreeObservations({ ...actual, observations: [...actual.observations].reverse() }).map(c => c.id).sort()).toEqual(cs.map(c => c.id).sort());
     expect(() => imageryPixelToGeo({ z: 18, x: -1, y: 0 }, { x: 0, y: 0 })).toThrow(RangeError);
-    expect(() => convertImageryTreeObservations({ ...actual, observations: [[0, 0, NaN]] })).toThrow(RangeError);
+    expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: undefined, observations: [[0, 0, NaN]] })).toThrow(RangeError);
+  });
+
+  it("retains each inspection view and rejects ambiguous batch ranges", () => {
+    const cs = convertImageryTreeObservations(actual);
+    expect(cs.slice(0, 34).every(c => c.imagery.captureDateSourceUrl === actual.source.mapUrl)).toBe(true);
+    expect(cs.slice(34).every(c => c.imagery.captureDateSourceUrl === actual.inspectionBatches![1]!.mapUrl)).toBe(true);
+    const overlap = { id: "overlap", observationRange: [34, 35] as [number, number] };
+    expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: [...actual.inspectionBatches!, overlap] })).toThrow(/Overlapping/);
+    expect(() => convertImageryTreeObservations({ ...actual, inspectionBatches: [{ ...overlap, observationRange: [34, 43] }] })).toThrow(RangeError);
   });
 
   it("renders only supplied centres and radii, with explicitly illustrative height and shared batched resources", () => {
@@ -137,6 +146,10 @@ describe("imagery-inferred vegetation", () => {
     const additions = r.records.filter(t => !originalIds.has(t.candidate.id));
     expect(additions).toHaveLength(9);
     expect(additions.filter(t => t.reason === "rendered")).toHaveLength(7);
+    expect(additions.filter(t => t.reason === "excluded").map(t => t.exclusions)).toEqual([
+      [{ sourceId: "way/116068331", kind: "road" }],
+      [{ sourceId: "way/307995087", kind: "road" }],
+    ]);
     for (const record of additions) {
       expect(record.candidate.coordinates[0]).toBeGreaterThan(140.3798);
       expect(record.candidate.coordinates[0]).toBeLessThan(140.381);
