@@ -26,15 +26,16 @@ export function getPlacementFeedback(influence: StructureInfluence) {
         : coverage === 0
           ? "弱点が範囲外・位置や向きを見直そう"
           : influence.coverageHint;
+  const placementSummary = `${name}を設置${coverage > 0 ? `・${coverage}地点をカバー` : ""}`;
   return {
     classification,
     tone: classification === "good" ? ("success" as const) : ("warn" as const),
     // Keep the mobile map visible: full assessment belongs in details, not a toast.
     toastMessage: classification === "mixed"
-      ? `${name}を設置・${coverage}地点をカバー\n別の${adverse}地点への影響に注意`
+      ? `${placementSummary}\n別の${adverse}地点への影響に注意`
       : classification === "good"
-        ? `${name}を設置・${coverage}地点をカバー`
-        : `${name}を設置\n${adverse > 0 ? `${adverse}地点への影響に注意` : coverage === 0 ? "弱点が範囲外・位置を見直そう" : "位置・向きを見直そう"}`,
+        ? placementSummary
+        : `${placementSummary}\n${adverse > 0 ? `${adverse}地点への影響に注意` : coverage === 0 ? "弱点が範囲外・位置を見直そう" : "位置・向きを見直そう"}`,
     message: `${name}を設置｜配置有効率 ${Math.round(influence.effectiveness * 100)}%・弱点カバー ${coverage}地点。${advice}`,
   };
 }

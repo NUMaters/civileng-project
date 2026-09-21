@@ -143,5 +143,10 @@ describe("confirmed placement feedback", () => {
     expect(getPlacementFeedback(influence()).tone).toBe("success");
     expect(getPlacementFeedback(influence({ coverageTone: "bad" })).classification).toBe("bad");
     expect(getPlacementFeedback(influence({ coverageTone: "bad" })).tone).toBe("warn");
+    const partial = getPlacementFeedback(influence({ coverageTone: "bad", coveredSiteIds: ["a"], adverseSiteIds: ["b"] }));
+    expect(partial.classification).toBe("bad");
+    expect(partial.toastMessage).toContain("1地点をカバー");
+    expect(partial.toastMessage).toContain("1地点への影響に注意");
+    expect(partial.toastMessage.length).toBeLessThan(60);
   });
 });
