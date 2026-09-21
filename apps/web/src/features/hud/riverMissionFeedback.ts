@@ -6,20 +6,36 @@ import type {
 
 const structures = new Map(loadStructures().map((structure) => [structure.id, structure]));
 
+export type PlacementFeedbackClassification = "good" | "bad" | "mixed" | "none";
+
 /** Coverage is a placement assessment, never a claim of damage prevented. */
 export function getPlacementFeedback(influence: StructureInfluence) {
   const name = structures.get(influence.structureId)?.displayName ?? influence.structureId;
   const coverage = new Set(influence.coveredSiteIds).size;
   const adverse = new Set(influence.adverseSiteIds).size;
-  const warning = adverse > 0 || influence.coverageTone !== "good" || coverage === 0;
-  const advice =
-    adverse > 0
-      ? `相性注意 ${adverse}地点・位置や向きを見直そう`
-      : coverage === 0
-        ? "弱点が範囲外・位置や向きを見直そう"
-        : influence.coverageHint;
+  const hasGoodCoverage = influence.coverageTone === "good" && coverage > 0;
+  const classification: PlacementFeedbackClassification = hasGoodCoverage
+    ? (adverse > 0 ? "mixed" : "good")
+    : (coverage > 0 ? "bad" : "none");
+  const advice = classification === "mixed"
+    ? `効果あり・別地点への影響に注意（相性注意 ${adverse}地点）`
+    : classification === "good"
+      ? influence.coverageHint
+      : adverse > 0
+        ? `相性注意 ${adverse}地点・位置や向きを見直そう`
+        : coverage === 0
+          ? "弱点が範囲外・位置や向きを見直そう"
+          : influence.coverageHint;
+  const placementSummary = `${name}を設置${coverage > 0 ? `・${coverage}地点をカバー` : ""}`;
   return {
-    tone: warning ? ("warn" as const) : ("success" as const),
+    classification,
+    tone: classification === "good" ? ("success" as const) : ("warn" as const),
+    // Keep the mobile map visible: full assessment belongs in details, not a toast.
+    toastMessage: classification === "mixed"
+      ? `${placementSummary}\n別の${adverse}地点への影響に注意`
+      : classification === "good"
+        ? placementSummary
+        : `${placementSummary}\n${adverse > 0 ? `${adverse}地点への影響に注意` : coverage === 0 ? "弱点が範囲外・位置を見直そう" : "位置・向きを見直そう"}`,
     message: `${name}を設置｜配置有効率 ${Math.round(influence.effectiveness * 100)}%・弱点カバー ${coverage}地点。${advice}`,
   };
 }

@@ -394,6 +394,7 @@
   display: none;
 }
 .game-shell .game-toast {
+  white-space: pre-line;
   top: auto;
   bottom: calc(158px + env(safe-area-inset-bottom));
   max-width: calc(100% - 100px);

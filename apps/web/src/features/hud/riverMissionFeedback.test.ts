@@ -5,6 +5,7 @@ import {
   type StructureInfluence,
 } from "../disaster/services/floodSimulation";
 import { getPlacementFeedback, getRiverMissionFeedback } from "./riverMissionFeedback";
+import { suggestedStructureHeading } from "../disaster/services/hydraulicPlacement";
 
 const realInfluence = calculateStructureInfluences([
   {
@@ -105,17 +106,47 @@ describe("confirmed placement feedback", () => {
   it("warns about adverse sites even when coverage is also good", () => {
     const result = getPlacementFeedback(influence({ adverseSiteIds: ["bad", "bad"] }));
     expect(result.tone).toBe("warn");
+    expect(result.classification).toBe("mixed");
     expect(result.message).toContain("相性注意 1地点");
+    expect(result.message).toContain("効果あり・別地点への影響に注意");
+    expect(result.toastMessage).toContain("地点をカバー");
+    expect(result.toastMessage).toContain("別の1地点への影響に注意");
+    expect(result.toastMessage.length).toBeLessThan(60);
+    expect(result.toastMessage).not.toContain("配置有効率");
+  });
+
+  it("classifies the real campus-core guided levee as mixed without removing adverse sites", () => {
+    const position = { longitude: 140.37776, latitude: 37.359853, height: 20 };
+    const [guided] = calculateStructureInfluences([{
+      id: "guided-levee",
+      structureId: "levee",
+      position,
+      headingDegrees: suggestedStructureHeading("levee", position),
+    }]);
+    expect(guided.coveredSiteIds).toContain("campus-core");
+    expect(guided.adverseSiteIds.length).toBeGreaterThan(0);
+    const result = getPlacementFeedback(guided);
+    expect(result.classification).toBe("mixed");
+    expect(result.message).toContain(`相性注意 ${new Set(guided.adverseSiteIds).size}地点`);
   });
 
   it("warns about out-of-range placement without claiming protection", () => {
     const result = getPlacementFeedback(influence({ coveredSiteIds: [] }));
     expect(result.tone).toBe("warn");
+    expect(result.classification).toBe("none");
     expect(result.message).toContain("弱点が範囲外");
+    expect(result.toastMessage).toContain("弱点が範囲外");
   });
 
   it("gives positive feedback only for compatible coverage", () => {
+    expect(getPlacementFeedback(influence()).classification).toBe("good");
     expect(getPlacementFeedback(influence()).tone).toBe("success");
+    expect(getPlacementFeedback(influence({ coverageTone: "bad" })).classification).toBe("bad");
     expect(getPlacementFeedback(influence({ coverageTone: "bad" })).tone).toBe("warn");
+    const partial = getPlacementFeedback(influence({ coverageTone: "bad", coveredSiteIds: ["a"], adverseSiteIds: ["b"] }));
+    expect(partial.classification).toBe("bad");
+    expect(partial.toastMessage).toContain("1地点をカバー");
+    expect(partial.toastMessage).toContain("1地点への影響に注意");
+    expect(partial.toastMessage.length).toBeLessThan(60);
   });
 });

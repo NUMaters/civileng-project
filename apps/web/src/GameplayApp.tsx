@@ -206,7 +206,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
     if (influence) {
       const feedback = getPlacementFeedback(influence);
       setMessage(
-        feedback.tone === "warn" ? "設置しました。位置・向きの相性に注意" : "設置しました",
+        feedback.toastMessage,
         feedback.tone,
       );
     }
