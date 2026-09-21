@@ -19,11 +19,20 @@ export type RenderedTerrainSurface = {
 };
 
 /** A measured ground surface, not bathymetry or bridge-deck geometry. */
-export function createGeographicTerrain(terrain: KoriyamaTerrain, spacingMeters = 12) {
+export function createGeographicTerrain(
+  terrain: KoriyamaTerrain,
+  spacingMeters = 12,
+  requestedBounds?: { minX: number; minZ: number; maxX: number; maxZ: number },
+) {
   if (!Number.isFinite(spacingMeters) || spacingMeters < 5 || spacingMeters > 100)
     throw new RangeError("Terrain spacing must be between 5 and 100 metres");
   const [west, south, east, north] = terrain.metadata.bounds as [number, number, number, number];
-  const a = geoToWorld(west, north), b = geoToWorld(east, south);
+  const sourceA = geoToWorld(west, north), sourceB = geoToWorld(east, south);
+  const bounds = requestedBounds ?? { minX: sourceA.x, minZ: sourceA.z, maxX: sourceB.x, maxZ: sourceB.z };
+  if (![bounds.minX, bounds.minZ, bounds.maxX, bounds.maxZ].every(Number.isFinite) ||
+      bounds.minX < sourceA.x || bounds.minZ < sourceA.z || bounds.maxX > sourceB.x || bounds.maxZ > sourceB.z ||
+      bounds.minX >= bounds.maxX || bounds.minZ >= bounds.maxZ) throw new RangeError("Terrain bounds must be finite and inside the source DEM");
+  const a = { x: bounds.minX, z: bounds.minZ }, b = { x: bounds.maxX, z: bounds.maxZ };
   const columns = Math.ceil((b.x - a.x) / spacingMeters);
   const rows = Math.ceil((b.z - a.z) / spacingMeters);
   const sampleGround = (x: number, z: number): number | null => {

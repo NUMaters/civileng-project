@@ -20,6 +20,8 @@ import { followGeographicShadows } from "./geographicShadows";
 import { createGeographicLandcover } from "./geographicLandcover";
 import { createGeographicImageryVegetation } from "./geographicImageryVegetation";
 import { createGeographicCanopy } from "./geographicCanopy";
+import { createGeographicBoundaryMosaic } from "./geographicBoundaryMosaic";
+import { GAMEPLAY_MAP_BOUNDS } from "./gameplayMapBounds";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
@@ -173,7 +175,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
     useEffect(() => {
       const container = host.current;
       if (!container || !geography) return;
-      const terrain = createGeographicTerrain(geography.terrain);
+      const terrain = createGeographicTerrain(geography.terrain, 12, GAMEPLAY_MAP_BOUNDS);
+      const boundaryMosaic = createGeographicBoundaryMosaic(terrain.bounds, terrain.sampleGround);
       const bridges = createGeographicBridges(geography.osm, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
       });
@@ -259,7 +262,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       controls.enableDamping = true;
       controls.dampingFactor = 0.09;
       controls.minDistance = 190;
-      controls.maxDistance = 1500;
+      controls.maxDistance = 850;
       controls.maxPolarAngle = Math.PI * 0.4;
       controls.minPolarAngle = Math.PI * 0.15;
       controls.screenSpacePanning = false;
@@ -272,7 +275,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const reset = () => {
         floodReturnPose = null;
         lastFloodPatchId = null;
-        controls.maxDistance = 1500;
+        controls.maxDistance = 850;
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
         controls.target.set(riverX(focus.z), terrain.sampleGround(riverX(focus.z), focus.z) ?? 0, focus.z);
@@ -290,7 +293,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls.update();
       };
       reset();
-      scene.add(terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group, canopy.group);
+      scene.add(boundaryMosaic, terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group, canopy.group);
       const waterMaterial = createGeographicWaterMaterial();
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {
@@ -939,15 +942,6 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             {error}
           </p>
         ) : !ready ? <p role="status" className="diorama-error">阿武隈川の地形と街を読み込み中…</p> : null}
-        <details className="diorama-attribution">
-          <summary>地図出典</summary>
-          <p>航空写真で判読した4つの樹林範囲内は、個々の木の位置・本数・密度・大きさを仮に再構成しています。実測や個別樹木の観測ではありません。</p>
-          <p>一部の樹冠位置・半径は地理院タイル（画面表示の撮影期間：2022年7〜9月）から目視推定しています。各木の撮影日は未検証で、幹位置・樹高の実測ではありません。高さ・樹形は仮表現です。</p>
-          <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
-          <a href="https://www.geospatial.jp/ckan/dataset/plateau-07203-koriyama-shi-2020" target="_blank" rel="noreferrer">PLATEAU 郡山市（2020年度）を加工</a>
-          <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noreferrer">地理院タイル（国土地理院）標高タイルを加工</a>
-          <p>建物はLOD1等の位置・高さを使用。屋根の形・勾配・色は一部推定したゲーム用表現です。未収録の高さ・橋面・樹木の大きさは仮表現です。列車は実際の運行情報ではありません。浸水はゲーム用で、実際の災害予測ではありません。</p>
-        </details>
       </div>
     );
   },

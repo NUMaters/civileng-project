@@ -18,7 +18,7 @@
       "Individual tree positions, counts, species and heights inside each envelope are unknown.",
       "Any generated internal tree placement is an illustrative reconstruction, not individually observed trees.",
       "Building, water, road, rail and existing-tree exclusions must be applied without moving their source geometry.",
-      "Small initial campus sample; not complete woodland coverage of the university or river corridor.",
+      "Conservative sample of clearly visible canopy groups; isolated trees and ambiguous low vegetation remain intentionally omitted.",
       "Capture period is the GSI map display, not independently verified per-patch acquisition metadata."
     ]
   },
@@ -78,6 +78,84 @@
         "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
         "boundaryStatus": "Conservative inferred bank-side canopy core; not a surveyed boundary or individual-tree observation. Broad grass and dark river shadows were excluded.",
         "screenVerticesPx": [[748,252],[762,234],[789,227],[797,242],[782,263],[760,277],[748,252]]
+      }
+    },
+    {
+      "id": "riverbank-upper-confluence-grove",
+      "rings": [[[142,-1448],[205,-1460],[286,-1426],[309,-1362],[281,-1288],[213,-1254],[151,-1280],[117,-1354],[142,-1448]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred canopy envelope around the visibly wooded confluence grove; not a surveyed boundary or individual-tree observation. Open grass and channel water were excluded.",
+        "screenVerticesPx": [[1166,600],[1229,588],[1310,622],[1333,686],[1305,760],[1237,794],[1175,768],[1141,694],[1166,600]]
+      }
+    },
+    {
+      "id": "riverbank-east-upper-tree-line",
+      "rings": [[[624,-1640],[675,-1621],[722,-1565],[744,-1484],[725,-1411],[689,-1383],[653,-1426],[647,-1502],[624,-1640]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred envelope following the visible east-bank tree line; not a surveyed boundary or individual-tree observation. The open levee crest was excluded.",
+        "screenVerticesPx": [[1648,408],[1699,427],[1746,483],[1768,564],[1749,637],[1713,665],[1677,622],[1671,546],[1648,408]]
+      }
+    },
+    {
+      "id": "riverbank-east-middle-grove",
+      "rings": [[[347,-642],[421,-674],[483,-624],[501,-548],[457,-468],[388,-452],[344,-504],[347,-642]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred envelope around the visibly wooded east-bank bend; not a surveyed boundary or individual-tree observation. Roads and open grass were excluded.",
+        "screenVerticesPx": [[1371,1406],[1445,1374],[1507,1424],[1525,1500],[1481,1580],[1412,1596],[1368,1544],[1371,1406]]
+      }
+    },
+    {
+      "id": "riverbank-west-middle-grove",
+      "rings": [[[-124,-417],[-55,-448],[33,-401],[54,-337],[22,-278],[-60,-290],[-121,-344],[-124,-417]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred envelope around the visible west-bank crown group; not a surveyed boundary or individual-tree observation. Bare bank and open levee grass were excluded.",
+        "screenVerticesPx": [[900,1631],[969,1600],[1057,1647],[1078,1711],[1046,1770],[964,1758],[903,1704],[900,1631]]
+      }
+    },
+    {
+      "id": "riverbank-west-south-tree-line",
+      "rings": [[[-183,-237],[-119,-276],[-36,-243],[55,-174],[65,-104],[4,-91],[-83,-139],[-167,-171],[-183,-237]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred envelope following the visible west-bank southern tree line; not a surveyed boundary or individual-tree observation. Water, bare bank and open grass were excluded.",
+        "screenVerticesPx": [[841,1811],[905,1772],[988,1805],[1079,1874],[1089,1944],[1028,1957],[941,1909],[857,1877],[841,1811]]
+      }
+    },
+    {
+      "id": "riverbank-east-south-tree-line",
+      "rings": [[[222,-309],[310,-342],[397,-291],[438,-218],[409,-126],[335,-93],[254,-140],[203,-225],[222,-309]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "The displayed GSI period is a view label; the acquisition date for this patch is unverified.",
+        "boundaryStatus": "Conservative inferred envelope around the visibly wooded east-bank southern slope; not a surveyed boundary or individual-tree observation. The roadway and open levee were excluded.",
+        "screenVerticesPx": [[1246,1739],[1334,1706],[1421,1757],[1462,1830],[1433,1922],[1359,1955],[1278,1908],[1227,1823],[1246,1739]]
       }
     }
   ]
