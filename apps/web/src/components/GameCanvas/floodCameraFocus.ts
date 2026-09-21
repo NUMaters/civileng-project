@@ -1,6 +1,17 @@
 import type { RenderedFloodPatch, FloodPoint } from "./dioramaInundation";
 export type { RenderedFloodPatch } from "./dioramaInundation";
 
+/** Stable ID order avoids reordering when areas fluctuate. First visit retains
+ * the existing largest-patch preference; subsequent visits advance even if the
+ * previous patch vanished. Prefix IDs at the caller to separate source kinds.
+ */
+export function nextRenderedFloodPatch(patches: readonly RenderedFloodPatch[], previousId: string | null): RenderedFloodPatch | null {
+  const eligible = patches.filter(valid);
+  if (!previousId) return selectRenderedFloodPatch(eligible);
+  eligible.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+  return eligible.find(p => p.id > previousId) ?? eligible[0] ?? null;
+}
+
 export type FloodCameraOptions = {
   verticalFovDegrees: number;
   aspect: number;

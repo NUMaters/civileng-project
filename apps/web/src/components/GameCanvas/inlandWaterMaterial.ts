@@ -1,5 +1,14 @@
 import * as THREE from "three";
 
+/** CPU mirror of the fragment alpha, used only to choose a visible focus anchor. */
+export function inlandWaterAlpha(depth: number, edge: number): number {
+  if (!Number.isFinite(depth) || !Number.isFinite(edge)) return 0;
+  const smooth = (a: number, b: number, value: number) => {
+    const t = Math.max(0, Math.min(1, (value - a) / (b - a))); return t * t * (3 - 2 * t);
+  };
+  return smooth(0, 1, edge) * smooth(0.04, 0.20, depth) * (0.48 + 0.34 * smooth(0.04, 1.8, depth));
+}
+
 /** Depth is the educational field's head above rendered ground, not a surveyed
  * depth. Domain fade hides the bounded illustration's artificial square edge;
  * it is presentation only, never a hydraulic barrier or a change to scoring. */

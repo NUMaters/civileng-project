@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { getFloodCameraFocus, frameRenderedFloodPatch, selectRenderedFloodPatch, type RenderedFloodPatch } from "./floodCameraFocus";
+import { getFloodCameraFocus, frameRenderedFloodPatch, selectRenderedFloodPatch, nextRenderedFloodPatch, type RenderedFloodPatch } from "./floodCameraFocus";
 
 function patch(size = 40): RenderedFloodPatch {
   return { id: "actual-wet-grid", anchor: { x: 10, y: 4, z: 20 }, vertexCount: 12, areaM2: size * size,
@@ -8,6 +8,17 @@ function patch(size = 40): RenderedFloodPatch {
 }
 
 describe("rendered flood camera planning", () => {
+  it("cycles river and inland stable IDs despite changing areas/input order, then wraps", () => {
+    const inland = { ...patch(20), id: "inland:campus" }, river = { ...patch(30), id: "river:campus" }, other = { ...patch(10), id: "inland:south" };
+    expect(nextRenderedFloodPatch([inland], null)).toBe(inland);
+    expect(nextRenderedFloodPatch([inland, river, other], null)).toBe(river);
+    expect(nextRenderedFloodPatch([inland, river, other], river.id)).toBe(inland);
+    expect(nextRenderedFloodPatch([other, river, { ...inland, areaM2: 9000 }], inland.id)).toBe(other);
+    expect(nextRenderedFloodPatch([other, river], inland.id)).toBe(other); // last site vanished
+    expect(nextRenderedFloodPatch([inland], inland.id)).toBe(inland);
+    expect(nextRenderedFloodPatch([], inland.id)).toBeNull();
+    expect(nextRenderedFloodPatch([{ ...inland, vertexCount: 0 }, river], null)).toBe(river);
+  });
   it("selects by emitted area instead of inflated bounds, keeping ties stable", () => {
     const small = { ...patch(200), areaM2: 2 }, large = { ...patch(20), id: "large", areaM2: 100 };
     expect(selectRenderedFloodPatch([])).toBeNull();

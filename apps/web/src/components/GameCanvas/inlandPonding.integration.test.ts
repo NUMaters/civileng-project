@@ -11,6 +11,8 @@ import { disposeDioramaObject } from "./disposeDioramaObject";
 import { listOverflowCandidates } from "../../features/disaster/services/overflowBankSites";
 import { advanceFloodSimulation, beginDisaster, beginPreparation } from "../../features/disaster/services/floodSimulation";
 import { suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
+import { inlandWaterAlpha } from "./inlandWaterMaterial";
+import { frameRenderedFloodPatch, nextRenderedFloodPatch } from "./floodCameraFocus";
 
 const read = (file: string) => readFileSync(new URL(`../../../public/geodata/koriyama/${file}`, import.meta.url));
 const terrain = createGeographicTerrain(decodeKoriyamaTerrain(Uint8Array.from(read("terrain.bin")).buffer,
@@ -27,6 +29,38 @@ const options = { bounds: terrain.bounds,
   classifyWater: mask.classify, classifyFootprint: mask.classifyFootprint,
 };
 afterAll(() => { disposeDioramaObject(world); disposeDioramaObject(terrain.group); });
+
+it("actual inland focus anchors hit visible rendered water above terrain and fit the mobile viewport", () => {
+  const field = createInlandPonding(options);
+  try {
+    const sites = listOverflowCandidates().filter(s => s.primaryHazard === "inlandPonding").map(s => ({ ...s, intensity: 0.8 }));
+    field.update({ phase: "disaster", disasterElapsedSeconds: 0, overflowSites: sites, floodDepthMeters: 1 });
+    field.update({ phase: "disaster", disasterElapsedSeconds: 15, overflowSites: sites, floodDepthMeters: 1 });
+    const patches = field.getRenderedPatches(); expect(patches).toHaveLength(2);
+    field.group.updateMatrixWorld(true);
+    for (const patch of patches) {
+      const a = patch.anchor;
+      const mesh = field.group.children.find(m => `inland:${m.userData.source.id}` === patch.id) as THREE.Mesh;
+      const hit = new THREE.Raycaster(new THREE.Vector3(a.x, a.y + 10, a.z), new THREE.Vector3(0, -1, 0)).intersectObject(mesh)[0]!;
+      expect(hit).toBeDefined(); expect(hit.point.y).toBeCloseTo(a.y, 5);
+      const p = mesh.geometry.getAttribute("position"), appearance = mesh.geometry.getAttribute("inlandAppearance");
+      const face = hit.face!;
+      const bary = new THREE.Triangle(new THREE.Vector3().fromBufferAttribute(p, face.a),
+        new THREE.Vector3().fromBufferAttribute(p, face.b), new THREE.Vector3().fromBufferAttribute(p, face.c))
+        .getBarycoord(hit.point, new THREE.Vector3())!;
+      const depth = appearance.getX(face.a) * bary.x + appearance.getX(face.b) * bary.y + appearance.getX(face.c) * bary.z;
+      const edge = appearance.getY(face.a) * bary.x + appearance.getY(face.b) * bary.y + appearance.getY(face.c) * bary.z;
+      expect(inlandWaterAlpha(depth, edge)).toBeGreaterThanOrEqual(0.01);
+      expect(a.y).toBeGreaterThan(options.sampleGround(a.x, a.z)!);
+      expect(mask.classify(a.x, a.z)).toBe("dry");
+      const framing = frameRenderedFloodPatch(patch, 43, 390 / 700, 1 - 340 / 700)!;
+      expect(framing).not.toBeNull(); expect(framing.distance).toBeLessThanOrEqual(1500);
+      expect(framing.target).toEqual(a);
+    }
+    const first = nextRenderedFloodPatch(patches, null)!;
+    expect(nextRenderedFloodPatch(patches, first.id)!.id).not.toBe(first.id);
+  } finally { field.dispose(); }
+});
 
 it("both actual inland fields stay above rendered terrain and cannot overlap any water ribbon/polygon", () => {
   const field = createInlandPonding(options);
@@ -98,6 +132,16 @@ it("Diorama constructs mask once, preserves river field, forwards authoritative 
   const frame = source.slice(source.indexOf("const draw ="), source.indexOf("latest.current.onReadyChange?.(true)"));
   expect(frame).not.toContain("createRenderedWaterMask(");
   expect(frame).toContain("if (state) inlandPonding.update(state)");
+  const focus = source.slice(source.indexOf("const focusFlood ="), source.indexOf("const raycaster ="));
+  const returning = focus.slice(focus.indexOf("const returnFromFlood ="));
+  expect(focus).toContain("lastFloodPatchId = framing.patchId");
+  expect(focus).toContain("floodReturnPose ??=");
+  expect(returning).not.toContain("lastFloodPatchId =");
+  expect(frame).not.toContain("focusFlood()");
+  expect(frame).toContain("state.disasterElapsedSeconds < focusElapsed");
+  expect(frame).toContain('state.phase === "preparation"');
+  expect(source).toContain("inlandPonding.getRenderedPatches()");
+  expect(source).toContain("inlandPatches !== cachedInlandPatches");
   expect(source.indexOf("scene.remove(inlandPonding.group)")).toBeLessThan(source.indexOf("inlandPonding.dispose()"));
   expect(source.indexOf("inlandPonding.dispose()")).toBeLessThan(source.indexOf("disposeObject(scene)"));
 });
