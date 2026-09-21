@@ -26,7 +26,7 @@ export function GameMenuScreen({
   onStartGame,
   openHowtoOnMount = false,
 }: GameMenuScreenProps) {
-  const [mode, setMode] = useState<PlayMode | null>(null);
+  const [mode, setMode] = useState<PlayMode | null>("solo");
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [loadState, setLoadState] = useState<LoadState>("idle");
   const [howtoOpen, setHowtoOpen] = useState(openHowtoOnMount);
@@ -107,14 +107,30 @@ export function GameMenuScreen({
       </header>
 
       <div className="game-menu__brief">
-        <p className="game-menu__brief-kicker">福島・郡山 / 阿武隈川</p>
+        <p className="game-menu__brief-kicker">福島・郡山&nbsp; / &nbsp;阿武隈川</p>
         <h1 id={titleId} className="game-menu__title">
           プレイモードを選択
         </h1>
-        <p className="game-menu__brief-copy">施設を選んで川へドラッグ。大雨への備えを始めよう。</p>
+        <p className="game-menu__brief-copy">
+          遊び方を確認するか、すぐに一人で治水へ挑戦できます。
+        </p>
       </div>
 
       <div className="game-menu__modes" role="group" aria-label="プレイモード">
+        <button
+          type="button"
+          className="game-menu__mode game-menu__mode--tutorial"
+          onClick={() => setHowtoOpen(true)}
+        >
+          <span className="game-menu__mode-index" aria-hidden="true">
+            本
+          </span>
+          <span className="game-menu__mode-body">
+            <span className="game-menu__mode-label">チュートリアル</span>
+            <strong>まずは遊び方を学ぶ</strong>
+            <span className="game-menu__mode-meta">施設の選び方と配置の流れ</span>
+          </span>
+        </button>
         <button
           type="button"
           className={`game-menu__mode${mode === "solo" ? " is-selected" : ""}`}
@@ -126,6 +142,7 @@ export function GameMenuScreen({
             1P
           </span>
           <span className="game-menu__mode-body">
+            <span className="game-menu__mode-badge">おすすめ</span>
             <span className="game-menu__mode-label">シングルプレイ</span>
             <strong>一人で治水に挑戦</strong>
             <span className="game-menu__mode-meta">
@@ -142,7 +159,7 @@ export function GameMenuScreen({
           className="game-menu__mode is-disabled"
           disabled
           aria-disabled="true"
-          title="マルチプレイは準備中"
+          title="マルチプレイは近日対応"
         >
           <span className="game-menu__mode-index" aria-hidden="true">
             MP
@@ -150,7 +167,7 @@ export function GameMenuScreen({
           <span className="game-menu__mode-body">
             <span className="game-menu__mode-label">マルチプレイ</span>
             <strong>みんなで協力（準備中）</strong>
-            <span className="game-menu__mode-meta">現在はシングルプレイで遊べます</span>
+            <span className="game-menu__mode-meta">最大 4 人 · 近日開放</span>
           </span>
         </button>
       </div>

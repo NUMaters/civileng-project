@@ -5,7 +5,7 @@ type TitleScreenProps = {
   onEnter: () => void;
 };
 
-/** 起動直後のタイトル。川のジオラマから治水体験へ案内する。 */
+/** 起動直後のタイトル。治水体験を上品に伝える。 */
 export function TitleScreen({ onEnter }: TitleScreenProps) {
   return (
     <section className="title-screen cc-lobby" aria-label="タイトル">
@@ -15,18 +15,19 @@ export function TitleScreen({ onEnter }: TitleScreenProps) {
       </div>
 
       <div className="title-screen__content">
-        <p className="title-screen__locale">福島・郡山 — 阿武隈川</p>
+        <p className="title-screen__locale">
+          <span aria-hidden="true">●</span> 福島・郡山 — 阿武隈川
+        </p>
 
         <div className="title-screen__brand">
           <p className="title-screen__eyebrow">河川治水シミュレーション</p>
           <h1 className="title-screen__logo" aria-label="CivilCraft">
             CivilCraft
           </h1>
-          <p className="title-screen__tagline">この街を、大雨から守ろう。</p>
-          <p className="title-screen__description">
-            堤防や遊水地を指で配置。
-            <br />
-            きみの工夫で、大雨から街を守ろう。
+          <span className="title-screen__wave" aria-hidden="true" />
+          <p className="title-screen__headline">この街を、大雨から守ろう。</p>
+          <p className="title-screen__tagline">
+            堤防や遊水地を配置して、きみの工夫で大雨から街を守る。
           </p>
         </div>
 
@@ -46,7 +47,8 @@ export function TitleScreen({ onEnter }: TitleScreenProps) {
         </ol>
 
         <button className="title-screen__cta" type="button" onClick={onEnter}>
-          はじめる
+          <span>はじめる</span>
+          <span aria-hidden="true">→</span>
         </button>
       </div>
 
