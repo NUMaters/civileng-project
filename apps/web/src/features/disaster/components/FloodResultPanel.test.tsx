@@ -13,11 +13,11 @@ const props = {
 };
 
 describe("result placement guidance", () => {
-  it("describes the next attempt's direct drag placement, not a removed preview step", () => {
+  it("describes drag, tap rotation and the required confirmation without the removed panel", () => {
     const html = renderToStaticMarkup(<FloodResultPanel {...props} />);
-    expect(html).toContain("次の挑戦では、下の施設を川や河岸へドラッグして設置する");
-    expect(html).toContain("設置後の効果表示を見て");
-    expect(html).not.toMatch(/仮配置|建設プレビュー|配置を確定/);
+    expect(html).toContain("次の挑戦では、下の施設を川や河岸へドラッグし、タップで向きを調整する");
+    expect(html).toContain("施設そばの✓で配置を確定し、効果表示を見て");
+    expect(html).not.toContain("建設プレビュー");
     expect(html).toContain("マップを確認");
     expect(html).toContain("メニューへ戻る");
   });
