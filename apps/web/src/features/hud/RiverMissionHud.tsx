@@ -91,21 +91,6 @@ export function RiverMissionHud({
 
   return (
     <header className={`river-hud${prep ? "" : " is-storm"}`} aria-label="ミッション状況">
-      <div className="river-hud__location">
-        <span>
-          <i aria-hidden="true" /> あぶくま川 <small>福島県・郡山市</small>
-        </span>
-        <button
-          type="button"
-          className="river-hud__menu"
-          aria-label="ゲームを一時停止"
-          onClick={() => onPause(true)}
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path d="M8 5v14M16 5v14" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
       <div className="river-hud__dashboard">
         <div className="river-hud__time">
           <MetricIcon kind="rain" />
@@ -137,6 +122,16 @@ export function RiverMissionHud({
             {damage.toFixed(1)}
             <small> %</small>
           </strong>
+        </button>
+        <button
+          type="button"
+          className="river-hud__menu"
+          aria-label="ゲームを一時停止"
+          onClick={() => onPause(true)}
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+            <path d="M8 5v14M16 5v14" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
       <div className="river-hud__objective">
