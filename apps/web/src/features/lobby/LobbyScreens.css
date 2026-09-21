@@ -1128,11 +1128,12 @@
   }
 
   .cc-lobby.game-menu {
-    align-content: center;
+    align-content: start;
     width: calc(100% - 16px);
-    height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    height: auto;
     min-height: 0;
-    margin: calc(8px + env(safe-area-inset-top)) 8px calc(8px + env(safe-area-inset-bottom));
+    max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    margin: calc(8px + env(safe-area-inset-top)) 8px auto;
     padding: 13px 11px;
     overflow-x: hidden;
     overflow-y: auto;
