@@ -186,7 +186,9 @@ export function createGeographicCanopy(patches: readonly CanopyPatch[], options:
         });
         mesh.instanceMatrix.needsUpdate = true; if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
         mesh.computeBoundingBox(); mesh.computeBoundingSphere(); mesh.frustumCulled = true;
-        mesh.castShadow = false; mesh.receiveShadow = true; group.add(mesh);
+        // Static crowns share the existing cached sun shadow map; trunks do not
+        // add sub-pixel shadows or another shadow draw for each spatial batch.
+        mesh.castShadow = part === "crown"; mesh.receiveShadow = true; group.add(mesh);
       }
     }
   }

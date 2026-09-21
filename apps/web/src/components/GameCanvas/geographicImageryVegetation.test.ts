@@ -163,6 +163,8 @@ describe("imagery-inferred vegetation", () => {
       else expect(record.exclusions.length).toBeGreaterThan(0);
     }
     expect(r.stats.tiles).toBe(2); expect(r.stats.meshes).toBe(4);
+    expect(r.group.children.filter(m => m.castShadow)).toHaveLength(2);
+    for (const mesh of r.group.children) expect(mesh.castShadow).toBe(mesh.userData.part === "crown");
     expect(r.records.every(t => t.reason === "rendered" || t.reason === "excluded")).toBe(true);
     expect(r.group.userData.attributions).toEqual([actual.source.attribution]);
     console.info("actual imagery vegetation", JSON.stringify({ stats: r.stats,

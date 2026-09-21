@@ -1,0 +1,60 @@
+<!doctype html><meta charset="utf-8"><title>Geographic tree shadow comparison</title>
+<!-- Development-only: same bundled geography, camera, lighting, renderer and tree
+     instances. Compare only the new trees' crown castShadow flag. Not phone FPS. -->
+<style>body{font:15px system-ui;color:#163d4f;background:#edf7fa;margin:16px}main{display:flex;gap:12px;flex-wrap:wrap}section{width:360px}canvas{display:block;width:360px;height:420px}pre{white-space:pre-wrap}h2{font-size:18px}</style>
+<h1>樹木の接地感：同じ地形・同じ視点で比較</h1>
+<p>左が変更前、右が樹冠の影あり。位置・高さ・樹冠形状・撮影条件は同一です。樹種や高さは実測ではありません。</p>
+<main></main><pre id="result">読み込み中</pre>
+<script type="module">
+import * as T from 'three';
+import { loadKoriyamaScene } from '../../src/components/GameCanvas/loadKoriyamaScene.ts';
+import { createGeographicTerrain } from '../../src/components/GameCanvas/geographicTerrain.ts';
+import { createGeographicWorld } from '../../src/components/GameCanvas/geographicWorld.ts';
+import { createGeographicImageryVegetation } from '../../src/components/GameCanvas/geographicImageryVegetation.ts';
+import { createGeographicCanopy } from '../../src/components/GameCanvas/geographicCanopy.ts';
+import { createImageryVegetationExclusions } from '../../src/components/GameCanvas/imageryVegetationExclusions.ts';
+import { GEOGRAPHIC_LIGHTING_STYLE as lightStyle } from '../../src/components/GameCanvas/geographicLightingStyle.ts';
+import { followGeographicShadows } from '../../src/components/GameCanvas/geographicShadows.ts';
+import { geoToWorld } from '../../src/components/GameCanvas/dioramaSpace.ts';
+import { disposeDioramaObject } from '../../src/components/GameCanvas/disposeDioramaObject.ts';
+
+const readPixels=renderer=>{const gl=renderer.getContext(),pixels=new Uint8Array(360*420*4);gl.readPixels(0,0,360,420,gl.RGBA,gl.UNSIGNED_BYTE,pixels);return pixels;};
+const changed=(a,b)=>{let count=0;for(let i=0;i<a.length;i+=4)if(Math.abs(a[i]-b[i])+Math.abs(a[i+1]-b[i+1])+Math.abs(a[i+2]-b[i+2])>3)count++;return count;};
+try {
+ const data=await loadKoriyamaScene(new AbortController().signal),terrain=createGeographicTerrain(data.terrain);
+ const world=createGeographicWorld(data.osm,{plateau:data.plateau,localBounds:terrain.bounds,groundSampler:terrain.sampleGround,renderedTerrainSurface:terrain.renderedSurface,surfaceGridSpacing:12,provisionalBuildingHeight:6,
+  surfaceSampler:(x,z,layer)=>{const y=['road','rail','campus'].includes(layer)?terrain.sampleRenderedGround(x,z):terrain.sampleGround(x,z);return y===null?null:y+(layer.startsWith('bridge-')?3:['water','waterway'].includes(layer)?.35:.12);}});
+ const exclusions=createImageryVegetationExclusions(data.osm,data.plateau,data.landcover);
+ const trees=createGeographicImageryVegetation(data.imageryTrees,{bounds:terrain.bounds,groundSampler:terrain.sampleGround,exclusions,illustrativeHeightM:7});
+ const canopy=createGeographicCanopy(data.canopyPatches,{bounds:terrain.bounds,groundSampler:terrain.sampleGround,exclusions,observedCrowns:data.imageryTrees});
+ const casters=[...trees.group.children,...canopy.group.children].filter(m=>m.userData.part==='crown');
+ const scene=new T.Scene();scene.background=new T.Color(lightStyle.background);scene.add(terrain.group,world,trees.group,canopy.group);
+ const sun=new T.DirectionalLight(lightStyle.sun.color,lightStyle.sun.intensity);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+ Object.assign(sun.shadow.camera,{left:-500,right:500,top:600,bottom:-600,near:1,far:1600});sun.shadow.bias=-.0008;
+ scene.add(sun,sun.target,new T.HemisphereLight(lightStyle.hemisphere.sky,lightStyle.hemisphere.ground,lightStyle.hemisphere.intensity));
+ const results=[];
+ for(const [name,lon,lat] of [['大学構内',140.3823,37.36035],['川沿い体育施設',140.38045,37.35995]]){
+  const focus=geoToWorld(lon,lat),y=terrain.sampleRenderedGround(focus.x,focus.z),target=new T.Vector3(focus.x,y,focus.z);
+  followGeographicShadows(sun,target,true);
+  const camera=new T.PerspectiveCamera(43,360/420,1,6000);camera.position.copy(target).add(new T.Vector3(70,135,150));camera.lookAt(target);
+  const variants=[];
+  for(const shadows of [false,true]){
+   casters.forEach(m=>m.castShadow=shadows);
+   const section=document.createElement('section'),heading=document.createElement('h2');heading.textContent=name+(shadows?'：樹冠の影あり':'：変更前');section.append(heading);document.querySelector('main').append(section);
+   const renderer=new T.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setPixelRatio(1);renderer.setSize(360,420);
+   renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=lightStyle.exposure;
+   renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFShadowMap;renderer.shadowMap.autoUpdate=false;renderer.shadowMap.needsUpdate=true;
+   section.append(renderer.domElement);let error=null;renderer.debug.onShaderError=()=>{error='Shader compilation failed';};
+   renderer.render(scene,camera);const refreshCalls=renderer.info.render.calls,pixels=readPixels(renderer);
+   renderer.render(scene,camera);const cachedCalls=renderer.info.render.calls,cachedPixels=readPixels(renderer);
+   variants.push({shadows,refreshCalls,cachedCalls,cachedPixelDifference:changed(pixels,cachedPixels),error,glError:renderer.getContext().getError(),pixels});
+   // The sun belongs to this fixture; release the previous renderer's shadow target.
+   sun.shadow.dispose();sun.shadow.map=null;renderer.dispose();
+  }
+  results.push({name,difference:changed(variants[0].pixels,variants[1].pixels),variants:variants.map(({pixels,...v})=>v)});
+ }
+ document.querySelector('#result').textContent=JSON.stringify({treeCount:trees.stats.counts.rendered,canopyCount:canopy.stats.counts.rendered,crownBatches:casters.length,results,
+  pass:results.every(r=>r.difference>50&&r.variants.every(v=>!v.error&&!v.glError&&v.cachedPixelDifference===0)&&r.variants[0].cachedCalls===r.variants[1].cachedCalls&&r.variants[1].refreshCalls-r.variants[0].refreshCalls<=casters.length)},null,2);
+ disposeDioramaObject(scene);
+}catch(error){document.querySelector('#result').textContent=String(error);}
+</script>
