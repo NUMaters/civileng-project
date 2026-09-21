@@ -19,7 +19,7 @@ import { createGeographicTrain } from "./geographicTrain";
 import { followGeographicShadows } from "./geographicShadows";
 import { createGeographicLandcover } from "./geographicLandcover";
 import { createGeographicImageryVegetation } from "./geographicImageryVegetation";
-import { createGeographicCanopy } from "./geographicCanopy";
+import { createGeographicCanopy, GAME_CANOPY_DENSITY } from "./geographicCanopy";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
@@ -190,6 +190,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const canopy = createGeographicCanopy(geography.canopyPatches, {
         bounds: terrain.bounds, groundSampler: terrain.sampleGround,
         exclusions: vegetationExclusions, observedCrowns: geography.imageryTrees,
+        ...GAME_CANOPY_DENSITY,
       });
       const world = createGeographicWorld({ ...geography.osm,
         features: geography.osm.features.filter(feature => !bridges.sourceIds.has(feature.id)),
