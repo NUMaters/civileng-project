@@ -78,11 +78,29 @@ jobs:
           cat /tmp/cf-verify.json
           test "${http_code}" = "200"
 
+      - name: Resolve Cloudflare Pages branch
+        id: pages-branch
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "main" ]; then
+            curl -sS \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/civilcraft" \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              > /tmp/cf-pages-project.json
+            branch=$(jq -r '.result.production_branch // empty' /tmp/cf-pages-project.json)
+            test -n "${branch}"
+          else
+            branch="${GITHUB_REF_NAME}"
+          fi
+          echo "branch=${branch}" >> "${GITHUB_OUTPUT}"
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/web
-          command: pages deploy ./dist --project-name=civilcraft
+          command: pages deploy ./dist --project-name=civilcraft --branch=${{ steps.pages-branch.outputs.branch }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
