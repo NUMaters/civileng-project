@@ -41,14 +41,14 @@ import { guidanceClearsFacilities, MAX_GUIDANCE_OBSTACLES } from "./guidanceFaci
 import { createRiverStageController } from "./riverStage";
 import { createRiverSurfaceSampler } from "./riverSurface";
 import { createRiverBoundaryResolver } from "./riverBoundary";
-import { frameRenderedFloodPatch, selectRenderedFloodPatch } from "./floodCameraFocus";
+import { frameRenderedFloodPatch, nextRenderedFloodPatch } from "./floodCameraFocus";
 
 export type DioramaGameMapHandle = CesiumGameMapHandle & {
   focusRenderedFlood: () => void;
   returnFromFlood: () => void;
 };
 type DioramaGameMapProps = CesiumGameMapProps & {
-  onFloodFocusChange?: (state: { available: boolean; viewing: boolean }) => void;
+  onFloodFocusChange?: (state: { available: boolean; viewing: boolean; next: boolean }) => void;
 };
 
 type Runtime = {
@@ -267,8 +267,11 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       controls.touches.ONE = T.TOUCH.PAN;
       controls.touches.TWO = T.TOUCH.DOLLY_ROTATE;
       let floodReturnPose: { position: T.Vector3; target: T.Vector3 } | null = null;
+      let lastFloodPatchId: string | null = null;
+      let focusElapsed: number | undefined;
       const reset = () => {
         floodReturnPose = null;
+        lastFloodPatchId = null;
         controls.maxDistance = 1500;
         const site = initialDioramaFocus();
         const focus = geoToWorld(site.longitude, site.latitude);
@@ -327,24 +330,30 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       scene.add(inlandPonding.group);
       let lastFloodFocusKey = "";
       let cachedPatches: ReturnType<typeof inundation.getRenderedPatches> | null = null;
+      let cachedInlandPatches: ReturnType<typeof inlandPonding.getRenderedPatches> | null = null;
       let cachedViewport = "";
-      let cachedFraming: ReturnType<typeof frameRenderedFloodPatch> = null;
+      let cachedFraming: (NonNullable<ReturnType<typeof frameRenderedFloodPatch>> & { patchId: string }) | null = null;
       const floodFraming = () => {
         const patches = inundation.getRenderedPatches();
+        const inlandPatches = inlandPonding.getRenderedPatches();
         const review = latest.current.getLatestFloodState?.().phase === "review";
-        const key = `${camera.aspect}/${viewportHeight}/${review}`;
-        if (patches !== cachedPatches || key !== cachedViewport) {
+        const key = `${camera.fov}/${camera.aspect}/${viewportHeight}/${review}/${lastFloodPatchId}`;
+        if (patches !== cachedPatches || inlandPatches !== cachedInlandPatches || key !== cachedViewport) {
           cachedPatches = patches;
+          cachedInlandPatches = inlandPatches;
           cachedViewport = key;
           const ratio = Math.max(0.1, 1 - 2 * Math.max(140, review ? 110 : 170) / Math.max(1, viewportHeight));
-          const patch = selectRenderedFloodPatch(patches.filter(p => frameRenderedFloodPatch(p, camera.fov, camera.aspect, ratio)));
-          cachedFraming = patch ? frameRenderedFloodPatch(patch, camera.fov, camera.aspect, ratio) : null;
+          const candidates = [...patches.map(p => ({ ...p, id: `river:${p.id}` })), ...inlandPatches];
+          const patch = nextRenderedFloodPatch(candidates.filter(p => frameRenderedFloodPatch(p, camera.fov, camera.aspect, ratio)), lastFloodPatchId);
+          const framing = patch ? frameRenderedFloodPatch(patch, camera.fov, camera.aspect, ratio) : null;
+          cachedFraming = patch && framing ? { ...framing, patchId: patch.id } : null;
         }
         return cachedFraming;
       };
       const focusFlood = () => {
         const framing = floodFraming();
         if (!framing) return;
+        lastFloodPatchId = framing.patchId;
         floodReturnPose ??= { position: camera.position.clone(), target: controls.target.clone() };
         // Only a user tap moves the camera. Preserve its azimuth/pitch and a return pose.
         const direction = camera.position.clone().sub(controls.target).normalize();
@@ -565,6 +574,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         notifyCameraFocus(controls.target.x, controls.target.z, now);
         if (followGeographicShadows(sun, controls.target)) renderer.shadowMap.needsUpdate = true;
         const state = latest.current.getLatestFloodState?.();
+        if (state && (state.phase === "idle" || state.phase === "preparation" ||
+          (focusElapsed !== undefined && state.disasterElapsedSeconds < focusElapsed))) lastFloodPatchId = null;
+        focusElapsed = state?.disasterElapsedSeconds;
         riverStage.update(state?.riverLevelMeters ?? 2.2);
         for (const [id, model] of r.models) {
           const influence = state?.structureInfluences.find(item => item.placementId === id);
@@ -594,12 +606,14 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
         if (state) inundation.update(state, dt, time);
         if (state) inlandPonding.update(state);
-        const available = floodFraming() !== null;
+        const framing = floodFraming();
+        const available = framing !== null;
+        const next = lastFloodPatchId !== null && framing !== null && framing.patchId !== lastFloodPatchId;
         const viewing = floodReturnPose !== null;
-        const focusKey = `${available}/${viewing}`;
+        const focusKey = `${available}/${viewing}/${next}`;
         if (lastFloodFocusKey !== focusKey) {
           lastFloodFocusKey = focusKey;
-          latest.current.onFloodFocusChange?.({ available, viewing });
+          latest.current.onFloodFocusChange?.({ available, viewing, next });
         }
         const activeLabelId = latest.current.placements.find(placement => placement.preview)?.id ?? selectedFacilityLabel.current;
         camera.updateMatrixWorld();
@@ -770,7 +784,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         renderer.dispose();
         renderer.domElement.remove();
         runtime.current = null;
-        latest.current.onFloodFocusChange?.({ available: false, viewing: false });
+        latest.current.onFloodFocusChange?.({ available: false, viewing: false, next: false });
         latest.current.onReadyChange?.(false);
       };
     }, [geography]);

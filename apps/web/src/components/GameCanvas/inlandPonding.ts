@@ -4,6 +4,8 @@ import { geoToWorld } from "./dioramaSpace";
 import type { RenderedTerrainSurface } from "./geographicTerrain";
 import { inlandTerrainTriangles } from "./inlandTerrainTriangles";
 import { createInlandWaterMaterial } from "./inlandWaterMaterial";
+import { inlandRenderedPatch } from "./inlandRenderedPatch";
+import type { RenderedFloodPatch } from "./dioramaInundation";
 
 export type InlandBounds = { minX: number; minZ: number; maxX: number; maxZ: number };
 type Bounds = InlandBounds;
@@ -57,6 +59,9 @@ export function createInlandPonding(options: {
     terrainSurface: "raw-DEM-valid actual rendered surface", sourceDomainMeters: N * CELL };
   const material = createInlandWaterMaterial();
   const fields = new Map<string, Field>();
+  const emptyPatches: readonly RenderedFloodPatch[] = Object.freeze([]);
+  let patches: { mesh: THREE.Mesh; patch: RenderedFloodPatch }[] = [];
+  let visibleMask = -1, visiblePatches = emptyPatches;
   let previous: number | undefined, pending = 0, disposed = false;
   const rejected = new Set<string>();
   const stats = { sites: 0, wetCells: 0, areaM2: 0, triangles: 0, drawCalls: 0,
@@ -72,6 +77,7 @@ export function createInlandPonding(options: {
   function clear() {
     for (const f of fields.values()) { f.geometry.dispose(); group.remove(f.mesh); }
     fields.clear(); rejected.clear(); previous = undefined; pending = 0;
+    patches = []; visibleMask = -1; visiblePatches = emptyPatches;
     Object.assign(stats, { sites: 0, wetCells: 0, areaM2: 0, triangles: 0, drawCalls: 0, rejectedSites: 0, allocatedVertices: 0 });
   }
   function create(source: OverflowSite): Field | null {
@@ -179,6 +185,17 @@ export function createInlandPonding(options: {
   }
   return {
     group, stats,
+    /** Stable immutable uploaded-geometry snapshot; at most four visibility checks. */
+    getRenderedPatches(): readonly RenderedFloodPatch[] {
+      if (disposed || !group.visible || !material.visible) return emptyPatches;
+      let mask = 0;
+      for (let i = 0; i < patches.length; i++) if (patches[i]!.mesh.visible) mask |= 1 << i;
+      if (mask !== visibleMask) {
+        visibleMask = mask;
+        visiblePatches = mask ? Object.freeze(patches.filter((_, i) => mask & (1 << i)).map(p => p.patch)) : emptyPatches;
+      }
+      return visiblePatches;
+    },
     update(state: State) {
       if (disposed) return;
       const elapsed = state.disasterElapsedSeconds;
@@ -205,6 +222,7 @@ export function createInlandPonding(options: {
       }
       Object.assign(stats, { sites: fields.size, wetCells: 0, areaM2: 0, triangles: 0, drawCalls: 0 });
       const depth = Number.isFinite(state.floodDepthMeters) ? Math.max(0, Math.min(2, state.floodDepthMeters)) : 0;
+      patches = []; visibleMask = -1;
       for (const [id, f] of fields) {
         const intensity = active.get(id) ?? 0;
         const target = intensity * (0.25 + depth);
@@ -212,6 +230,8 @@ export function createInlandPonding(options: {
         // Retain the DEM/cache and recede smoothly; pause/result never advance it.
         f.pressure += (target - f.pressure) * (1 - Math.exp(-dt / (target > f.pressure ? 3 : 12)));
         rebuild(f);
+        const patch = inlandRenderedPatch(id, f.positions, f.appearance, f.geometry.drawRange.count);
+        if (patch) patches.push({ mesh: f.mesh, patch });
         // Only fully receded, absent sources relinquish their slot. This is
         // visual-cache retirement, NOT a conclusion that local demand is zero.
         // A new source can take the free slot on the next bounded update.

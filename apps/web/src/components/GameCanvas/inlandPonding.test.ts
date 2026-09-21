@@ -20,6 +20,28 @@ const state = (time: number, sites = [site], depth = 1) => ({ phase: "disaster" 
 const options = { bounds, sampleGround: (x: number, z: number) => (x * x + z * z) / 500,
   classifyWater: () => "dry" as const, classifyFootprint: () => "dry" as const };
 
+it("publishes stable focus snapshots only at upload cadence and clears lifecycle/hidden patches", () => {
+  const field = createInlandPonding(options);
+  expect(field.getRenderedPatches()).toHaveLength(0);
+  field.update(state(0)); field.update(state(10));
+  const patches = field.getRenderedPatches(); expect(patches).toHaveLength(1);
+  const mesh = field.group.children[0] as THREE.Mesh, position = mesh.geometry.getAttribute("position");
+  const read = vi.spyOn(position, "getX");
+  for (let i = 0; i < 60; i++) expect(field.getRenderedPatches()).toBe(patches);
+  expect(read).not.toHaveBeenCalled();
+  field.update(state(10)); field.update(state(10.05)); expect(field.getRenderedPatches()).toBe(patches);
+  field.update(state(10.1)); expect(field.getRenderedPatches()).not.toBe(patches);
+  const frozen = field.getRenderedPatches();
+  field.update({ ...state(20), phase: "result" }); expect(field.getRenderedPatches()).toBe(frozen);
+  mesh.visible = false; expect(field.getRenderedPatches()).toHaveLength(0);
+  mesh.visible = true; expect(field.getRenderedPatches()).toHaveLength(1);
+  field.group.visible = false; expect(field.getRenderedPatches()).toHaveLength(0); field.group.visible = true;
+  field.update(state(0)); expect(field.getRenderedPatches()).toHaveLength(0);
+  field.update(state(10)); field.update(state(11, [])); expect(field.getRenderedPatches()).toHaveLength(1);
+  field.update(state(110, [])); expect(field.getRenderedPatches()).toHaveLength(0);
+  field.dispose(); expect(field.getRenderedPatches()).toHaveLength(0);
+});
+
 it("fades only the artificial domain edge and supplies finite local water depth without extra draws", () => {
   const field = createInlandPonding({ ...options, sampleGround: () => 0 });
   field.update(state(0)); field.update(state(10));

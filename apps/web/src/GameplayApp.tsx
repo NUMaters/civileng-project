@@ -87,7 +87,7 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
   const { advanceForTest, getLatestState, phase, restart, startFreshGame, startRainNow } = flood;
   const socket = useGameSocket(REALTIME_ENABLED && playMode === "multi");
   const mapRef = useRef<DioramaGameMapHandle>(null);
-  const [floodFocus, setFloodFocus] = useState({ available: false, viewing: false });
+  const [floodFocus, setFloodFocus] = useState({ available: false, viewing: false, next: false });
   const dragRef = useRef<DockDragState | null>(null);
   const dragGhostRef = useRef<HTMLDivElement | null>(null);
   const [drag, setDrag] = useState<DockDragState | null>(null);
@@ -474,11 +474,11 @@ export function GameplayApp({ playMode, inGame, sessionId, onReturnToMenu }: Gam
         <button
           type="button"
           className={`river-recenter${floodFocus.available || floodFocus.viewing ? " river-recenter--flood" : ""}`}
-          aria-label={floodFocus.viewing ? "元の視点へ" : floodFocus.available ? "浸水を見る" : "川の中心へ視点を戻す"}
+          aria-label={floodFocus.viewing ? "元の視点へ" : floodFocus.available ? floodFocus.next ? "次の浸水を見る" : "浸水を見る" : "川の中心へ視点を戻す"}
           onClick={() => floodFocus.viewing ? mapRef.current?.returnFromFlood()
             : floodFocus.available ? mapRef.current?.focusRenderedFlood() : mapRef.current?.resetCamera()}
         >
-          {floodFocus.available || floodFocus.viewing ? <span>{floodFocus.viewing ? "元の視点へ" : "浸水を見る"}</span> :
+          {floodFocus.available || floodFocus.viewing ? <span>{floodFocus.viewing ? "元の視点へ" : floodFocus.next ? "次の浸水を見る" : "浸水を見る"}</span> :
           <svg
             width="20"
             height="20"
