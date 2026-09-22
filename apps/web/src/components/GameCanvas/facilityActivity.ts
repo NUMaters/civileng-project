@@ -34,7 +34,8 @@ export function resolveFacilityActivity(influence: StructureInfluence | undefine
     // current candidate set has no capacityShortage sites. Effectiveness alone
     // cannot authorize work: its evaluator retains a floor even on dry banks.
     const effectiveness = clamp(influence.effectiveness);
-    if (state.phase !== "disaster") return result(0, "掘削作業は待機中");
+    const recorded = state.phase === "result" || state.phase === "review";
+    if (state.phase !== "disaster" && !recorded) return result(0, "掘削作業は待機中");
     if (!effectiveness || !Number.isFinite(influence.longitude) || !Number.isFinite(influence.latitude) ||
       !Number.isFinite(influence.headingDegrees) ||
       !getRiverPlacementContext(influence.longitude, influence.latitude, influence.headingDegrees).inChannel) {
@@ -44,7 +45,9 @@ export function resolveFacilityActivity(influence: StructureInfluence | undefine
     // protection. Only this placement's actual positive attribution feeds water.
     const protection = influence.positiveSiteContributions?.reduce((max, site) => Math.max(max, clamp(site.strength)), 0) ?? 0;
     const water = effectiveness * protection * clamp((state.riverLevelMeters - 2.2) / 2.5);
-    return result(effectiveness, "河道掘削作業中", water >= 0.01 ? water : 0);
+    // Result/review keep the same activity inputs at the simulation's frozen
+    // final elapsed time. Zeroing them would reset the rig instead of freezing it.
+    return result(effectiveness, recorded ? "河道掘削の作業記録" : "河道掘削作業中", water >= 0.01 ? water : 0);
   }
   const stored = influence.structureId === "retention-basin"
     ? clamp(state.retentionStorageByPlacement?.[influence.placementId] ?? 0) : 0;

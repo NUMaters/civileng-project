@@ -1,4 +1,5 @@
 import { expect, it } from "vitest";
+import * as THREE from "three";
 import type { PlacedStructure } from "../../features/construction";
 import { calculateOverflowSites, calculatePositiveSiteContributions, calculateStructureInfluences, createInitialFloodState,
   refreshPlacementEffects, type StructureInfluence } from "../../features/disaster/services/floodSimulation";
@@ -79,12 +80,53 @@ it("gates dredging by actual channel location rather than a positive effectivene
   }
 });
 
-it("keeps dredging previews, non-disaster phases and missing state inactive", () => {
+it("keeps dredging previews, idle/preparation, unknown phases and missing state inactive", () => {
   const own = realDredgingInfluence();
   expect(resolveFacilityActivity({ ...own, preview: true }, storm()).operationActivity).toBe(0);
   expect(resolveFacilityActivity(own, undefined).operationActivity).toBe(0);
-  for (const phase of ["idle", "preparation", "result", "review"]) {
+  for (const phase of ["idle", "preparation", "unknown", ""]) {
     expect(resolveFacilityActivity(own, { ...storm(), phase }).operationActivity).toBe(0);
+  }
+});
+
+it("preserves the exact 90s rig snapshot and buffer version through result/review", () => {
+  const own = realDredgingInfluence();
+  // Cover both the actual no-benefit case and an attributed water-feedback case.
+  for (const positiveSiteContributions of [own.positiveSiteContributions, [{ siteId: "inland-campus", strength: 0.6 }]]) {
+    const source = { ...own, positiveSiteContributions };
+    const model = createDioramaFacility("channel-dredging");
+    try {
+      const cycle = createDredgingWorkCycle(model);
+      const falling = model.getObjectByName("dredging-falling-soil") as THREE.InstancedMesh;
+      const snapshot = () => {
+        model.updateMatrixWorld(true);
+        const values: unknown[] = [];
+        model.traverse(object => values.push(object.position.toArray(), object.rotation.toArray(),
+          object.scale.toArray(), object.visible, object.matrixWorld.toArray()));
+        values.push(Array.from(falling.instanceMatrix.array));
+        return values;
+      };
+      const state = { ...storm(), disasterElapsedSeconds: 90 };
+      const before = resolveFacilityActivity(source, state);
+      expect(before.operationActivity).toBeGreaterThan(0);
+      cycle.update(before.operationActivity, state.disasterElapsedSeconds, false);
+      const finalPose = snapshot(), version = falling.instanceMatrix.version;
+      for (const phase of ["result", "review", "result", "review"]) {
+        const after = resolveFacilityActivity(source, { ...state, phase });
+        expect(after.operationActivity).toBe(before.operationActivity);
+        expect(after.activity).toBe(before.activity);
+        expect(after.waterActivity).toBe(before.waterActivity);
+        expect(after.warning).toBe(before.warning);
+        expect(after.label).toContain("作業記録");
+        expect(after.label).not.toMatch(/作業中|稼働中/);
+        expect(cycle.update(after.operationActivity, state.disasterElapsedSeconds, false)).toBe(false);
+        expect(snapshot()).toEqual(finalPose);
+        expect(falling.instanceMatrix.version).toBe(version);
+      }
+      const idle = resolveFacilityActivity(source, { ...state, phase: "idle" });
+      cycle.update(idle.operationActivity, 0, false);
+      expect(model.getObjectByName("dredging-boom")!.rotation.z).toBe(0);
+    } finally { disposeDioramaObject(model); }
   }
 });
 
