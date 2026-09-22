@@ -8,6 +8,7 @@ import {
 import { geoToWorld, groundY } from "./dioramaSpace";
 import type { RiverBoundary, RiverBoundaryResolver, SurfaceSampler } from "./riverBoundary";
 import { MAX_RIVER_EDGE_POINTS } from "./riverBoundary";
+import type { FacilityFloodBarrier } from "./facilityFloodBarrier";
 
 export type FloodPoint = Readonly<{ x: number; y: number; z: number }>;
 export type RenderedFloodPatch = Readonly<{
@@ -25,6 +26,11 @@ export type DioramaInundation = {
   object3D: THREE.Group;
   /** Immutable geometry-upload snapshot, in the same local metre space as group. */
   getRenderedPatches: () => readonly RenderedFloodPatch[];
+  /** Replace immutable committed construction snapshot; null removes all barriers.
+   * Applies only to the boundary-backed 4m rendering field, not scores or legacy 16m mode.
+   * Call on placement changes, not each animation frame. Existing water is retained
+   * outside changed cells; changes take effect even while simulation time is paused. */
+  setFloodBarriers: (barriers: FacilityFloodBarrier | null) => void;
   /** Seconds. dt is compatibility-only; simulation elapsed drives water, time throttles uploads. */
   update: (
     state: Pick<
@@ -64,6 +70,9 @@ type BankGrid = {
   x: Float64Array;
   z: Float64Array;
   bed: Float32Array;
+  terrainBed: Float32Array;
+  construction: Float32Array;
+  retainPuddles: boolean;
   depth: Float32Array;
   next: Float32Array;
   neighbors: Int32Array;
@@ -139,6 +148,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
   let geometryDirty = false;
   let disposed = false;
   let renderedPatches: readonly RenderedFloodPatch[] = NO_PATCHES;
+  let barriers: FacilityFloodBarrier | null = null;
 
   function reset(): void {
     grids.clear();
@@ -159,7 +169,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
       const vertexStart = vertex;
       if (grid.bank) {
         const b = grid.bank;
-        simulationBufferBytes += b.lateral.byteLength + b.x.byteLength + b.z.byteLength + b.bed.byteLength +
+        simulationBufferBytes += b.lateral.byteLength + b.x.byteLength + b.z.byteLength + b.bed.byteLength + b.terrainBed.byteLength + b.construction.byteLength +
           b.depth.byteLength + b.next.byteLength + b.neighbors.byteLength + b.connected.byteLength + b.queue.byteLength +
           b.source.byteLength + b.surface.byteLength + b.shade.byteLength + b.weights.byteLength + b.flux.byteLength + b.edgeFirst.byteLength + b.edgeEnd.byteLength + b.contour.byteLength;
         vertex = emitBankGrid(grid, positions, colors, vertex);
@@ -221,6 +231,13 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
     group,
     object3D: group,
     getRenderedPatches: () => !disposed && group.visible && mesh.visible && geometry.drawRange.count > 0 ? renderedPatches : NO_PATCHES,
+    setFloodBarriers(next) {
+      if (disposed || next === barriers) return;
+      barriers = next;
+      for (const grid of grids.values()) if (grid.bank) applyFloodBarriers(grid.bank, barriers);
+      // Construction edits are explicit events, independent of the simulation clock.
+      rebuild();
+    },
     update(state, dt, time) {
       if (disposed) return;
       void dt;
@@ -303,6 +320,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
               // cache bed/masks once, while checking the live throat each update.
               grid.bank = createBankGrid(boundary, sampleGround);
               if (!grid.bank) { removed = grids.delete(seed.id) || removed; continue; }
+              if (barriers) applyFloodBarriers(grid.bank, barriers);
             }
             grids.set(seed.id, grid);
           }
@@ -333,6 +351,7 @@ export function createDioramaInundation(sampleGround: SurfaceSampler = groundY, 
     dispose() {
       if (disposed) return;
       disposed = true;
+      barriers = null;
       reset();
       geometry.dispose();
       material.dispose();
@@ -588,7 +607,8 @@ function createBankGrid(b: RiverBoundary, sample: SurfaceSampler): BankGrid | un
   edges.sort((a, c) => a - c);
   const columns = edges.length - 1, cells = columns * SUB_ROWS, nodes = (columns + 1) * (SUB_ROWS + 1);
   const bank: BankGrid = { columns, lateral: Float64Array.from(edges), x: new Float64Array(nodes), z: new Float64Array(nodes),
-    bed: new Float32Array(cells), depth: new Float32Array(cells), next: new Float32Array(cells),
+    bed: new Float32Array(cells), terrainBed: new Float32Array(cells), construction: new Float32Array(cells).fill(-Infinity), retainPuddles: false,
+    depth: new Float32Array(cells), next: new Float32Array(cells),
     neighbors: new Int32Array(cells * 4), connected: new Uint8Array(cells), queue: new Int32Array(cells),
     source: new Uint8Array(cells), surface: new Float32Array(nodes), shade: new Float32Array(nodes), weights: new Uint8Array(nodes), flux: new Float64Array(4),
     edgeFirst: new Uint8Array(columns), edgeEnd: new Uint8Array(columns), contour: new Float64Array(16) };
@@ -600,6 +620,7 @@ function createBankGrid(b: RiverBoundary, sample: SurfaceSampler): BankGrid | un
   for (let row = 0; row < SUB_ROWS; row++) for (let col = 0; col < columns; col++) {
     const i = row * columns + col;
     bank.bed[i] = bankCellBed(bank, b, col, row, sample);
+    bank.terrainBed[i] = bank.bed[i]!;
     bank.neighbors[i * 4] = col > 0 ? i - 1 : -1;
     bank.neighbors[i * 4 + 1] = col + 1 < columns ? i + 1 : -1;
     bank.neighbors[i * 4 + 2] = row > 0 ? i - columns : -1;
@@ -609,14 +630,39 @@ function createBankGrid(b: RiverBoundary, sample: SurfaceSampler): BankGrid | un
   return bank;
 }
 
+/** Conservative cell envelope of exact model/cell intersections (up to one
+ * 4m cell, ~5.7m diagonally). No sub-grid gaps; finite crests permit overtopping.
+ * Terrain sampling is cached separately and never repeated for placement edits.
+ */
+function applyFloodBarriers(bank: BankGrid, barriers: FacilityFloodBarrier | null): void {
+  const stride = bank.columns + 1;
+  bank.retainPuddles ||= (barriers?.facilityCount ?? 0) > 0;
+  for (let i = 0; i < bank.bed.length; i++) {
+    const node = Math.floor(i / bank.columns) * stride + i % bank.columns;
+    const corners = [node, node + 1, node + stride + 1, node + stride].map(n => ({ x: bank.x[n]!, z: bank.z[n]! }));
+    // Bank tangent/inland bases can have either handedness.
+    const a = corners[0]!, b = corners[1]!, c = corners[2]!;
+    if ((b.x - a.x) * (c.z - a.z) - (b.z - a.z) * (c.x - a.x) < 0) corners.reverse();
+    bank.construction[i] = barriers?.cellElevation(corners) ?? -Infinity;
+    const previous = bank.bed[i]!;
+    bank.bed[i] = Math.max(bank.terrainBed[i]!, bank.construction[i]!);
+    // Do not manufacture head by raising an already wet cell. Local construction
+    // displaces its intersected water; deleting/moving it does not create water.
+    if (bank.bed[i]! > previous) bank.depth[i] = Math.max(0, bank.depth[i]! - (bank.bed[i]! - previous));
+  }
+}
+
 function refreshBankSource(grid: Grid, sample: SurfaceSampler): boolean {
   const bank = grid.bank, b = grid.boundary!;
   if (!bank || !validBank(b)) return false;
   const head = riverHead(grid);
   let active = false;
   for (let col = 0; col < bank.columns; col++) if (bank.source[col]) {
-    bank.bed[col] = bankCellBed(bank, b, col, 0, sample);
-    if (head - bank.bed[col]! >= WET) active = true;
+    bank.terrainBed[col] = bankCellBed(bank, b, col, 0, sample);
+    bank.bed[col] = Math.max(bank.terrainBed[col]!, bank.construction[col]!);
+    // A built obstruction is not a missing source/DEM: it stops injection locally,
+    // while already flooded cells continue diffusing/draining behind it.
+    if (head - bank.terrainBed[col]! >= WET) active = true;
   }
   return active;
 }
@@ -682,7 +728,10 @@ function emitBankGrid(grid: Grid, positions: THREE.BufferAttribute, colors: THRE
   }
   b.connected.fill(0); b.surface.fill(0); b.shade.fill(0); b.weights.fill(0);
   let tail = 0;
-  for (let i = 0; i < columns; i++) if (b.source[i] && b.depth[i]! >= WET) { b.connected[i] = 1; b.queue[tail++] = i; }
+  if (b.retainPuddles) for (let i = 0; i < b.depth.length; i++) {
+    if (b.depth[i]! >= WET && Number.isFinite(b.bed[i])) { b.connected[i] = 1; b.queue[tail++] = i; }
+  }
+  for (let i = 0; i < columns; i++) if (!b.connected[i] && b.source[i] && b.depth[i]! >= WET) { b.connected[i] = 1; b.queue[tail++] = i; }
   for (let cursor = 0; cursor < tail; cursor++) {
     const i = b.queue[cursor]!;
     for (let k = 0; k < 4; k++) {

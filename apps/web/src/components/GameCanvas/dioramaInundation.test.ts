@@ -26,8 +26,105 @@ import { createGeographicTerrain } from "./geographicTerrain";
 import { decodeKoriyamaTerrain, type KoriyamaTerrainMetadata } from "./koriyamaTerrain";
 import { createRiverStageController } from "./riverStage";
 import { createRiverSurfaceSampler } from "./riverSurface";
+import { createFacilityFloodBarrier } from "./facilityFloodBarrier";
 
 const adapters: DioramaInundation[] = [];
+describe("construction layer in the boundary-backed flood field", () => {
+  const placement = { structureId: "levee", x: 40, z: 0, headingDegrees: 90 };
+  function fixture(head = 2, ground: SurfaceSampler = () => 0) {
+    const boundary: RiverBoundary = { sourceId: "barrier-test", polygonIndex: 0, segmentIndex: 0,
+      anchor: { x: 0, z: 0 }, left: { x: 0, y: head, z: -8 }, right: { x: 0, y: head, z: 8 },
+      inland: { x: 1, z: 0 }, isLand: x => x >= 0 };
+    const adapter = createDioramaInundation(ground, () => boundary);
+    adapters.push(adapter);
+    const geometry = (adapter.group.children[0] as THREE.Mesh).geometry;
+    return { adapter, geometry };
+  }
+  function wetAt(geometry: THREE.BufferGeometry, predicate: (x: number, z: number) => boolean) {
+    const p = geometry.getAttribute("position");
+    for (let i = 0; i < geometry.drawRange.count; i++) if (predicate(p.getX(i), p.getZ(i))) return true;
+    return false;
+  }
+  it("blocks frontal flow but retains upstream flood and allows flow around the finite ends", () => {
+    const blocked = fixture(), control = fixture();
+    blocked.adapter.setFloodBarriers(createFacilityFloodBarrier([placement], () => 0));
+    run(blocked.adapter, wetState(), 600);
+    run(control.adapter, wetState(), 600);
+    expect(wetAt(control.geometry, (x, z) => x > 44 && Math.abs(z) < 20)).toBe(true);
+    expect(wetAt(blocked.geometry, (x, z) => x > 32 && x < 48 && Math.abs(z) < 40)).toBe(false);
+    expect(wetAt(blocked.geometry, x => x < 20)).toBe(true);
+    // At 2m the existing drainage term arrests the front before the distant ends.
+    // An 8m source remains below the 15.5m crest while reaching the end route.
+    const around = fixture(8);
+    around.adapter.setFloodBarriers(createFacilityFloodBarrier([placement], () => 0));
+    run(around.adapter, wetState(), 1800);
+    expect(wetAt(around.geometry, (x, z) => x > 60 && Math.abs(z) > 52)).toBe(true);
+    expect(wetAt(around.geometry, (x, z) => x > 36 && x < 44 && Math.abs(z) < 40)).toBe(false);
+  }, 30_000);
+  it("permits overtopping above the finite rendered crest", () => {
+    const high = fixture(20);
+    high.adapter.setFloodBarriers(createFacilityFloodBarrier([placement], () => 0));
+    run(high.adapter, wetState(), 600);
+    expect(wetAt(high.geometry, (x, z) => x > 60 && Math.abs(z) < 20)).toBe(true);
+  });
+  it("applies movement, rotation and deletion without resampling terrain or clearing unrelated water", () => {
+    const sample = vi.fn(() => 0), f = fixture(2, sample);
+    run(f.adapter, wetState(), 600);
+    const set = (p: typeof placement) => {
+      const calls = sample.mock.calls.length;
+      f.adapter.setFloodBarriers(createFacilityFloodBarrier([p], () => 0));
+      expect(sample).toHaveBeenCalledTimes(calls);
+    };
+    set(placement);
+    expect(wetAt(f.geometry, (x, z) => x > 32 && x < 48 && Math.abs(z) < 40)).toBe(false);
+    expect(wetAt(f.geometry, x => x > 64)).toBe(true);
+    set({ ...placement, x: 1000 });
+    for (let i = 1; i <= 600; i++) f.adapter.update({ ...wetState(), disasterElapsedSeconds: 60 + i / 10 }, 0.1, 60 + i / 10);
+    expect(wetAt(f.geometry, (x, z) => x > 32 && x < 48 && Math.abs(z) < 20)).toBe(true);
+    set({ ...placement, headingDegrees: 0 });
+    expect(wetAt(f.geometry, (x, z) => x < 80 && Math.abs(z) < 4)).toBe(false);
+    f.adapter.setFloodBarriers(null);
+    for (let i = 1; i <= 600; i++) f.adapter.update({ ...wetState(), disasterElapsedSeconds: 120 + i / 10 }, 0.1, 120 + i / 10);
+    expect(wetAt(f.geometry, (x, z) => x > 32 && x < 48 && Math.abs(z) < 4)).toBe(true);
+  });
+  it("source blockage preserves inland puddles", () => {
+    const f = fixture();
+    run(f.adapter, wetState(), 600);
+    f.adapter.setFloodBarriers(createFacilityFloodBarrier([{ ...placement, x: 0 }], () => 0));
+    f.adapter.update({ ...wetState(), disasterElapsedSeconds: 60.1 }, 0.1, 60.1);
+    expect(wetAt(f.geometry, x => x > 24)).toBe(true);
+    expect(f.adapter.getRenderedPatches()).toHaveLength(1);
+  });
+  it("keeps an unrelated source wet and caches construction between edits", () => {
+    const boundary = (z: number): RiverBoundary => ({ sourceId: `source-${z}`, polygonIndex: 0, segmentIndex: 0,
+      anchor: { x: 0, z }, left: { x: 0, y: 2, z: z - 8 }, right: { x: 0, y: 2, z: z + 8 },
+      inland: { x: 1, z: 0 }, isLand: x => x >= 0 });
+    const adapter = createDioramaInundation(() => 0, site => boundary(site.id === "other" ? 500 : 0));
+    adapters.push(adapter);
+    const state = wetState();
+    state.overflowSites.push({ ...state.overflowSites[0]!, id: "other" });
+    const barrier = createFacilityFloodBarrier([{ ...placement, x: 0 }], () => 0);
+    const sample = vi.fn(barrier.cellElevation), snapshot = { ...barrier, cellElevation: sample };
+    adapter.setFloodBarriers(snapshot);
+    run(adapter, state, 10);
+    expect(adapter.getRenderedPatches().map(p => p.id)).toEqual(["other"]);
+    const calls = sample.mock.calls.length;
+    for (let i = 0; i < 20; i++) adapter.update({ ...state, disasterElapsedSeconds: 1 + i / 10 }, 0.1, 1 + i / 10);
+    adapter.setFloodBarriers(snapshot);
+    expect(sample).toHaveBeenCalledTimes(calls);
+    expect(adapter.group.userData.floodGrid.cachedSites).toBe(2);
+  });
+  it("does not make missing terrain permeable or apply previews", () => {
+    const missing = fixture(20, x => x >= 24 && x <= 28 ? null : 0);
+    missing.adapter.setFloodBarriers(createFacilityFloodBarrier([placement], () => 0));
+    run(missing.adapter, wetState(), 300);
+    expect(wetAt(missing.geometry, x => x > 28)).toBe(false);
+    const preview = fixture(), control = fixture();
+    preview.adapter.setFloodBarriers(createFacilityFloodBarrier([{ ...placement, preview: true }], () => 0));
+    run(preview.adapter, wetState(), 100); run(control.adapter, wetState(), 100);
+    expectSameBuffer(preview.geometry.getAttribute("position").array, control.geometry.getAttribute("position").array);
+  });
+});
 // Compare full reusable buffers without Vitest recursively diffing 145k scalars.
 function expectSameBuffer(a: ArrayBufferView, b: ArrayBufferView) {
   expect(a.byteLength).toBe(b.byteLength);

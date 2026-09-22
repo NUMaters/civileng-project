@@ -25,6 +25,7 @@ import { GAMEPLAY_MAP_BOUNDS } from "./gameplayMapBounds";
 import { createImageryVegetationExclusions } from "./imageryVegetationExclusions";
 import { loadKoriyamaScene, type KoriyamaSceneData } from "./loadKoriyamaScene";
 import { createDioramaInundation } from "./dioramaInundation";
+import { createFacilityFloodBarrier } from "./facilityFloodBarrier";
 import { createInlandPonding } from "./inlandPonding";
 import { createRenderedWaterMask } from "./renderedWaterMask";
 import { createDioramaFacility } from "./dioramaFacilities";
@@ -60,6 +61,8 @@ type Runtime = {
   controls: OrbitControls;
   models: Map<string, T.Group>;
   operations: Map<string, ReturnType<typeof createFacilityOperationVisuals>>;
+  inundation: ReturnType<typeof createDioramaInundation>;
+  floodBarrierKey: string | null;
   ghost: T.Group | null;
   ghostType: string | null;
   pick: (x: number, y: number) => { x: number; z: number } | null;
@@ -389,6 +392,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls,
         models: new Map(),
         operations: new Map(),
+        inundation,
+        floodBarrierKey: null,
         ghost: null,
         ghostType: null,
         pick,
@@ -796,6 +801,18 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
     useEffect(() => {
       const r = runtime.current;
       if (!r) return;
+      // Committed props are authoritative, never animated models or drag ghosts.
+      // Cache by geometry so preview edits/unrelated placements do not rebuild grids.
+      const levees = props.placements.filter(p => p.structureId === "levee" && !p.preview).map(p => ({
+        structureId: p.structureId,
+        ...geoToWorld(p.position.longitude, p.position.latitude),
+        headingDegrees: p.headingDegrees,
+      }));
+      const floodBarrierKey = JSON.stringify(levees);
+      if (r.floodBarrierKey !== floodBarrierKey) {
+        r.inundation.setFloodBarriers(levees.length ? createFacilityFloodBarrier(levees, r.ground) : null);
+        r.floodBarrierKey = floodBarrierKey;
+      }
       const ids = new Set(props.placements.map((p) => p.id));
       for (const [id, model] of r.models) {
         if (!ids.has(id)) {
@@ -847,7 +864,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         }
       }
       r.renderer.shadowMap.needsUpdate = true;
-    }, [props.placements, ready]);
+    // A recreated scene needs its own snapshot even if ready/placements are unchanged.
+    }, [props.placements, ready, geography]);
 
     const labelFor = (p: PlacedStructure) =>
       props.structures.find((s) => s.id === p.structureId)?.displayName ?? "施設";
