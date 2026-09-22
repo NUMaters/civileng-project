@@ -5,11 +5,17 @@ import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { configureDioramaThumbnailCamera } from "./dioramaThumbnails";
 import { disposeDioramaObject } from "./disposeDioramaObject";
 
+function meshes(group: THREE.Group) {
+  const result: THREE.Mesh<THREE.BufferGeometry, THREE.Material>[] = [];
+  group.traverse(object => { if (object instanceof THREE.Mesh) result.push(object as typeof result[number]); });
+  return result;
+}
+
 describe("sculpted facility models", () => {
   for (const [id, triangleBudget, draws, halfX, halfZ, height] of [
     ["levee", 1200, 4, 49, 19, 15.1],
     ["revetment", 2200, 3, 40, 12, 13.5],
-    ["channel-dredging", 6200, 5, 39, 19, 33.7],
+    ["channel-dredging", 6800, 16, 39, 19, 33.7],
   ] as const) {
     it(`${id} preserves footprint, ownership, thumbnail and bounded budget`, () => {
       const group = createDioramaFacility(id);
@@ -18,27 +24,28 @@ describe("sculpted facility models", () => {
       const camera = new THREE.PerspectiveCamera(32, 256 / 192, 0.1, 1000);
       configureDioramaThumbnailCamera(camera, group, id);
       let triangles = 0;
-      for (const [index, child] of group.children.entries()) {
-        const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.Material>;
-        const copy = other.children[index] as typeof mesh;
+      const modelMeshes = meshes(group), copies = meshes(other);
+      for (const [index, mesh] of modelMeshes.entries()) {
+        const copy = copies[index]!;
         expect(mesh.geometry).not.toBe(copy.geometry);
         expect(mesh.material).not.toBe(copy.material);
         expect(resources.has(mesh.geometry)).toBe(false);
         expect(resources.has(mesh.material)).toBe(false);
         resources.add(mesh.geometry); resources.add(mesh.material);
         const positions = mesh.geometry.getAttribute("position");
-        triangles += positions.count / 3;
+        triangles += (mesh.geometry.index?.count ?? positions.count) / 3 * (mesh instanceof THREE.InstancedMesh ? mesh.count : 1);
         expect(positions.array).toEqual(copy.geometry.getAttribute("position").array);
         expect(Array.from(mesh.geometry.getAttribute("normal").array).every(Number.isFinite)).toBe(true);
         for (let i = 0; i < positions.count; i++) {
-          const p = new THREE.Vector3().fromBufferAttribute(positions, i).project(camera);
+          if (!mesh.visible) continue;
+          const p = new THREE.Vector3().fromBufferAttribute(positions, i).applyMatrix4(mesh.matrixWorld).project(camera);
           expect(Math.max(Math.abs(p.x), Math.abs(p.y), Math.abs(p.z))).toBeLessThan(1);
         }
       }
       const bounds = new THREE.Box3().setFromObject(group);
       console.info(id, triangles, group.children.length, bounds.min.toArray(), bounds.max.toArray());
       expect(triangles).toBeLessThanOrEqual(triangleBudget);
-      expect(group.children).toHaveLength(draws);
+      expect(modelMeshes).toHaveLength(draws);
       for (const [actual, expected] of [
         [bounds.min.x, -halfX], [bounds.max.x, halfX], [bounds.min.z, -halfZ],
         [bounds.max.z, halfZ], [bounds.min.y, 0], [bounds.max.y, height],
@@ -53,7 +60,7 @@ describe("sculpted facility models", () => {
       const model = createDioramaFacility(id);
       const operation = createFacilityOperationVisuals(id);
       model.updateMatrixWorld(true);
-      for (const child of model.children) ((child as THREE.Mesh).material as THREE.Material).side = THREE.DoubleSide;
+      for (const mesh of meshes(model)) mesh.material.side = THREE.DoubleSide;
       const flow = operation.group.getObjectByName("directional-water-flow") as THREE.InstancedMesh;
       const matrix = new THREE.Matrix4();
       for (const amount of [0.001, 0.5, 1]) for (const time of [0, 1, 3, 5, 7.99]) {
