@@ -1,8 +1,11 @@
 import * as THREE from "three";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDioramaFacility } from "./dioramaFacilities";
-import { createDredgingWorkCycle, DREDGING_CYCLE_SECONDS } from "./dredgingWorkCycle";
+import { createDredgingWorkCycle, createDredgingShadowRefresh, extendDredgingLabelEnvelope, DREDGING_CYCLE_SECONDS } from "./dredgingWorkCycle";
 import { disposeDioramaObject } from "./disposeDioramaObject";
+import { cacheFacilityLabelEnvelope, projectFacilityBody, layoutFacilityLabelOutsideBody,
+  type ProjectedFacilityBody } from "./facilityModelLabelLayout";
+import type { FacilityLabelLayout } from "./facilityLabelLayout";
 
 const models: THREE.Group[] = [];
 function setup() {
@@ -141,5 +144,63 @@ describe("articulated dredging work cycle", () => {
 
   it("rejects models without the required joints", () => {
     expect(() => createDredgingWorkCycle(new THREE.Group())).toThrow("articulated");
+  });
+
+  it("only invalidates shadows for changed casting joints, not a paused clock or falling soil", () => {
+    const { cycle } = setup();
+    expect(cycle.update(0, 0)).toBe(false);
+    expect(cycle.update(1, 3)).toBe(true);
+    expect(cycle.update(1, 3)).toBe(false);
+    expect(cycle.update(1, 0.72 * DREDGING_CYCLE_SECONDS)).toBe(true);
+    expect(cycle.update(1, 0.76 * DREDGING_CYCLE_SECONDS)).toBe(false);
+    expect(cycle.update(1, 3, true)).toBe(true);
+    expect(cycle.update(1, 4, true)).toBe(false);
+  });
+
+  it("limits shared shadow refreshes and retains final pending changes across a pause", () => {
+    const refresh = createDredgingShadowRefresh();
+    expect(refresh(false, 0, false)).toBe(false);
+    expect(refresh(true, 0, false)).toBe(true);
+    for (let now = 16; now < 500; now += 16) expect(refresh(true, now, false)).toBe(false);
+    expect(refresh(false, 500, false)).toBe(true);
+    expect(refresh(false, 1000, false)).toBe(false);
+    expect(refresh(true, 1010, true)).toBe(false); // camera/placement already requests the pass
+    expect(refresh(false, 1600, false)).toBe(false);
+    expect(refresh(true, 1700, false)).toBe(true);
+    expect(refresh(true, 1800, false)).toBe(false); // stop/reduced-motion final pose
+    expect(refresh(false, 2200, false)).toBe(true);
+    expect(refresh(false, 3000, false)).toBe(false);
+  });
+
+  it("caches the full moving sweep and keeps projected labels outside it at every heading", () => {
+    const { model, update } = setup();
+    const envelope = extendDredgingLabelEnvelope(cacheFacilityLabelEnvelope(model));
+    expect(envelope.supports).toHaveLength(8);
+    const sweep = new THREE.Box3().setFromPoints([...envelope.corners]);
+    const actual = new THREE.Box3();
+    for (let i = 0; i <= 200; i++) {
+      update(i / 200);
+      actual.setFromObject(model);
+      expect(sweep.containsBox(actual)).toBe(true);
+    }
+    const camera = new THREE.PerspectiveCamera(43, 390 / 700, 1, 6000);
+    const projection = new THREE.Matrix4(), scratch = new THREE.Vector3();
+    const body = {} as ProjectedFacilityBody, label = {} as FacilityLabelLayout;
+    const viewport = { left: 8, right: 382, top: 8, bottom: 692 };
+    let shown = 0;
+    model.position.set(50, 8, -20);
+    for (const heading of [0, 0.7, 1.8, 3.4, 5.1]) for (const pitch of [150, 300]) {
+      model.rotation.y = heading;
+      model.updateMatrixWorld(true);
+      camera.position.copy(model.position).add(new THREE.Vector3(200, pitch, 300));
+      camera.lookAt(model.position); camera.updateMatrixWorld(true);
+      projection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(model.matrixWorld);
+      expect(projectFacilityBody(envelope, projection, 390, 700, body, scratch)).toBe(true);
+      if (layoutFacilityLabelOutsideBody(body, 200, 64, 390, 700, viewport, label)) {
+        expect(label.y + 64 < body.top || label.y > body.bottom).toBe(true);
+        shown++;
+      }
+    }
+    expect(shown).toBeGreaterThan(0);
   });
 });

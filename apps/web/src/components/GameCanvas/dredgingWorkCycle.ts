@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { FacilityLabelEnvelope } from "./facilityModelLabelLayout";
 
 const BOOM_REST = Math.atan2(18, 12);
 const STICK_REST = Math.atan2(-17, 16);
@@ -22,6 +23,37 @@ const POSES = [
 ] as const;
 const ease = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
 const ramp = (t: number, start: number, end: number) => ease(Math.max(0, Math.min(1, (t - start) / (end - start))));
+
+/** Creation-time, model-local sweep bound; never sample geometry in the render loop.
+ * Wrist radius <= 7 + hypot(12,18)*cos(.1) + hypot(16,17)*cos(.35).
+ * Adding 16m encloses all scoop/soil vertices for every joint pitch. Y follows
+ * the same length bounds over boom [.1,1.1] and stick [-1.1,-.35]. The static
+ * pontoon and rotating cab fit inside this box too. Expand if the rig changes.
+ */
+export function extendDredgingLabelEnvelope(envelope: FacilityLabelEnvelope): FacilityLabelEnvelope {
+  const box = new THREE.Box3(new THREE.Vector3(-39, -22, -19), new THREE.Vector3(55, 41, 67));
+  for (const corner of envelope.corners) box.expandByPoint(corner);
+  const corners: THREE.Vector3[] = [];
+  for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) {
+    for (const z of [box.min.z, box.max.z]) corners.push(new THREE.Vector3(x, y, z));
+  }
+  // Synthetic sweep supports deliberately replace the static convex hull.
+  return { ...envelope, corners, supports: corners };
+}
+
+/** One gate shared by all dredgers: at most two additional full shadow passes/s.
+ * Pending changes survive a paused simulation until the final pose is rendered.
+ * Existing camera/placement invalidations also satisfy the pending refresh.
+ */
+export function createDredgingShadowRefresh() {
+  let pending = false, last = -Infinity;
+  return (changed: boolean, nowMs: number, alreadyRequested: boolean): boolean => {
+    pending ||= changed;
+    if (alreadyRequested) { pending = false; last = nowMs; return false; }
+    if (!pending || nowMs - last < 500) return false;
+    pending = false; last = nowMs; return true;
+  };
+}
 
 /** Rest transforms reproduce the original toy model exactly. Resources belong to this model. */
 export function createDredgingWorkRig() {
@@ -69,16 +101,18 @@ export function createDredgingWorkCycle(model: THREE.Group) {
   const releaseY = 13 + BOOM_LENGTH * Math.sin(1.1) + STICK_LENGTH * Math.sin(-0.35)
     + 13.7 * Math.sin(DUMP_PITCH) - 5.5 * Math.cos(DUMP_PITCH);
   return {
-    update(activity: number, elapsed: number, reducedMotion = false): void {
+    // Return true only when shadow-casting joints actually change pose.
+    update(activity: number, elapsed: number, reducedMotion = false): boolean {
       const active = Number.isFinite(activity) && activity > 0 && Number.isFinite(elapsed) && !reducedMotion;
       if (!active) {
+        const changed = turret.rotation.y !== 0 || boom.rotation.z !== 0 || stick.rotation.z !== 0 || bucket.rotation.z !== 0;
         turret.rotation.y = boom.rotation.z = stick.rotation.z = bucket.rotation.z = 0;
         soil.visible = falling.visible = false;
         soil.scale.set(3.6, 1.2, 3.7);
         matrix.makeTranslation(28, 8, 0);
         for (let i = 0; i < falling.count; i++) falling.setMatrixAt(i, matrix);
         falling.instanceMatrix.needsUpdate = true;
-        return;
+        return changed;
       }
       const t = ((elapsed % DREDGING_CYCLE_SECONDS) + DREDGING_CYCLE_SECONDS) % DREDGING_CYCLE_SECONDS / DREDGING_CYCLE_SECONDS;
       let index = 0;
@@ -89,6 +123,9 @@ export function createDredgingWorkCycle(model: THREE.Group) {
       const boomPitch = a[2] + (b[2] - a[2]) * u;
       const stickPitch = a[3] + (b[3] - a[3]) * u;
       const bucketPitch = a[4] + (b[4] - a[4]) * u;
+      const changed = turret.rotation.y !== yaw || boom.rotation.z !== boomPitch - BOOM_REST ||
+        stick.rotation.z !== stickPitch - boomPitch - (STICK_REST - BOOM_REST) ||
+        bucket.rotation.z !== bucketPitch - stickPitch + STICK_REST;
       turret.rotation.y = yaw;
       boom.rotation.z = boomPitch - BOOM_REST;
       stick.rotation.z = stickPitch - boomPitch - (STICK_REST - BOOM_REST);
@@ -110,6 +147,7 @@ export function createDredgingWorkCycle(model: THREE.Group) {
         falling.setMatrixAt(i, matrix);
       }
       falling.instanceMatrix.needsUpdate = true;
+      return changed;
     },
   };
 }
