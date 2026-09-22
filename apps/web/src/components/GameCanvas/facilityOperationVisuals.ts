@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { BASIN_PORTS, basinInletHeight, PUMP_JET_LENGTH, PUMP_PORTS } from "./facilityVisualPorts";
+import { createBasinConstructionShape } from "./basinConstructionSurface";
 
 /** Facility-local metres, +Y up. Add group to the actual facility, not the map.
  * The caller supplies normalized simulation activity and simulation elapsed seconds;
@@ -65,16 +66,7 @@ export function createFacilityOperationVisuals(structureId: string): {
     }
     group.add(runningLights);
   } else if (structureId === "retention-basin") {
-    const shape = new THREE.Shape();
-    shape.moveTo(-24, -22);
-    shape.lineTo(24, -22);
-    shape.quadraticCurveTo(32, -22, 32, -14);
-    shape.lineTo(32, 14);
-    shape.quadraticCurveTo(32, 22, 24, 22);
-    shape.lineTo(-24, 22);
-    shape.quadraticCurveTo(-32, 22, -32, 14);
-    shape.lineTo(-32, -14);
-    shape.quadraticCurveTo(-32, -22, -24, -22);
+    const shape = createBasinConstructionShape();
     // A retained body of water needs a stable blue surface; inlet streak opacity
     // must not fade it into the dry field when inflow drops to zero.
     const storedWaterMaterial = new THREE.MeshStandardMaterial({
@@ -162,7 +154,7 @@ export function createFacilityOperationVisuals(structureId: string): {
           break;
         case "channel-dredging":
           // Along the channel on either side of the 78x38 work barge.
-          transform.position.set(-45 + phase * 90, 1.2, lane < 2 ? -27 + lane * 4 : 23 + (lane - 2) * 4);
+          transform.position.set(-45 + phase * 90, 2.15, lane < 2 ? -27 + lane * 4 : 23 + (lane - 2) * 4);
           transform.rotation.y = Math.PI / 2;
           transform.scale.set(1.2, 1, 9);
           break;

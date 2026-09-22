@@ -4,6 +4,7 @@ import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { getStructureModelParts } from "./structureModels";
 import { BASIN_PORTS, PUMP_BORE_RADIUS, PUMP_PORTS } from "./facilityVisualPorts";
 import { createDredgingWorkRig } from "./dredgingWorkCycle";
+import { createBasinConstructionShape } from "./basinConstructionSurface";
 
 const COLORS = {
   grass: 0x9bd849,
@@ -155,16 +156,7 @@ export function createDioramaFacility(structureId: string): THREE.Group {
       // Broad pale overflow sill distinguishes the intentional low point.
       box([BASIN_PORTS.inletHalfWidth * 2, 0.08, 7], [0, BASIN_PORTS.sillHeight + 0.04, -27.5], "cream");
       // Rounded water surface stays inside the actual open berm, below its crest.
-      const pool = new THREE.Shape();
-      pool.moveTo(-24, -22);
-      pool.lineTo(24, -22);
-      pool.quadraticCurveTo(32, -22, 32, -14);
-      pool.lineTo(32, 14);
-      pool.quadraticCurveTo(32, 22, 24, 22);
-      pool.lineTo(-24, 22);
-      pool.quadraticCurveTo(-32, 22, -32, 14);
-      pool.lineTo(-32, -14);
-      pool.quadraticCurveTo(-32, -22, -24, -22);
+      const pool = createBasinConstructionShape();
       const water = new THREE.ShapeGeometry(pool, 8).rotateX(-Math.PI / 2);
       // Opaque basin bed remains visible while the operational water is absent.
       // Without this, the underlying river is visible through an apparently full basin.
