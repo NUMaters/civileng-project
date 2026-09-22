@@ -5,6 +5,22 @@ import { disposeDioramaObject } from "./disposeDioramaObject";
 import { BASIN_PORTS, PUMP_PORTS } from "./facilityVisualPorts";
 
 const ids = ["drainage-pump", "retention-basin", "levee", "revetment", "channel-dredging"];
+it("retains basin water independently of inlet activity and restores stored snapshots", () => {
+  const v = createFacilityOperationVisuals("retention-basin");
+  const water = v.group.getObjectByName("basin-fill")!;
+  v.update(0.8, 10, false, 0.8, 0.6);
+  const height = water.position.y;
+  v.update(0, 12, false, 0, 0.6);
+  expect(v.group.visible).toBe(true);
+  expect(water.visible).toBe(true);
+  expect(water.position.y).toBe(height);
+  expect(v.group.getObjectByName("directional-water-flow")!.visible).toBe(false);
+  v.update(0, 3, false, 0, 0.2);
+  expect(water.position.y).toBeLessThan(height);
+  v.update(0, 0, false, 0, 0);
+  expect(v.group.visible).toBe(false);
+  disposeDioramaObject(v.group);
+});
 it("shows preventive pump operation on its equipment panel without emitting water", () => {
   const v = createFacilityOperationVisuals("drainage-pump");
   v.update(0, 1, false, 0.6);
@@ -159,7 +175,7 @@ it("fills to 4.2 with inlet crossing the low berm, and never invents outlet flow
   const water = v.group.getObjectByName("basin-fill")!;
   for (const amount of [0.001, 0.1, 0.5, 1, 2]) {
     v.update(amount, 3);
-    expect(water.position.y).toBeCloseTo(0.22 + Math.min(amount, 1) * 3.98);
+    expect(water.position.y).toBeCloseTo(0.26 + Math.min(amount, 1) * 3.94);
     expect(water.position.y).toBeGreaterThan(0.2);
     for (const p of vertices(water as THREE.Mesh)) {
       expect(Math.abs(p.x)).toBeLessThanOrEqual(32.001);

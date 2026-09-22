@@ -14,6 +14,17 @@ const storm = () => ({ ...createInitialFloodState(), phase: "disaster" as const,
   inflowPerSecond: 0.01737, drainageCapacityPerSecond: 0.01976, floodDepthMeters: 0.7, protectedBankSites: [{ id: "inland-campus", longitude: 140.3791, latitude: 37.36035,
     primaryHazard: "inlandPonding" as const, protectionStrength: 0.9, overflowing: false }] });
 
+it("stops basin intake at capacity and distinguishes retained water from new inflow", () => {
+  const basin = { ...influence(), structureId: "retention-basin" };
+  const full = resolveFacilityActivity(basin, { ...storm(), retentionStorageByPlacement: { [basin.placementId]: 1 } });
+  expect(full.activity).toBe(0);
+  expect(full.label).toContain("貯留上限");
+  const retained = resolveFacilityActivity(basin, { ...storm(), riverLevelMeters: 2.2,
+    retentionStorageByPlacement: { [basin.placementId]: 0.5 } });
+  expect(retained.activity).toBe(0);
+  expect(retained.label).toBe("貯めた水を保持中");
+});
+
 it("keeps mixed positive/adverse activity with a separate warning", () => {
   const own = influence();
   const result = resolveFacilityActivity({ ...own, adverseSiteIds: ["campus-core"] }, storm());
