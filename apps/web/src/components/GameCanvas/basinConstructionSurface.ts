@@ -23,13 +23,14 @@ export type BasinConstructionMask = {
   uniforms: {
     basinMaskCount: THREE.IUniform<number>;
     maskCenter: THREE.IUniform<THREE.Vector4[]>;
-    maskLevels: THREE.IUniform<THREE.Vector2[]>;
+    maskLevels: THREE.IUniform<THREE.Vector3[]>;
   };
   status: BasinConstructionUpdate;
   /** Inspect after compilation for unsupported hooks. No GPU resources owned here. */
   attachments: Array<{ ok: boolean; reason?: string }>;
   attach(material: THREE.Material, kind: BasinConstructionKind): void;
   update(placements: readonly BasinConstructionPlacement[]): void;
+  updateTransform(index: number, x: number, z: number, rotationY: number, baseY: number, scale: number): void;
   contains(world: WorldPoint): boolean;
   shouldDiscard(world: WorldPoint, kind: BasinConstructionKind): boolean;
   /** Nearest forward bed-plane intersection, bounded by that basin's own pool. */
@@ -64,7 +65,7 @@ function poolContains(x: number, z: number): boolean {
 
 /** Prepend to a fragment shader and merge mask.uniforms by reference.
  * maskCenter = world X/Z, cos(-heading), sin(-heading).
- * maskLevels = world bed Y, world full-berm crest Y.
+ * maskLevels = world bed Y, world full-berm crest Y, animated uniform scale.
  * At the start of main(): if (basinConstructionDiscardTerrain(world)) discard;
  * or basinConstructionDiscardWater(world) for SOURCE water only.
  * Never attach to the constructed bed, berm, or own stored-water material.
@@ -72,11 +73,11 @@ function poolContains(x: number, z: number): boolean {
 export const BASIN_CONSTRUCTION_GLSL = `
 uniform int basinMaskCount;
 uniform vec4 maskCenter[64];
-uniform vec2 maskLevels[64];
+uniform vec3 maskLevels[64];
 bool basinConstructionInside(vec3 world, int i) {
   vec2 delta = world.xz - maskCenter[i].xy;
   vec2 p = abs(vec2(maskCenter[i].z * delta.x - maskCenter[i].w * delta.y,
-    maskCenter[i].w * delta.x + maskCenter[i].z * delta.y));
+    maskCenter[i].w * delta.x + maskCenter[i].z * delta.y)) / maskLevels[i].z;
   if (p.x > 32.0 || p.y > 22.0) return false;
   if (p.x <= 24.0 || p.y <= 14.0) return true;
   vec2 edge = sqrt(max(vec2(0.0), (vec2(32.0, 22.0) - p) / 8.0));
@@ -120,7 +121,7 @@ export function createBasinConstructionMask(): BasinConstructionMask {
       value: Array.from({ length: BASIN_CONSTRUCTION_MAX_MASKS }, () => new THREE.Vector4()),
     },
     maskLevels: {
-      value: Array.from({ length: BASIN_CONSTRUCTION_MAX_MASKS }, () => new THREE.Vector2()),
+      value: Array.from({ length: BASIN_CONSTRUCTION_MAX_MASKS }, () => new THREE.Vector3()),
     },
   };
   const valid = (p: BasinConstructionPlacement) =>
@@ -129,7 +130,8 @@ export function createBasinConstructionMask(): BasinConstructionMask {
     const center = uniforms.maskCenter.value[i];
     const dx = world.x - center.x,
       dz = world.z - center.y;
-    return poolContains(center.z * dx - center.w * dz, center.w * dx + center.z * dz);
+    const scale = uniforms.maskLevels.value[i].z;
+    return poolContains((center.z * dx - center.w * dz) / scale, (center.w * dx + center.z * dz) / scale);
   };
   const mask: BasinConstructionMask = {
     uniforms,
@@ -162,10 +164,19 @@ export function createBasinConstructionMask(): BasinConstructionMask {
         uniforms.maskLevels.value[i].set(
           datum + BASIN_CONSTRUCTION_BED_Y,
           datum + BASIN_CONSTRUCTION_CREST_Y,
+          1,
         );
       });
       uniforms.basinMaskCount.value = placements.length;
       mask.status = { ok: true, count: placements.length };
+    },
+    // Match animated model transforms without rebuilding arrays or sampling terrain.
+    updateTransform(index, x, z, rotationY, baseY, scale) {
+      if (index < 0 || index >= uniforms.basinMaskCount.value || !Number.isInteger(index) ||
+          !Number.isFinite(x + z + rotationY + baseY + scale) || scale <= 0) return;
+      uniforms.maskCenter.value[index].set(x, z, Math.cos(rotationY), Math.sin(rotationY));
+      uniforms.maskLevels.value[index].set(baseY + BASIN_CONSTRUCTION_BED_Y * scale,
+        baseY + BASIN_CONSTRUCTION_CREST_Y * scale, scale);
     },
     raycastFloor(ray: THREE.Ray): THREE.Vector3 | null {
       if (

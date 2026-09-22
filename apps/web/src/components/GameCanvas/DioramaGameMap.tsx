@@ -63,6 +63,7 @@ type Runtime = {
   models: Map<string, T.Group>;
   operations: Map<string, ReturnType<typeof createFacilityOperationVisuals>>;
   basinConstruction: ReturnType<typeof createBasinConstructionMask>;
+  basinMaskSlots: Map<string, number>;
   inundation: ReturnType<typeof createDioramaInundation>;
   floodBarrierKey: string | null;
   ghost: T.Group | null;
@@ -411,6 +412,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         models: new Map(),
         operations: new Map(),
         basinConstruction,
+        basinMaskSlots: new Map(),
         inundation,
         floodBarrierKey: null,
         ghost: null,
@@ -629,6 +631,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             model.userData.rotationShadowDirty = false;
             renderer.shadowMap.needsUpdate = true;
           }
+          const basinSlot = r.basinMaskSlots.get(id);
+          if (basinSlot !== undefined) r.basinConstruction.updateTransform(basinSlot,
+            model.position.x, model.position.z, model.rotation.y, model.position.y, model.scale.x);
         }
         waterMaterial.uniforms.time!.value = time;
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
@@ -822,11 +827,13 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       if (!r) return;
       // Local construction cuts only the bowl; source DEM remains unchanged.
       // The same snapshot includes previews so placement shows the finished bed.
+      r.basinMaskSlots.clear();
       r.basinConstruction.update(props.placements.flatMap(p => {
         if (p.structureId !== "retention-basin") return [];
         const point = geoToWorld(p.position.longitude, p.position.latitude);
         const ground = r.ground(point.x, point.z);
         if (ground === null || !Number.isFinite(ground)) return [];
+        r.basinMaskSlots.set(p.id, r.basinMaskSlots.size);
         return [{ ...point, headingDegrees: p.headingDegrees, baseY: ground + 0.5 }];
       }));
       if (!r.basinConstruction.status.ok) {

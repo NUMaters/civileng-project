@@ -25,11 +25,36 @@ function compile(material: THREE.Material) {
 }
 
 describe("basin construction mask", () => {
+  it("tracks the same intermediate rotation, pop scale and lifted bed as the model", () => {
+    const mask = createBasinConstructionMask();
+    mask.update([placement]);
+    const centers = mask.uniforms.maskCenter.value;
+    const levels = mask.uniforms.maskLevels.value;
+    for (const angle of [0, -0.17, -0.42, -Math.PI / 5]) {
+      for (const scale of [0.9, 1, 1.12]) {
+        const baseY = placement.baseY + (scale - 1) * 24;
+        mask.updateTransform(0, placement.x, placement.z, angle, baseY, scale);
+        const transform = new THREE.Matrix4().compose(new THREE.Vector3(placement.x, baseY, placement.z),
+          new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), angle), new THREE.Vector3(scale, scale, scale));
+        expect(mask.contains(new THREE.Vector3(31, 1, 0).applyMatrix4(transform))).toBe(true);
+        expect(mask.contains(new THREE.Vector3(33, 1, 0).applyMatrix4(transform))).toBe(false);
+        expect(mask.shouldDiscard(new THREE.Vector3(0, 8.9, 0).applyMatrix4(transform), "water")).toBe(true);
+        expect(mask.shouldDiscard(new THREE.Vector3(0, 9.1, 0).applyMatrix4(transform), "water")).toBe(false);
+        const floor = mask.raycastFloor(new THREE.Ray(new THREE.Vector3(placement.x, 100, placement.z), new THREE.Vector3(0, -1, 0)));
+        expect(floor!.y).toBeCloseTo(baseY + 0.2 * scale);
+      }
+    }
+    expect(mask.uniforms.maskCenter.value).toBe(centers);
+    expect(mask.uniforms.maskLevels.value).toBe(levels);
+    mask.update([]);
+    mask.updateTransform(0, 0, 0, 0, 0, 1);
+    expect(mask.contains(p())).toBe(false);
+  });
   it("uses main's baseY exactly once and separates terrain cut from source overtopping", () => {
     const mask = createBasinConstructionMask();
     expect(mask.update([placement])).toBeUndefined();
     expect(mask.status).toEqual({ ok: true, count: 1 });
-    expect(mask.uniforms.maskLevels.value[0].toArray()).toEqual([12.7, 21.5]);
+    expect(mask.uniforms.maskLevels.value[0].toArray()).toEqual([12.7, 21.5, 1]);
     expect(mask.contains(p())).toBe(true);
     expect(mask.shouldDiscard(p(100, 12.69), "terrain")).toBe(false);
     expect(mask.shouldDiscard(p(100, 12.7), "terrain")).toBe(false);
@@ -291,7 +316,7 @@ describe("basin material integration", () => {
   it("exports bounded GLSL with the CPU transform, shape and independent thresholds", () => {
     expect(BASIN_CONSTRUCTION_MAX_MASKS).toBe(64);
     expect(BASIN_CONSTRUCTION_GLSL).toContain("vec4 maskCenter[64]");
-    expect(BASIN_CONSTRUCTION_GLSL).toContain("vec2 maskLevels[64]");
+    expect(BASIN_CONSTRUCTION_GLSL).toContain("vec3 maskLevels[64]");
     expect(BASIN_CONSTRUCTION_GLSL).toContain(
       "maskCenter[i].z * delta.x - maskCenter[i].w * delta.y",
     );
