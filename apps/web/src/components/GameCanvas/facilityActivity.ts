@@ -12,6 +12,7 @@ type ActivityState = Pick<FloodSimulationState, "riverLevelMeters" | "floodDepth
   /** Added to the live state in the simulation; optional for pre-integration map callers. */
   inflowPerSecond?: number;
   drainageCapacityPerSecond?: number;
+  retentionStorageByPlacement?: Readonly<Record<string, number>>;
 };
 
 /** Operational illustration, not a per-facility measured flow or saved-damage attribution. */
@@ -27,6 +28,9 @@ export function resolveFacilityActivity(influence: StructureInfluence | undefine
   });
   if (!influence || influence.preview || !state) return result(0, "配置を検討中");
   if (state.phase === "idle" || state.phase === "preparation") return result(0, "大雨に備えて待機");
+  const stored = influence.structureId === "retention-basin"
+    ? clamp(state.retentionStorageByPlacement?.[influence.placementId] ?? 0) : 0;
+  if (stored >= 1) return result(0, "貯留上限・水を保持中");
   if (!influence.positiveSiteContributions) return result(0, "施設の寄与を確認できません");
 
   const contributions = influence.positiveSiteContributions.filter(site => clamp(site.strength) > 0);
@@ -46,7 +50,7 @@ export function resolveFacilityActivity(influence: StructureInfluence | undefine
   const waterActivity = influence.structureId === "drainage-pump"
     ? clamp(influence.effectiveness) * protection * clamp(state.floodDepthMeters / 0.7)
     : activity;
-  if (activity < 0.01) return result(0, "水の増加に備えて待機", 0);
+  if (activity < 0.01) return result(0, stored > 0 ? "貯めた水を保持中" : "水の増加に備えて待機", 0);
   // Aggregate site state is used only for the continuing-flood warning, never attribution.
   const overwhelmed = state.protectedBankSites.some(site => site.overflowing &&
     contributions.some(contribution => contribution.siteId === site.id));

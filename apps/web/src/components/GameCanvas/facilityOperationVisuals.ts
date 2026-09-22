@@ -9,7 +9,7 @@ import { BASIN_PORTS, basinInletHeight, PUMP_JET_LENGTH, PUMP_PORTS } from "./fa
  */
 export function createFacilityOperationVisuals(structureId: string): {
   group: THREE.Group;
-  update(activity: number, elapsed: number, reducedMotion?: boolean, operationActivity?: number): void;
+  update(activity: number, elapsed: number, reducedMotion?: boolean, operationActivity?: number, storedFraction?: number): void;
 } {
   const group = new THREE.Group();
   group.name = `facility-operation:${structureId}`;
@@ -75,15 +75,23 @@ export function createFacilityOperationVisuals(structureId: string): {
     shape.quadraticCurveTo(-32, 22, -32, 14);
     shape.lineTo(-32, -14);
     shape.quadraticCurveTo(-32, -22, -24, -22);
-    water = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8).rotateX(-Math.PI / 2), material);
+    // A retained body of water needs a stable blue surface; inlet streak opacity
+    // must not fade it into the dry field when inflow drops to zero.
+    const storedWaterMaterial = new THREE.MeshStandardMaterial({
+      color: "#10a6cf", roughness: 0.28, metalness: 0.08, side: THREE.DoubleSide,
+    });
+    water = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8).rotateX(-Math.PI / 2), storedWaterMaterial);
     water.name = "basin-fill";
     group.add(water);
   }
 
-  function update(activity: number, elapsed: number, reducedMotion = false, operationActivity = activity): void {
+  function update(activity: number, elapsed: number, reducedMotion = false, operationActivity = activity, storedFraction = activity): void {
     const amount = Number.isFinite(activity) ? THREE.MathUtils.clamp(activity, 0, 1) : 0;
+    // Storage belongs to simulation state, not instantaneous inlet flow. Legacy
+    // callers may omit it, but the live map always supplies accumulated storage.
+    const stored = Number.isFinite(storedFraction) ? THREE.MathUtils.clamp(storedFraction, 0, 1) : 0;
     const operating = Number.isFinite(operationActivity) ? THREE.MathUtils.clamp(operationActivity, 0, 1) : 0;
-    group.visible = amount > 0 || Boolean(runningLights && operating > 0);
+    group.visible = amount > 0 || Boolean(water && stored > 0) || Boolean(runningLights && operating > 0);
     flow.visible = amount > 0;
     if (jets) jets.visible = amount > 0;
     if (runningLights && runningMaterial) {
@@ -96,7 +104,10 @@ export function createFacilityOperationVisuals(structureId: string): {
     // Modulo before multiplication also keeps extreme finite times safe.
     const time = reducedMotion || !Number.isFinite(elapsed) ? 0 : ((elapsed % 8) + 8) % 8;
     material.opacity = 0.45 + amount * 0.4;
-    if (water) water.position.y = 0.22 + 3.98 * amount;
+    if (water) {
+      water.visible = stored > 0;
+      water.position.y = 0.26 + 3.94 * stored;
+    }
     if (jets) {
       for (let i = 0; i < 3; i++) {
         transform.position.fromArray(PUMP_PORTS[i].mouth);
@@ -126,7 +137,7 @@ export function createFacilityOperationVisuals(structureId: string): {
         }
         case "retention-basin": {
           const z = BASIN_PORTS.outerZ + 1 + phase * (BASIN_PORTS.poolZ - BASIN_PORTS.outerZ - 2);
-          const poolHeight = 0.22 + 3.98 * amount;
+          const poolHeight = 0.26 + 3.94 * stored;
           transform.position.set((i - 1) * 3, basinInletHeight(z, poolHeight), z);
           // Tilt the whole short streak onto the descending chute, never through it.
           const slope = (basinInletHeight(z + 0.1, poolHeight) - basinInletHeight(z - 0.1, poolHeight)) / 0.2;
