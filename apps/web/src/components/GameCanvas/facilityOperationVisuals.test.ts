@@ -220,6 +220,12 @@ it("moves dredging flow across the work area alongside the barge", () => {
   const points = vertices(meshes(v.group)[0]!);
   expect(points.some(p => p.x < -39)).toBe(true);
   expect(points.some(p => p.x > 10)).toBe(true);
-  expect(points.every(p => Math.abs(p.z) > 19 && p.y < 2)).toBe(true);
+  expect(points.every(p => Math.abs(p.z) > 19 && p.y > 2 && p.y < 2.3)).toBe(true);
+  const flow = meshes(v.group)[0]! as THREE.InstancedMesh;
+  const matrix = new THREE.Matrix4();
+  for (let i = 0; i < flow.count; i++) {
+    flow.getMatrixAt(i, matrix);
+    expect(matrix.elements[13]).toBeCloseTo(2.15);
+  }
   disposeDioramaObject(v.group);
 });

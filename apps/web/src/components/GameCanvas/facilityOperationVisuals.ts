@@ -154,7 +154,7 @@ export function createFacilityOperationVisuals(structureId: string): {
           break;
         case "channel-dredging":
           // Along the channel on either side of the 78x38 work barge.
-          transform.position.set(-45 + phase * 90, 1.2, lane < 2 ? -27 + lane * 4 : 23 + (lane - 2) * 4);
+          transform.position.set(-45 + phase * 90, 2.15, lane < 2 ? -27 + lane * 4 : 23 + (lane - 2) * 4);
           transform.rotation.y = Math.PI / 2;
           transform.scale.set(1.2, 1, 9);
           break;

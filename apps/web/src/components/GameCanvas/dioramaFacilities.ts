@@ -3,6 +3,7 @@ import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { getStructureModelParts } from "./structureModels";
 import { BASIN_PORTS, PUMP_BORE_RADIUS, PUMP_PORTS } from "./facilityVisualPorts";
+import { createDredgingWorkRig } from "./dredgingWorkCycle";
 import { createBasinConstructionShape } from "./basinConstructionSurface";
 
 const COLORS = {
@@ -24,7 +25,7 @@ type Point = [number, number, number];
  * Toy-scale meters: +X east, -Z north, +Y up. Origin is the footprint center
  * at ground level. Caller owns placement/heading and can dispose every mesh's
  * geometry/material by traversal: nothing is shared between returned groups.
- * Parts are baked into one opaque mesh per color (also suitable for thumbnails).
+ * Parts are baked per color and rigid joint (also suitable for thumbnails).
  */
 export function createDioramaFacility(structureId: string): THREE.Group {
   const group = new THREE.Group();
@@ -33,7 +34,12 @@ export function createDioramaFacility(structureId: string): THREE.Group {
   const sculpted = structureId === "drainage-pump" || structureId === "retention-basin";
   const defense = ["levee", "revetment", "channel-dredging"].includes(structureId);
   if (sculpted || defense) group.userData.modelProvenance = "illustrative-player-structure; not-surveyed";
-  const batches = new Map<Color, THREE.BufferGeometry[]>();
+  let batches = new Map<Color, THREE.BufferGeometry[]>();
+  const jointBatches = new Map<THREE.Group, typeof batches>([[group, batches]]);
+  function batchAt(target: THREE.Group) {
+    batches = jointBatches.get(target) ?? new Map<Color, THREE.BufferGeometry[]>();
+    jointBatches.set(target, batches);
+  }
   // Per-build cache only: baked output owns its resources independently of other
   // previews/placements. Repeated windows and collars reuse construction geometry.
   const roundedBoxes = new Map<string, THREE.BufferGeometry>();
@@ -234,6 +240,9 @@ export function createDioramaFacility(structureId: string): THREE.Group {
       break;
     }
     case "channel-dredging": {
+      const rig = createDredgingWorkRig();
+      group.add(rig.turret, rig.falling);
+      group.userData.workCycleProvenance = "illustrative-dig-lift-dump-return; not-measured-volume; no-terrain-modification";
       box([78, 4, 38], [0, 2, 0], "blue", 1.8);
       box([73, 1, 34], [0, 4.5, 0], "cream", 0.45);
       for (const x of [-28, 28]) {
@@ -248,16 +257,24 @@ export function createDioramaFacility(structureId: string): THREE.Group {
         roller.dispose();
         for (const x of [-20, -16, -12, -8, -4]) box([1.8, 0.18, 4.5], [x, 9.45, z], "stone");
       }
+      // Receiving pile on the east deck; illustrative spoil, never terrain data.
+      sphere([7, 2.1, 7], [26, 5.2, 0], "earth");
+      batchAt(rig.turret);
       box([22, 5, 16], [-12, 11, 0], "yellow", 2);
       box([10, 10, 12], [-18, 18, -1], "yellow", 1.7);
       box([0.5, 6, 9], [-12.8, 19, -1], "blue", 0.2, 1);
       box([7, 6, 0.5], [-18, 19, 5.1], "blue", 0.2, 1);
       box([0.6, 6, 0.55], [-12.45, 19, 0.8], "yellow", 0.15, 1);
       box([12, 1.5, 14], [-18, 23.7, -1], "yellow", 0.5);
+      batchAt(rig.boom);
       beam([-5, 13, 0], [7, 31, 0], 4.8, 5, "yellow");
-      beam([7, 31, 0], [23, 14, 0], 3.7, 4, "yellow");
       beam([-4, 16, 3], [5, 28, 3], 1.1, 1.1, "stone");
-      for (const p of [[-5, 13, 0], [7, 31, 0], [23, 14, 0]] as Point[]) sphere([2.7, 2.7, 3], p, "dark");
+      sphere([2.7, 2.7, 3], [-5, 13, 0], "dark");
+      batchAt(rig.stick);
+      beam([7, 31, 0], [23, 14, 0], 3.7, 4, "yellow");
+      sphere([2.7, 2.7, 3], [7, 31, 0], "dark");
+      batchAt(rig.bucket);
+      sphere([2.7, 2.7, 3], [23, 14, 0], "dark");
       // Open scoop: back, floor, cheeks and teeth, with its mouth facing east.
       box([2.5, 8, 11], [24, 10, 0], "dark", 1.1);
       box([10, 2, 11], [28, 6.5, 0], "dark", 0.9);
@@ -273,10 +290,14 @@ export function createDioramaFacility(structureId: string): THREE.Group {
   cube.dispose();
   ball.dispose();
   for (const geometry of roundedBoxes.values()) geometry.dispose();
-  for (const [color, parts] of batches) {
+  group.updateMatrixWorld(true);
+  for (const [target, colors] of jointBatches) for (const [color, parts] of colors) {
     const geometry = mergeGeometries(parts, false);
     for (const part of parts) part.dispose();
     if (!geometry) throw new Error(`Could not merge diorama facility: ${structureId}/${color}`);
+    // Inputs retain the original rest-pose coordinates; bake into each joint's
+    // local frame once, so updates change transforms without rebuilding geometry.
+    if (target !== group) geometry.applyMatrix4(target.matrixWorld.clone().invert());
     geometry.computeBoundingBox();
     geometry.computeBoundingSphere();
     const material = new THREE.MeshStandardMaterial({
@@ -288,7 +309,7 @@ export function createDioramaFacility(structureId: string): THREE.Group {
     mesh.name = `${structureId}:${color}`;
     mesh.castShadow = color !== "water" && color !== "foam";
     mesh.receiveShadow = true;
-    group.add(mesh);
+    target.add(mesh);
   }
   return group;
 }

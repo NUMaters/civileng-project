@@ -29,6 +29,8 @@ import { createFacilityFloodBarrier } from "./facilityFloodBarrier";
 import { createInlandPonding } from "./inlandPonding";
 import { createRenderedWaterMask } from "./renderedWaterMask";
 import { createDioramaFacility } from "./dioramaFacilities";
+import { createDredgingWorkCycle, createDredgingShadowRefresh, extendDredgingLabelEnvelope } from "./dredgingWorkCycle";
+import { resolveDredgingBaseY } from "./dredgingFloat";
 import { getDioramaGuidance, initialDioramaFocus, isPreferredDioramaGuidanceCandidate } from "./dioramaGuidance";
 import { createGeographicGuidanceAnchors, selectGuidanceAdvice, selectGuidanceProjection } from "./geographicGuidanceAnchors";
 import { FACILITY_TAP_SLOP, facilityPopScale, nextFacilityHeading } from "./facilityTap";
@@ -62,8 +64,10 @@ type Runtime = {
   controls: OrbitControls;
   models: Map<string, T.Group>;
   operations: Map<string, ReturnType<typeof createFacilityOperationVisuals>>;
+  dredgingCycles: Map<string, ReturnType<typeof createDredgingWorkCycle>>;
   basinConstruction: ReturnType<typeof createBasinConstructionMask>;
   basinMaskSlots: Map<string, number>;
+  sampleRiverSurface: (x: number, z: number) => number | null;
   inundation: ReturnType<typeof createDioramaInundation>;
   floodBarrierKey: string | null;
   ghost: T.Group | null;
@@ -156,8 +160,12 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             r.scene.add(r.ghost);
           }
           const ground = r.ground(point.x, point.z);
-          if (ground === null) return { overMap: true, placeable: false };
-          r.ghost.position.set(point.x, ground + 1, point.z);
+          const base = id === "channel-dredging"
+            ? resolveDredgingBaseY(r.sampleRiverSurface(point.x, point.z), ground)
+            : ground === null ? null : ground + 1;
+          if (id === "channel-dredging") r.ghost.visible = base !== null;
+          if (base === null) return { overMap: true, placeable: false };
+          r.ghost.position.set(point.x, base, point.z);
           r.ghost.rotation.y = -T.MathUtils.degToRad(suggestedStructureHeading(id, geo));
           r.ghost.scale.setScalar(0.98);
           return { overMap: true, placeable: resolved !== undefined };
@@ -411,8 +419,10 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls,
         models: new Map(),
         operations: new Map(),
+        dredgingCycles: new Map(),
         basinConstruction,
         basinMaskSlots: new Map(),
+        sampleRiverSurface,
         inundation,
         floodBarrierKey: null,
         ghost: null,
@@ -586,6 +596,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       const cameraCorrection = new T.Vector3();
       const projectedPoint = new T.Vector3();
       const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const refreshDredgingShadows = createDredgingShadowRefresh();
       const draw = (now: number) => {
         frame = requestAnimationFrame(draw);
         const dt = Math.min(0.05, (now - last) / 1000);
@@ -607,6 +618,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           (focusElapsed !== undefined && state.disasterElapsedSeconds < focusElapsed))) lastFloodPatchId = null;
         focusElapsed = state?.disasterElapsedSeconds;
         riverStage.update(state?.riverLevelMeters ?? 2.2);
+        let dredgingPoseChanged = false;
         for (const [id, model] of r.models) {
           const influence = state?.structureInfluences.find(item => item.placementId === id);
           const operation = resolveFacilityActivity(influence, state);
@@ -614,6 +626,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             state?.disasterElapsedSeconds ?? 0, reducedMotion.matches,
             model.userData.preview ? 0 : operation.operationActivity,
             model.userData.preview ? 0 : state?.retentionStorageByPlacement?.[id] ?? 0);
+          const poseChanged = r.dredgingCycles.get(id)?.update(model.userData.preview ? 0 : operation.operationActivity,
+            state?.disasterElapsedSeconds ?? 0, reducedMotion.matches);
+          if (poseChanged && model.visible) dredgingPoseChanged = true;
           const operationText = labels.current.get(id)?.querySelector("[data-operation]");
           if (operationText && operationText.textContent !== operation.label) operationText.textContent = operation.label;
           const delta =
@@ -625,7 +640,19 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           const progress = (now - model.userData.popStarted) / 240;
           const pop = facilityPopScale(progress);
           model.scale.setScalar(pop);
-          model.position.y = model.userData.groundHeight + (pop - 1) * 24;
+          const dredging = r.dredgingCycles.has(id);
+          const base = dredging
+            ? resolveDredgingBaseY(sampleRiverSurface(model.position.x, model.position.z), model.userData.groundElevation)
+            : model.userData.groundHeight;
+          if (dredging) {
+            if (model.visible !== (base !== null)) dredgingPoseChanged = true;
+            model.visible = base !== null;
+          }
+          if (base !== null) {
+            const y = base + (pop - 1) * 24;
+            if (dredging && model.position.y !== y) dredgingPoseChanged = true;
+            model.position.y = y;
+          }
           if (model.userData.rotationShadowDirty && Math.abs(delta) < 0.001 && progress >= 1) {
             model.rotation.y = model.userData.targetRotation;
             model.userData.rotationShadowDirty = false;
@@ -635,6 +662,13 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           if (basinSlot !== undefined) r.basinConstruction.updateTransform(basinSlot,
             model.position.x, model.position.z, model.rotation.y, model.position.y, model.scale.x);
         }
+        if (r.ghost && r.ghostType === "channel-dredging") {
+          const { x, z } = r.ghost.position;
+          const base = resolveDredgingBaseY(sampleRiverSurface(x, z), r.ground(x, z));
+          r.ghost.visible = base !== null;
+          if (base !== null) r.ghost.position.y = base;
+        }
+        if (refreshDredgingShadows(dredgingPoseChanged, now, renderer.shadowMap.needsUpdate)) renderer.shadowMap.needsUpdate = true;
         waterMaterial.uniforms.time!.value = time;
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
         if (state) inundation.update(state, dt, time);
@@ -813,6 +847,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         scene.remove(inlandPonding.group);
         inlandPonding.dispose();
         disposeObject(scene);
+        r.dredgingCycles.clear();
+        r.operations.clear();
+        r.models.clear();
         if (!world.waterMeshes.length) waterMaterial.dispose();
         renderer.dispose();
         renderer.domElement.remove();
@@ -858,6 +895,7 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
           disposeObject(model);
           r.models.delete(id);
           r.operations.delete(id);
+          r.dredgingCycles.delete(id);
         }
       }
       for (const placement of props.placements) {
@@ -873,7 +911,11 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
               }
             }
           }
-          labelEnvelopes.current.set(model, cacheFacilityLabelEnvelope(model));
+          const envelope = cacheFacilityLabelEnvelope(model);
+          if (placement.structureId === "channel-dredging") {
+            r.dredgingCycles.set(placement.id, createDredgingWorkCycle(model));
+            labelEnvelopes.current.set(model, extendDredgingLabelEnvelope(envelope));
+          } else labelEnvelopes.current.set(model, envelope);
           const operation = createFacilityOperationVisuals(placement.structureId);
           model.add(operation.group);
           r.operations.set(placement.id, operation);
@@ -887,9 +929,15 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         const point = geoToWorld(placement.position.longitude, placement.position.latitude);
         model.userData.preview = placement.preview === true;
         const ground = r.ground(point.x, point.z);
-        model.visible = ground !== null;
-        model.userData.groundHeight = (ground ?? 0) + 0.5;
-        model.position.set(point.x, model.userData.groundHeight, point.z);
+        model.userData.groundElevation = ground;
+        model.userData.groundHeight = placement.structureId === "channel-dredging"
+          ? resolveDredgingBaseY(null, ground) : (ground ?? 0) + 0.5;
+        const base = placement.structureId === "channel-dredging"
+          ? resolveDredgingBaseY(r.sampleRiverSurface(point.x, point.z), ground)
+          : ground === null ? null : model.userData.groundHeight;
+        model.visible = base !== null;
+        model.position.x = point.x; model.position.z = point.z;
+        if (base !== null) model.position.y = base;
         const target = -T.MathUtils.degToRad(placement.headingDegrees);
         if (target !== model.userData.targetRotation) {
           const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

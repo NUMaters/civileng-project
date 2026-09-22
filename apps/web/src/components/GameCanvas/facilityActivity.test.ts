@@ -1,9 +1,15 @@
 import { expect, it } from "vitest";
+import * as THREE from "three";
 import type { PlacedStructure } from "../../features/construction";
 import { calculateOverflowSites, calculatePositiveSiteContributions, calculateStructureInfluences, createInitialFloodState,
   refreshPlacementEffects, type StructureInfluence } from "../../features/disaster/services/floodSimulation";
 import { listOverflowCandidates } from "../../features/disaster/services/overflowBankSites";
 import { resolveFacilityActivity } from "./facilityActivity";
+import { ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
+import { getRiverPlacementContext, suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
+import { createDioramaFacility } from "./dioramaFacilities";
+import { createDredgingWorkCycle } from "./dredgingWorkCycle";
+import { disposeDioramaObject } from "./disposeDioramaObject";
 
 const pump: PlacedStructure = { id: "pump", structureId: "drainage-pump", headingDegrees: 50,
   position: { longitude: 140.3791, latitude: 37.36035, height: 20 } };
@@ -13,6 +19,132 @@ const influence = (): StructureInfluence => ({ ...calculateStructureInfluences([
 const storm = () => ({ ...createInitialFloodState(), phase: "disaster" as const, riverLevelMeters: 4.7,
   inflowPerSecond: 0.01737, drainageCapacityPerSecond: 0.01976, floodDepthMeters: 0.7, protectedBankSites: [{ id: "inland-campus", longitude: 140.3791, latitude: 37.36035,
     primaryHazard: "inlandPonding" as const, protectionStrength: 0.9, overflowing: false }] });
+
+function realDredgingInfluence() {
+  const placements = ABUKUMA_RIVER_CENTERLINE.map((p, i): PlacedStructure => {
+    const position = { longitude: p.lon, latitude: p.lat, height: 17 };
+    return { id: `dredging:${i}`, structureId: "channel-dredging", position,
+      headingDegrees: suggestedStructureHeading("channel-dredging", position) };
+  });
+  // Actual source coordinates and evaluator results: no fabricated coverage.
+  const own = calculateStructureInfluences(placements).find(item => item.effectiveness > 0 &&
+    item.positiveSiteContributions?.length === 0 && item.coveredSiteIds.length === 0 && item.adverseSiteIds.length > 0);
+  expect(own).toBeDefined();
+  return own!;
+}
+
+it("operates real in-channel dredging with zero own bank protection while keeping water feedback zero", () => {
+  expect(listOverflowCandidates().some(site => site.primaryHazard === "capacityShortage")).toBe(false);
+  const own = realDredgingInfluence();
+  expect(getRiverPlacementContext(own.longitude, own.latitude, own.headingDegrees).inChannel).toBe(true);
+  const before = JSON.stringify(own);
+  const model = createDioramaFacility("channel-dredging");
+  try {
+    const cycle = createDredgingWorkCycle(model);
+    const boom = model.getObjectByName("dredging-boom")!;
+    let firstPose = 0;
+    for (const elapsed of [4, 24]) {
+      const state = { ...storm(), disasterElapsedSeconds: elapsed, riverLevelMeters: 2.2 };
+      const activity = resolveFacilityActivity(own, state);
+      expect(activity.operationActivity).toBe(own.effectiveness);
+      expect(activity.waterActivity).toBe(0); expect(activity.activity).toBe(0);
+      expect(activity.warning).toBe(`相性注意${own.adverseSiteIds.length}地点`);
+      expect(activity.label).toContain("掘削作業中");
+      expect(activity.label).not.toMatch(/流下断面を確保|越水を抑制/);
+      cycle.update(activity.operationActivity, elapsed, false);
+      expect(boom.rotation.z).not.toBe(0);
+      if (elapsed === 4) firstPose = boom.rotation.z;
+      else expect(boom.rotation.z).not.toBeCloseTo(firstPose, 3);
+    }
+  } finally { disposeDioramaObject(model); }
+  expect(JSON.stringify(own)).toBe(before);
+});
+
+it("gates dredging by actual channel location rather than a positive effectiveness floor or borrowed protection", () => {
+  const valid = realDredgingInfluence();
+  for (const position of [{ longitude: 140.37776, latitude: 37.359853 },
+    { longitude: 140.3791, latitude: 37.36035 }]) {
+    const context = getRiverPlacementContext(position.longitude, position.latitude, 50);
+    expect(context.inChannel).toBe(false);
+    const own = calculateStructureInfluences([{ id: "misplaced", structureId: "channel-dredging",
+      position: { ...position, height: 17 }, headingDegrees: 50 }])[0];
+    expect(own.effectiveness).toBeGreaterThan(0); // evaluator has a floor even for misplacements
+    expect(resolveFacilityActivity(own, storm()).operationActivity).toBe(0);
+    expect(resolveFacilityActivity({ ...own, positiveSiteContributions: [{ siteId: "inland-campus", strength: 1 }] }, storm()).waterActivity).toBe(0);
+  }
+  for (const effectiveness of [0, -1, NaN, Infinity]) {
+    expect(resolveFacilityActivity({ ...valid, effectiveness }, storm()).operationActivity).toBe(0);
+  }
+  for (const key of ["longitude", "latitude", "headingDegrees"] as const) for (const value of [NaN, Infinity]) {
+    expect(resolveFacilityActivity({ ...valid, [key]: value }, storm()).operationActivity).toBe(0);
+  }
+});
+
+it("keeps dredging previews, idle/preparation, unknown phases and missing state inactive", () => {
+  const own = realDredgingInfluence();
+  expect(resolveFacilityActivity({ ...own, preview: true }, storm()).operationActivity).toBe(0);
+  expect(resolveFacilityActivity(own, undefined).operationActivity).toBe(0);
+  for (const phase of ["idle", "preparation", "unknown", ""]) {
+    expect(resolveFacilityActivity(own, { ...storm(), phase }).operationActivity).toBe(0);
+  }
+});
+
+it("preserves the exact 90s rig snapshot and buffer version through result/review", () => {
+  const own = realDredgingInfluence();
+  // Cover both the actual no-benefit case and an attributed water-feedback case.
+  for (const positiveSiteContributions of [own.positiveSiteContributions, [{ siteId: "inland-campus", strength: 0.6 }]]) {
+    const source = { ...own, positiveSiteContributions };
+    const model = createDioramaFacility("channel-dredging");
+    try {
+      const cycle = createDredgingWorkCycle(model);
+      const falling = model.getObjectByName("dredging-falling-soil") as THREE.InstancedMesh;
+      const snapshot = () => {
+        model.updateMatrixWorld(true);
+        const values: unknown[] = [];
+        model.traverse(object => values.push(object.position.toArray(), object.rotation.toArray(),
+          object.scale.toArray(), object.visible, object.matrixWorld.toArray()));
+        values.push(Array.from(falling.instanceMatrix.array));
+        return values;
+      };
+      const state = { ...storm(), disasterElapsedSeconds: 90 };
+      const before = resolveFacilityActivity(source, state);
+      expect(before.operationActivity).toBeGreaterThan(0);
+      cycle.update(before.operationActivity, state.disasterElapsedSeconds, false);
+      const finalPose = snapshot(), version = falling.instanceMatrix.version;
+      for (const phase of ["result", "review", "result", "review"]) {
+        const after = resolveFacilityActivity(source, { ...state, phase });
+        expect(after.operationActivity).toBe(before.operationActivity);
+        expect(after.activity).toBe(before.activity);
+        expect(after.waterActivity).toBe(before.waterActivity);
+        expect(after.warning).toBe(before.warning);
+        expect(after.label).toContain("作業記録");
+        expect(after.label).not.toMatch(/作業中|稼働中/);
+        expect(cycle.update(after.operationActivity, state.disasterElapsedSeconds, false)).toBe(false);
+        expect(snapshot()).toEqual(finalPose);
+        expect(falling.instanceMatrix.version).toBe(version);
+      }
+      const idle = resolveFacilityActivity(source, { ...state, phase: "idle" });
+      cycle.update(idle.operationActivity, 0, false);
+      expect(model.getObjectByName("dredging-boom")!.rotation.z).toBe(0);
+    } finally { disposeDioramaObject(model); }
+  }
+});
+
+it("keeps dredging mechanics independent of missing/invalid benefit data and water feedback attributable", () => {
+  const own = realDredgingInfluence();
+  for (const strength of [0, -1, NaN, Infinity]) {
+    const activity = resolveFacilityActivity({ ...own, positiveSiteContributions: [{ siteId: "inland-campus", strength }] }, storm());
+    expect(activity.operationActivity).toBeGreaterThan(0); expect(activity.waterActivity).toBe(0);
+  }
+  expect(resolveFacilityActivity({ ...own, positiveSiteContributions: undefined }, storm())).toMatchObject({
+    operationActivity: own.effectiveness, waterActivity: 0, activity: 0,
+  });
+  // Forward compatibility: positive local evidence may enable water feedback,
+  // but aggregate protection alone must never be substituted for it.
+  const attributed = { ...own, positiveSiteContributions: [{ siteId: "inland-campus", strength: 0.6 }] };
+  expect(resolveFacilityActivity(attributed, storm()).waterActivity).toBeCloseTo(own.effectiveness * 0.6);
+  expect(resolveFacilityActivity(attributed, { ...storm(), riverLevelMeters: 2.2 }).waterActivity).toBe(0);
+});
 
 it("stops basin intake at capacity and distinguishes retained water from new inflow", () => {
   const basin = { ...influence(), structureId: "retention-basin" };
