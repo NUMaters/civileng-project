@@ -1129,12 +1129,15 @@
 
   .cc-lobby.game-menu {
     align-content: center;
-    width: calc(100% - 16px);
+    gap: 9px;
+    width: calc(100% - 32px);
+    max-width: 356px;
     height: auto;
     min-height: 0;
     max-height: calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    margin: auto 8px;
-    padding: 13px 11px;
+    margin: auto;
+    padding: 12px 10px;
+    border-radius: 25px;
     overflow-x: hidden;
     overflow-y: auto;
   }
@@ -1145,13 +1148,13 @@
 
   .cc-lobby.game-menu .game-menu__back,
   .cc-lobby.game-menu .game-menu__howto-btn {
-    min-height: 40px;
-    padding: 7px 9px;
-    font-size: 11px;
+    min-height: 36px;
+    padding: 6px 8px;
+    font-size: 10px;
   }
 
   .cc-lobby.game-menu .game-menu__brand {
-    font-size: 18px;
+    font-size: 17px;
   }
 
   .cc-lobby.game-menu .game-menu__brief-kicker {
@@ -1160,7 +1163,7 @@
 
   .cc-lobby.game-menu .game-menu__title {
     margin: 2px 0;
-    font-size: clamp(25px, 7.4vw, 29px);
+    font-size: clamp(23px, 7vw, 27px);
   }
 
   .cc-lobby.game-menu .game-menu__title::after {
@@ -1169,12 +1172,16 @@
   }
 
   .cc-lobby.game-menu .game-menu__mode {
-    min-height: 82px;
-    padding: 10px;
+    min-height: 72px;
+    padding: 8px 9px;
+    border-radius: 18px;
   }
 
   .cc-lobby.game-menu .game-menu__mode-index {
     align-self: center;
+    width: 38px;
+    padding: 8px 4px;
+    font-size: 17px;
   }
 
   .cc-lobby.game-menu .game-menu__mode-body {
@@ -1183,24 +1190,26 @@
   }
 
   .cc-lobby.game-menu .game-menu__mode-label {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .cc-lobby.game-menu .game-menu__mode strong {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .cc-lobby.game-menu .game-menu__mode-meta {
-    font-size: 10px;
-    line-height: 1.45;
+    font-size: 9px;
+    line-height: 1.35;
   }
 
   .cc-lobby.game-menu .game-menu__status {
+    min-height: 32px;
     padding-block: 5px;
   }
 
   .cc-lobby.game-menu .game-menu__start {
-    min-height: 48px;
+    min-height: 44px;
+    padding-block: 9px;
   }
 
   .cc-howto.howto-modal {
