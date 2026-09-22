@@ -32,6 +32,52 @@ function snapshot(model: THREE.Group) {
 }
 
 describe("articulated dredging work cycle", () => {
+  it("blends a small activity at fixed elapsed instead of snapping to the global-clock pose", () => {
+    const { cycle, bucket, model, falling } = setup();
+    cycle.update(0, 10); model.updateMatrixWorld(true);
+    const rest = tip(bucket);
+    cycle.update(0.011, 10); model.updateMatrixWorld(true);
+    const low = tip(bucket);
+    expect(low.distanceTo(rest)).toBeGreaterThan(0);
+    expect(low.distanceTo(rest)).toBeLessThan(0.5);
+    expect(falling.visible).toBe(false);
+    const version = falling.instanceMatrix.version, lowPose = snapshot(model);
+    expect(cycle.update(0.011, 10)).toBe(false);
+    expect(falling.instanceMatrix.version).toBe(version);
+    expect(snapshot(model)).toEqual(lowPose);
+    // Same elapsed, different activity must invalidate the pose cache.
+    expect(cycle.update(1, 10)).toBe(true); model.updateMatrixWorld(true);
+    expect(tip(bucket).distanceTo(low)).toBeGreaterThan(5);
+    cycle.update(0.011, 10); model.updateMatrixWorld(true);
+    expect(snapshot(model)).toEqual(lowPose);
+    cycle.update(0.00001, 10); model.updateMatrixWorld(true);
+    expect(tip(bucket).distanceTo(rest)).toBeLessThan(0.00001);
+    cycle.update(0, 10); model.updateMatrixWorld(true);
+    expect(tip(bucket).distanceTo(rest)).toBe(0);
+  });
+
+  it("keeps partial activation continuous, deck-clear and inside the cached sweep", () => {
+    const { update, bucket, model } = setup();
+    const envelope = extendDredgingLabelEnvelope(cacheFacilityLabelEnvelope(model));
+    const sweep = new THREE.Box3().setFromPoints([...envelope.corners]);
+    const actual = new THREE.Box3();
+    for (const phase of [0, 0.2, 0.32, 0.47, 0.62, 0.74, 0.9]) {
+      for (let i = 0; i <= 40; i++) {
+        update(phase, i / 200);
+        expect(sweep.containsBox(actual.setFromObject(model))).toBe(true);
+        for (const x of [-2.7, 13]) for (const y of [-8.6, 2.7]) for (const z of [-5.5, 5.5]) {
+          const p = bucket.localToWorld(new THREE.Vector3(x, y, z));
+          if (p.y < 5 && p.y > -4) expect(p.x > 39 || p.x < -39 || Math.abs(p.z) > 19).toBe(true);
+        }
+      }
+      for (const amount of [0.01, 0.1, 0.2]) {
+        update(phase, amount - 0.000001); const before = tip(bucket);
+        update(phase, amount + 0.000001);
+        expect(tip(bucket).distanceTo(before)).toBeLessThan(0.01);
+      }
+    }
+  });
+
   it("keeps previews, idle and reduced motion in the exact original fixed pose", () => {
     const { model, update, cycle } = setup();
     const rest = snapshot(model);
