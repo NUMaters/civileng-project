@@ -1,4 +1,5 @@
 import type { FloodSimulationState, StructureInfluence } from "../../features/disaster/services/floodSimulation";
+import { getRiverPlacementContext } from "../../features/disaster/services/hydraulicPlacement";
 
 const clamp = (n: number) => Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0;
 const labels: Record<string, string> = {
@@ -28,6 +29,23 @@ export function resolveFacilityActivity(influence: StructureInfluence | undefine
   });
   if (!influence || influence.preview || !state) return result(0, "配置を検討中");
   if (state.phase === "idle" || state.phase === "preparation") return result(0, "大雨に備えて待機");
+  if (influence.structureId === "channel-dredging") {
+    // Earthwork can run without protecting a bank candidate. In particular the
+    // current candidate set has no capacityShortage sites. Effectiveness alone
+    // cannot authorize work: its evaluator retains a floor even on dry banks.
+    const effectiveness = clamp(influence.effectiveness);
+    if (state.phase !== "disaster") return result(0, "掘削作業は待機中");
+    if (!effectiveness || !Number.isFinite(influence.longitude) || !Number.isFinite(influence.latitude) ||
+      !Number.isFinite(influence.headingDegrees) ||
+      !getRiverPlacementContext(influence.longitude, influence.latitude, influence.headingDegrees).inChannel) {
+      return result(0, "河道内の有効な配置で作業");
+    }
+    // Mechanical motion is not evidence of water-level reduction or bank
+    // protection. Only this placement's actual positive attribution feeds water.
+    const protection = influence.positiveSiteContributions?.reduce((max, site) => Math.max(max, clamp(site.strength)), 0) ?? 0;
+    const water = effectiveness * protection * clamp((state.riverLevelMeters - 2.2) / 2.5);
+    return result(effectiveness, "河道掘削作業中", water >= 0.01 ? water : 0);
+  }
   const stored = influence.structureId === "retention-basin"
     ? clamp(state.retentionStorageByPlacement?.[influence.placementId] ?? 0) : 0;
   if (stored >= 1) return result(0, "貯留上限・水を保持中");

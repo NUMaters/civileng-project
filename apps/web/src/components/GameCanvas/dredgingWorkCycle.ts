@@ -100,11 +100,16 @@ export function createDredgingWorkCycle(model: THREE.Group) {
     + 13.7 * Math.cos(DUMP_PITCH) + 5.5 * Math.sin(DUMP_PITCH);
   const releaseY = 13 + BOOM_LENGTH * Math.sin(1.1) + STICK_LENGTH * Math.sin(-0.35)
     + 13.7 * Math.sin(DUMP_PITCH) - 5.5 * Math.cos(DUMP_PITCH);
+  // Bind once to the newly-created rest pose. Only transitions reset instances;
+  // a paused clock or repeated preview/reduced-motion frame needs no GPU upload.
+  let resting = true, lastPhase = NaN;
   return {
     // Return true only when shadow-casting joints actually change pose.
     update(activity: number, elapsed: number, reducedMotion = false): boolean {
       const active = Number.isFinite(activity) && activity > 0 && Number.isFinite(elapsed) && !reducedMotion;
       if (!active) {
+        if (resting) return false;
+        resting = true; lastPhase = NaN;
         const changed = turret.rotation.y !== 0 || boom.rotation.z !== 0 || stick.rotation.z !== 0 || bucket.rotation.z !== 0;
         turret.rotation.y = boom.rotation.z = stick.rotation.z = bucket.rotation.z = 0;
         soil.visible = falling.visible = false;
@@ -115,6 +120,8 @@ export function createDredgingWorkCycle(model: THREE.Group) {
         return changed;
       }
       const t = ((elapsed % DREDGING_CYCLE_SECONDS) + DREDGING_CYCLE_SECONDS) % DREDGING_CYCLE_SECONDS / DREDGING_CYCLE_SECONDS;
+      if (!resting && t === lastPhase) return false;
+      resting = false; lastPhase = t;
       let index = 0;
       while (index < POSES.length - 2 && t > POSES[index + 1]![0]) index++;
       const a = POSES[index]!, b = POSES[index + 1]!;

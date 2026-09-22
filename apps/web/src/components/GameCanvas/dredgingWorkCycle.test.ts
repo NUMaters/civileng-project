@@ -46,6 +46,37 @@ describe("articulated dredging work cycle", () => {
     cycle.update(1, NaN); expect(snapshot(model)).toEqual(rest);
   });
 
+  it("does not upload instance matrices for repeated rest, reduced-motion or frozen-time frames", () => {
+    const { model, cycle, falling } = setup();
+    const writes = vi.spyOn(falling, "setMatrixAt");
+    const initialVersion = falling.instanceMatrix.version;
+    for (let i = 0; i < 120; i++) {
+      cycle.update(0, i); cycle.update(1, i, true);
+    }
+    expect(writes).not.toHaveBeenCalled();
+    expect(falling.instanceMatrix.version).toBe(initialVersion);
+    cycle.update(1, 4);
+    const activeVersion = falling.instanceMatrix.version;
+    const activePose = snapshot(model);
+    writes.mockClear();
+    for (let i = 0; i < 120; i++) cycle.update(1, 4);
+    expect(writes).not.toHaveBeenCalled();
+    expect(falling.instanceMatrix.version).toBe(activeVersion);
+    expect(snapshot(model)).toEqual(activePose);
+    cycle.update(1, 4, true);
+    expect(writes).toHaveBeenCalledTimes(12); // one transition back to rest
+    const restVersion = falling.instanceMatrix.version;
+    writes.mockClear();
+    for (let i = 0; i < 120; i++) {
+      cycle.update(1, i, true); cycle.update(0, i);
+    }
+    expect(writes).not.toHaveBeenCalled();
+    expect(falling.instanceMatrix.version).toBe(restVersion);
+    cycle.update(1, 4);
+    expect(falling.instanceMatrix.version).toBeGreaterThan(restVersion);
+    expect(snapshot(model)).toEqual(activePose);
+  });
+
   it("digs below local water datum outside the pontoon, lifts, slews, dumps, then returns", () => {
     const { model, bucket, soil, falling, update } = setup();
     update(0.2);
