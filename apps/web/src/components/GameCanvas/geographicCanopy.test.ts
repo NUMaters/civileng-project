@@ -48,9 +48,9 @@ function renderCost(group: THREE.Group) {
 }
 
 describe("bounded imagery canopy reconstruction", () => {
-  it("preserves thirteen source envelopes and labels internal placement as illustrative, not observed trees", () => {
+  it("preserves twenty source envelopes and labels internal placement as illustrative, not observed trees", () => {
     const patches = convertImageryCanopyObservations(source);
-    expect(patches).toHaveLength(13);
+    expect(patches).toHaveLength(20);
     expect(patches.filter(p => p.illustrativeProfile).map(p => p.id)).toEqual([
       "riverbank-middle-canopy-core", "riverbank-north-canopy-core",
     ]);
@@ -58,7 +58,7 @@ describe("bounded imagery canopy reconstruction", () => {
     for (const p of patches) expect(p.source).toBe(source.source);
     expect(source.source.mapUrl).toBe("https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1");
     const riverbankIds = source.patches.filter(p => p.id.startsWith("riverbank-")).map(p => p.id);
-    expect(riverbankIds).toHaveLength(9);
+    expect(riverbankIds).toHaveLength(16);
     const mapBounds = { minX: koriyamaGeoToLocal([140.370, 37.379]).x, maxX: koriyamaGeoToLocal([140.398, 37.351]).x,
       minZ: koriyamaGeoToLocal([140.370, 37.379]).z, maxZ: koriyamaGeoToLocal([140.398, 37.351]).z };
     for (const patch of patches.filter(p => riverbankIds.includes(p.id))) {
@@ -174,6 +174,12 @@ describe("bounded imagery canopy reconstruction", () => {
     const nw = koriyamaGeoToLocal([140.370, 37.379]), se = koriyamaGeoToLocal([140.398, 37.351]);
     const groundSampler = vi.fn((x: number, z: number) => { const p = worldToGeo(x, z); return sampleKoriyamaTerrain(terrain, p.longitude, p.latitude).localY; });
     const options = { bounds: { minX: nw.x, minZ: nw.z, maxX: se.x, maxZ: se.z }, exclusions, observedCrowns, groundSampler };
+    const addedPatch = (p: { id: string }) => p.id.startsWith("riverbank-z20260922-");
+    const previousPatches = patches.filter(p => !addedPatch(p));
+    expect(previousPatches).toHaveLength(13);
+    expect(patches.filter(addedPatch)).toHaveLength(7);
+    const previous = create(previousPatches, options);
+    groundSampler.mockClear();
     const baseline = create(patches.map(p => ({ ...p, illustrativeProfile: undefined })), options);
     const baselineGroundCalls = groundSampler.mock.calls.length;
     groundSampler.mockClear();
@@ -183,7 +189,23 @@ describe("bounded imagery canopy reconstruction", () => {
     expect(baseline.stats.counts.rendered).toBeGreaterThan(300);
     expect(baseline.stats.evaluatedCells).toBeGreaterThan(1_000);
     expect(accepted.length).toBeGreaterThan(baseline.stats.counts.rendered);
-    expect(r.stats.evaluatedCells).toBeGreaterThan(baseline.stats.evaluatedCells); expect(r.stats.meshes).toBeLessThanOrEqual(16);
+    expect(r.stats.evaluatedCells).toBeGreaterThan(baseline.stats.evaluatedCells);
+    // Spatially separated riverbank envelopes need more tile batches, not
+    // one draw call per reconstructed tree. Keep a bounded expansion budget.
+    expect(r.stats.meshes).toBeLessThanOrEqual(24);
+    expect(r.records.filter(c => !c.patchId.startsWith("riverbank-z20260922-"))).toEqual(previous.records);
+    const expansionTrees = accepted.filter(c => c.patchId.startsWith("riverbank-z20260922-"));
+    expect(expansionTrees.length).toBeGreaterThan(0);
+    expect(accepted.length).toBe(previous.stats.counts.rendered + expansionTrees.length);
+    for (const result of [previous, r]) {
+      expect(result.stats.skippedPatches).toEqual([]);
+      expect(result.stats.counts.capacity).toBe(0);
+      expect(result.stats.evaluatedCells).toBeLessThan(8192);
+      expect(result.stats.counts.rendered).toBeLessThan(1500);
+    }
+    expect(renderCost(r.group).instanceBytes - renderCost(previous.group).instanceBytes).toBe(expansionTrees.length * 140);
+    expect(renderCost(r.group).triangles - renderCost(previous.group).triangles).toBeLessThanOrEqual(expansionTrees.length * 400);
+    console.info("canopy envelope expansion", JSON.stringify({ before: previous.stats, after: r.stats, beforeCost: renderCost(previous.group), afterCost: renderCost(r.group), addedTrees: expansionTrees.length }));
     expect(r.group.children.filter(m => m.castShadow)).toHaveLength(r.stats.meshes / 2);
     for (const mesh of r.group.children) expect(mesh.castShadow).toBe(mesh.userData.part === "crown");
     expect(r.stats.skippedPatches).toEqual([]); expect(r.stats.counts.capacity).toBe(0);
