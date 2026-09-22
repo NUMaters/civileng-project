@@ -24,6 +24,97 @@
   },
   "patches": [
     {
+      "id": "riverbank-z20260922-east-bridge-north",
+      "rings": [[[573,-1126],[600,-1108],[547,-1042],[526,-1050],[549,-1092],[573,-1126]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "Reinspection of the cached GSI mosaic on 2026-09-22; inherited view-label capture period, per-patch acquisition date unverified.",
+        "boundaryStatus": "Visually traced crown-bearing riverbank strip from the georeferenced z18 mosaic (top-left tile 233290/101697). Open channel, broad reed/grass beds, levee crest and crown shadows alone omitted. Envelope inferred; individual internal tree positions and heights illustrative.",
+        "screenVerticesPx": [[1597,922],[1624,940],[1571,1006],[1550,998],[1573,956],[1597,922]]
+      }
+    },
+    {
+      "id": "riverbank-z20260922-east-bridge-south",
+      "rings": [[[515,-979],[536,-962],[499,-884],[447,-809],[406,-755],[383,-771],[438,-857],[486,-933],[515,-979]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "Reinspection of the cached GSI mosaic on 2026-09-22; inherited view-label capture period, per-patch acquisition date unverified.",
+        "boundaryStatus": "Visually traced crown-bearing riverbank strip from the georeferenced z18 mosaic (top-left tile 233290/101697). Open channel, broad reed/grass beds, levee crest and crown shadows alone omitted. Envelope inferred; individual internal tree positions and heights illustrative.",
+        "screenVerticesPx": [[1539,1069],[1560,1086],[1523,1164],[1471,1239],[1430,1293],[1407,1277],[1462,1191],[1510,1115],[1539,1069]]
+      }
+    },
+    {
+      "id": "riverbank-z20260922-east-bend-a",
+      "rings": [[[371,-738],[401,-725],[363,-658],[297,-589],[256,-603],[305,-658],[371,-738]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "Reinspection of the cached GSI mosaic on 2026-09-22; inherited view-label capture period, per-patch acquisition date unverified.",
+        "boundaryStatus": "Visually traced crown-bearing riverbank strip from the georeferenced z18 mosaic (top-left tile 233290/101697). Open channel, broad reed/grass beds, levee crest and crown shadows alone omitted. Envelope inferred; individual internal tree positions and heights illustrative.",
+        "screenVerticesPx": [[1395,1310],[1425,1323],[1387,1390],[1321,1459],[1280,1445],[1329,1390],[1395,1310]]
+      }
+    },
+    {
+      "id": "riverbank-z20260922-east-bend-b",
+      "rings": [[[245,-577],[276,-562],[229,-518],[153,-456],[104,-438],[96,-459],[167,-507],[245,-577]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "Reinspection of the cached GSI mosaic on 2026-09-22; inherited view-label capture period, per-patch acquisition date unverified.",
+        "boundaryStatus": "Visually traced crown-bearing riverbank strip from the georeferenced z18 mosaic (top-left tile 233290/101697). Open channel, broad reed/grass beds, levee crest and crown shadows alone omitted. Envelope inferred; individual internal tree positions and heights illustrative.",
+        "screenVerticesPx": [[1269,1471],[1300,1486],[1253,1530],[1177,1592],[1128,1610],[1120,1589],[1191,1541],[1269,1471]]
+      }
+    },
+    {
+      "id": "riverbank-z20260922-east-campus-north",
+      "rings": [[[80,-435],[110,-413],[45,-357],[-22,-318],[-64,-312],[-65,-336],[6,-382],[80,-435]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "Reinspection of the cached GSI mosaic on 2026-09-22; inherited view-label capture period, per-patch acquisition date unverified.",
+        "boundaryStatus": "Visually traced crown-bearing riverbank strip from the georeferenced z18 mosaic (top-left tile 233290/101697). Open channel, broad reed/grass beds, levee crest and crown shadows alone omitted. Envelope inferred; individual internal tree positions and heights illustrative.",
+        "screenVerticesPx": [[1104,1613],[1134,1635],[1069,1691],[1002,1730],[960,1736],[959,1712],[1030,1666],[1104,1613]]
+      }
+    },
+    {
+      "id": "riverbank-z20260922-confluence-school-east",
+      "rings": [[[248,-1407],[290,-1421],[317,-1398],[307,-1344],[280,-1293],[242,-1282],[228,-1317],[232,-1365],[248,-1407]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "Reinspection of the cached GSI mosaic on 2026-09-22; inherited view-label capture period, per-patch acquisition date unverified.",
+        "boundaryStatus": "Visually traced crown-bearing riverbank strip from the georeferenced z18 mosaic (top-left tile 233290/101697). Open channel, broad reed/grass beds, levee crest and crown shadows alone omitted. Envelope inferred; individual internal tree positions and heights illustrative.",
+        "screenVerticesPx": [[1272,641],[1314,627],[1341,650],[1331,704],[1304,755],[1266,766],[1252,731],[1256,683],[1272,641]]
+      }
+    },
+    {
+      "id": "riverbank-z20260922-confluence-school-north",
+      "rings": [[[-154,-1344],[-91,-1357],[-37,-1343],[30,-1360],[112,-1381],[142,-1368],[146,-1333],[79,-1315],[0,-1308],[-73,-1306],[-141,-1318],[-154,-1344]]],
+      "observationView": {
+        "mapUrl": "https://maps.gsi.go.jp/#18/37.3600/140.3825/&base=seamlessphoto&ls=seamlessphoto&disp=1",
+        "layer": "seamlessphoto",
+        "referenceTileTopLeftScreenPx": [1024,2048],
+        "displayedCapturePeriod": "2022-07/2022-09",
+        "captureDateUncertainty": "Reinspection of the cached GSI mosaic on 2026-09-22; inherited view-label capture period, per-patch acquisition date unverified.",
+        "boundaryStatus": "Visually traced crown-bearing riverbank strip from the georeferenced z18 mosaic (top-left tile 233290/101697). Open channel, broad reed/grass beds, levee crest and crown shadows alone omitted. Envelope inferred; individual internal tree positions and heights illustrative.",
+        "screenVerticesPx": [[870,704],[933,691],[987,705],[1054,688],[1136,667],[1166,680],[1170,715],[1103,733],[1024,740],[951,742],[883,730],[870,704]]
+      }
+    },
+    {
       "id": "campus-north-grove-core",
       "rings": [[[211,-227],[243,-239],[272,-223],[278,-187],[259,-155],[223,-155],[205,-184],[211,-227]]]
     },
