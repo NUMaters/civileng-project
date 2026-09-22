@@ -75,7 +75,12 @@ export function createFacilityOperationVisuals(structureId: string): {
     shape.quadraticCurveTo(-32, 22, -32, 14);
     shape.lineTo(-32, -14);
     shape.quadraticCurveTo(-32, -22, -24, -22);
-    water = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8).rotateX(-Math.PI / 2), material);
+    // A retained body of water needs a stable blue surface; inlet streak opacity
+    // must not fade it into the dry field when inflow drops to zero.
+    const storedWaterMaterial = new THREE.MeshStandardMaterial({
+      color: "#10a6cf", roughness: 0.28, metalness: 0.08, side: THREE.DoubleSide,
+    });
+    water = new THREE.Mesh(new THREE.ShapeGeometry(shape, 8).rotateX(-Math.PI / 2), storedWaterMaterial);
     water.name = "basin-fill";
     group.add(water);
   }
