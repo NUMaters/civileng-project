@@ -36,6 +36,7 @@ import "./diorama.css";
 import { disposeDioramaObject as disposeObject } from "./disposeDioramaObject";
 import { createFacilityOperationVisuals } from "./facilityOperationVisuals";
 import { resolveFacilityActivity } from "./facilityActivity";
+import { createBasinConstructionMask } from "./basinConstructionSurface";
 import { FACILITY_LABEL_MARGIN, type FacilityLabelLayout } from "./facilityLabelLayout";
 import { cacheFacilityLabelEnvelope, projectFacilityBody, layoutFacilityLabelOutsideBody,
   type FacilityLabelEnvelope } from "./facilityModelLabelLayout";
@@ -61,6 +62,8 @@ type Runtime = {
   controls: OrbitControls;
   models: Map<string, T.Group>;
   operations: Map<string, ReturnType<typeof createFacilityOperationVisuals>>;
+  basinConstruction: ReturnType<typeof createBasinConstructionMask>;
+  basinMaskSlots: Map<string, number>;
   inundation: ReturnType<typeof createDioramaInundation>;
   floodBarrierKey: string | null;
   ghost: T.Group | null;
@@ -298,6 +301,17 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       reset();
       scene.add(boundaryMosaic, terrain.group, world, bridges.group, train.group, landcover.group, imageryVegetation.group, canopy.group);
       const waterMaterial = createGeographicWaterMaterial();
+      const basinConstruction = createBasinConstructionMask();
+      basinConstruction.attach(waterMaterial, "water");
+      const terrainMaterials = new Set<T.Material>();
+      terrain.group.traverse(object => {
+        if (object instanceof T.Mesh) {
+          for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+            terrainMaterials.add(material);
+          }
+        }
+      });
+      for (const material of terrainMaterials) basinConstruction.attach(material, "terrain");
       const oldWaterMaterials = new Set<T.Material>();
       for (const mesh of world.waterMeshes) {
         for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) oldWaterMaterials.add(material);
@@ -377,13 +391,18 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
       };
       const raycaster = new T.Raycaster(),
         cursor = new T.Vector2();
+      const sourceWaterObjects = new Set<T.Object3D>(world.waterMeshes);
       const pick = (x: number, y: number) => {
         const rect = renderer.domElement.getBoundingClientRect();
         if (x < rect.left || y < rect.top || x > rect.right || y > rect.bottom) return null;
         cursor.set(((x - rect.left) / rect.width) * 2 - 1, 1 - ((y - rect.top) / rect.height) * 2);
         raycaster.setFromCamera(cursor, camera);
-        const hit = raycaster.intersectObjects([...terrain.group.children, ...world.waterMeshes], false)[0];
-        return hit ? { x: hit.point.x, z: hit.point.z } : null;
+        const hit = raycaster.intersectObjects([...terrain.group.children, ...world.waterMeshes], false)
+          .find(candidate => !basinConstruction.shouldDiscard(candidate.point,
+            sourceWaterObjects.has(candidate.object) ? "water" : "terrain"));
+        const floor = basinConstruction.raycastFloor(raycaster.ray);
+        const point = floor && (!hit || floor.distanceTo(raycaster.ray.origin) < hit.distance) ? floor : hit?.point;
+        return point ? { x: point.x, z: point.z } : null;
       };
       const r: Runtime = {
         renderer,
@@ -392,6 +411,8 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
         controls,
         models: new Map(),
         operations: new Map(),
+        basinConstruction,
+        basinMaskSlots: new Map(),
         inundation,
         floodBarrierKey: null,
         ghost: null,
@@ -610,6 +631,9 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             model.userData.rotationShadowDirty = false;
             renderer.shadowMap.needsUpdate = true;
           }
+          const basinSlot = r.basinMaskSlots.get(id);
+          if (basinSlot !== undefined) r.basinConstruction.updateTransform(basinSlot,
+            model.position.x, model.position.z, model.rotation.y, model.position.y, model.scale.x);
         }
         waterMaterial.uniforms.time!.value = time;
         waterMaterial.uniforms.storm!.value = state?.rainfallIntensity ?? 0;
@@ -801,6 +825,20 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
     useEffect(() => {
       const r = runtime.current;
       if (!r) return;
+      // Local construction cuts only the bowl; source DEM remains unchanged.
+      // The same snapshot includes previews so placement shows the finished bed.
+      r.basinMaskSlots.clear();
+      r.basinConstruction.update(props.placements.flatMap(p => {
+        if (p.structureId !== "retention-basin") return [];
+        const point = geoToWorld(p.position.longitude, p.position.latitude);
+        const ground = r.ground(point.x, point.z);
+        if (ground === null || !Number.isFinite(ground)) return [];
+        r.basinMaskSlots.set(p.id, r.basinMaskSlots.size);
+        return [{ ...point, headingDegrees: p.headingDegrees, baseY: ground + 0.5 }];
+      }));
+      if (!r.basinConstruction.status.ok) {
+        console.warn("Basin construction surface unavailable", r.basinConstruction.status);
+      }
       // Committed props are authoritative, never animated models or drag ghosts.
       // Cache by geometry so preview edits/unrelated placements do not rebuild grids.
       const levees = props.placements.filter(p => p.structureId === "levee" && !p.preview).map(p => ({
