@@ -4,6 +4,7 @@ import type { PlacedStructure } from "../../construction";
 import {
   advanceFloodSimulation,
   beginDisaster,
+  beginPreparation,
   calculateMitigation,
   calculateOverflowSites,
   calculatePlacementEffectiveness,
@@ -13,6 +14,7 @@ import {
   refreshPlacementEffects,
   reopenResult,
 } from "./floodSimulation";
+import { advanceRetentionStorage } from "./retentionStorage";
 
 const CLEAR_THRESHOLD = loadRules().victory.clearThresholdPercent;
 const DISASTER_SECONDS = loadRules().timing.phases.disasterSeconds;
@@ -79,6 +81,83 @@ function channelMisplacedLevee(): PlacedStructure {
 }
 
 describe("floodSimulation", () => {
+  it("accumulates basin storage only from current steps, including late placement", () => {
+    const late = { ...startDisaster(), disasterElapsedSeconds: DISASTER_SECONDS - 10 };
+    const refreshed = refreshPlacementEffects(late, [BASIN]);
+    expect(refreshed.retentionStorageByPlacement).toEqual({ [BASIN.id]: 0 });
+    const next = advanceFloodSimulation(refreshed, [BASIN], 1);
+    const fill = next.retentionStorageByPlacement![BASIN.id];
+    expect(fill).toBeGreaterThan(0);
+    expect(fill).toBeLessThanOrEqual(1 / 45);
+    expect(next.retentionStorageByPlacement).toEqual(
+      advanceRetentionStorage(
+        refreshed.retentionStorageByPlacement,
+        next.structureInfluences,
+        next.riverLevelMeters,
+        1,
+      ),
+    );
+    expect(
+      advanceFloodSimulation(next, [BASIN], 1).retentionStorageByPlacement![BASIN.id],
+    ).toBeGreaterThan(fill);
+  });
+
+  it("refresh retains fill, prunes removed basins, and excludes previews", () => {
+    const current = {
+      ...startDisaster(),
+      retentionStorageByPlacement: { [BASIN.id]: 0.4, removed: 0.8 },
+    };
+    const refreshed = refreshPlacementEffects(current, [
+      BASIN,
+      { ...BASIN, id: "preview", preview: true },
+    ]);
+    expect(refreshed.retentionStorageByPlacement).toEqual({ [BASIN.id]: 0.4 });
+    expect(refreshPlacementEffects(refreshed, []).retentionStorageByPlacement).toEqual({});
+    expect(refreshPlacementEffects(refreshed, [BASIN]).retentionStorageByPlacement).toEqual(
+      refreshed.retentionStorageByPlacement,
+    );
+  });
+
+  it("bounds the final integration dt and freezes storage in result and review", () => {
+    const current = {
+      ...startDisaster(),
+      disasterElapsedSeconds: DISASTER_SECONDS - 0.25,
+      retentionStorageByPlacement: { [BASIN.id]: 0.4 },
+    };
+    const final = advanceFloodSimulation(current, [BASIN], 60);
+    expect(final).toEqual(advanceFloodSimulation(current, [BASIN], 0.25));
+    expect(final.phase).toBe("result");
+    expect(final.retentionStorageByPlacement![BASIN.id]).toBeGreaterThan(0.4);
+    expect(final.retentionStorageByPlacement![BASIN.id]).toBeLessThanOrEqual(0.4 + 0.25 / 45);
+    expect(advanceFloodSimulation(final, [BASIN], 60)).toBe(final);
+    const review = enterReview(final);
+    expect(advanceFloodSimulation(review, [BASIN], 60)).toBe(review);
+    expect(reopenResult(review).retentionStorageByPlacement).toEqual(
+      final.retentionStorageByPlacement,
+    );
+    expect(refreshPlacementEffects(review, [BASIN]).retentionStorageByPlacement).toEqual(
+      final.retentionStorageByPlacement,
+    );
+    expect(beginPreparation().retentionStorageByPlacement).toEqual({});
+    expect(beginDisaster(final).retentionStorageByPlacement).toEqual({});
+  });
+
+  it("accepts older snapshots and does not advance storage in preparation or invalid ticks", () => {
+    const legacy = startDisaster();
+    delete legacy.retentionStorageByPlacement;
+    const next = advanceFloodSimulation(legacy, [BASIN]);
+    expect(next.retentionStorageByPlacement).toEqual(
+      advanceRetentionStorage(undefined, next.structureInfluences, next.riverLevelMeters, 1),
+    );
+    for (const dt of [0, -1, NaN, Infinity]) {
+      expect(advanceFloodSimulation(legacy, [BASIN], dt)).toBe(legacy);
+    }
+    const preparing = refreshPlacementEffects(beginPreparation(), [BASIN]);
+    expect(advanceFloodSimulation(preparing, [BASIN], 0.1).retentionStorageByPlacement).toEqual({
+      [BASIN.id]: 0,
+    });
+  });
+
   it("施設がない場合は大雨で浸水被害が発生する", () => {
     const state = runToResult([]);
 
