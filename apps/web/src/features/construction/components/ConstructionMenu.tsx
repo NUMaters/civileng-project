@@ -72,6 +72,13 @@ export function ConstructionMenu({
             </div>
           </dl>
           <p className="cmd-dock__tooltip-zone">{getStructureZoneMeaning(selected.id)}</p>
+          <button
+            className="cmd-dock__keyboard-place"
+            type="button"
+            onClick={() => onKeyboardPlace(selected.id)}
+          >
+            キーボードで配置
+          </button>
         </div>
       ) : null}
 

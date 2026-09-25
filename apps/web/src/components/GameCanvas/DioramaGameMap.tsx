@@ -7,6 +7,7 @@ import type { CesiumGameMapHandle, CesiumGameMapProps } from "./CesiumGameMap";
 import type { PlacedStructure } from "../../features/construction";
 import { calculateStructureInfluences } from "../../features/disaster/services/floodSimulation";
 import { suggestedStructureHeading } from "../../features/disaster/services/hydraulicPlacement";
+import { ABUKUMA_RIVER_CENTERLINE } from "./abukumaRiverGeometry";
 import { resolvePlaceablePosition } from "./riverPlacement";
 import { geoToWorld, riverX, worldToGeo } from "./dioramaSpace";
 import { createGeographicWorld } from "./geographicWorld";
@@ -179,6 +180,18 @@ export const DioramaGameMap = forwardRef<DioramaGameMapHandle, DioramaGameMapPro
             latest.current.onInvalidPosition("川か河岸の近くへドラッグしてください");
             return false;
           }
+          latest.current.onDropPlace(id, geo, suggestedStructureHeading(id, geo));
+          return true;
+        },
+        placeStructureAtDefault: (id) => {
+          const anchor = ABUKUMA_RIVER_CENTERLINE[Math.floor(ABUKUMA_RIVER_CENTERLINE.length / 2)];
+          if (!runtime.current || anchor === undefined) return false;
+          const geo = resolvePlaceablePosition({
+            longitude: anchor.lon,
+            latitude: anchor.lat,
+            height: 0,
+          });
+          if (!geo) return false;
           latest.current.onDropPlace(id, geo, suggestedStructureHeading(id, geo));
           return true;
         },

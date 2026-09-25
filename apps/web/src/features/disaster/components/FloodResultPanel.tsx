@@ -5,8 +5,6 @@ import "./FloodResultPanel.css";
 
 const CLEAR_THRESHOLD = loadRules().victory.clearThresholdPercent;
 
-const CLEAR_THRESHOLD = loadRules().victory.clearThresholdPercent;
-
 type FloodResultPanelProps = Pick<
   FloodSimulationState,
   "phase" | "isClear" | "damagePercent" | "score"
