@@ -1,0 +1,12 @@
+{
+  "protectedAreas": [],
+  "rivers": [
+    {
+      "id": "abukuma",
+      "displayName": "阿武隈川",
+      "source": "OSM relation/18504988"
+    }
+  ],
+  "roads": [],
+  "existingStructures": []
+}

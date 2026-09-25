@@ -7,6 +7,12 @@ dist/
 bin/
 *.tsbuildinfo
 
+# Generated Cesium static assets (copied by apps/web/scripts/copy-cesium-assets.mjs)
+apps/web/public/cesiumStatic/
+apps/web/public/plateau/
+apps/web/.cache/
+apps/web/.preview-dist/
+
 # Go
 apps/server/bin/
 
@@ -25,6 +31,9 @@ apps/server/bin/
 
 # Test / coverage
 coverage/
+
+# Local scratch / temporary files
+tmp/
 
 # Docker volumes (local)
 .docker/

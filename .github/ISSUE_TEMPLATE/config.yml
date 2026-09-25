@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Issue 運用ドキュメント
+    url: https://github.com/NUMaters/civileng-project/blob/develop/docs/development/issue-management.md
+    about: ラベル・マイルストーン・起票ルールはこちら

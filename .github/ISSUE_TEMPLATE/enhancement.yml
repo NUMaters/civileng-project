@@ -1,0 +1,46 @@
+name: Feature / Enhancement
+description: 機能追加・改善
+title: "feat: "
+labels: ["enhancement", "mvp"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        実装 Issue は `feat(scope):` / `chore:` 形式のタイトルを推奨します（[issue-management.md](https://github.com/NUMaters/civileng-project/blob/develop/docs/development/issue-management.md)）。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+    validations:
+      required: true
+  - type: textarea
+    id: background
+    attributes:
+      label: 背景・動機
+  - type: textarea
+    id: criteria
+    attributes:
+      label: 完了条件
+      description: チェックリスト形式で
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: 主な領域
+      options:
+        - ui
+        - api
+        - civil-engineering
+        - game-design
+        - architecture
+        - devops
+        - ai
+        - other
+  - type: textarea
+    id: related
+    attributes:
+      label: 関連 Issue / PR

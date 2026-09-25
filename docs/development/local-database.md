@@ -10,19 +10,19 @@
 
 ローカル開発では `docker-compose.yml` で PostgreSQL と Redis を起動する。アプリケーション（`apps/server`）は `.env` の接続 URL を参照する。
 
-| サービス | 用途 |
-|---------|------|
+| サービス      | 用途                               |
+| ------------- | ---------------------------------- |
 | PostgreSQL 16 | 永続データ（ルーム、プレイヤー等） |
-| Redis 7 | セッション・キャッシュ |
+| Redis 7       | セッション・キャッシュ             |
 
 ---
 
 ## docker-compose サービス構成
 
-| サービス | イメージ | コンテナ名 | ホストポート（既定） |
-|---------|---------|-----------|-------------------|
-| `postgres` | `postgres:16-alpine` | `civilcraft-postgres` | `5432` |
-| `redis` | `redis:7-alpine` | `civilcraft-redis` | `6379` |
+| サービス   | イメージ             | コンテナ名            | ホストポート（既定） |
+| ---------- | -------------------- | --------------------- | -------------------- |
+| `postgres` | `postgres:16-alpine` | `civilcraft-postgres` | `5432`               |
+| `redis`    | `redis:7-alpine`     | `civilcraft-redis`    | `6379`               |
 
 ### 起動・停止
 
@@ -47,21 +47,21 @@ PostgreSQL のデータは Docker ボリューム `postgres_data` に保存さ�
 
 ## 環境変数
 
-`.env.example` をコピーして `.env` を作成する。
+`.env.example` をコピーして `.env` を作成する。サーバー／Web を含む全体一覧は [environment-variables.md](./environment-variables.md)。
 
 ```bash
 cp .env.example .env
 ```
 
-| 変数 | 既定値 | 説明 |
-|------|--------|------|
-| `POSTGRES_USER` | `civilcraft` | PostgreSQL ユーザー |
-| `POSTGRES_PASSWORD` | `civilcraft` | PostgreSQL パスワード |
-| `POSTGRES_DB` | `civilcraft` | データベース名 |
-| `POSTGRES_PORT` | `5432` | ホスト側ポート |
-| `DATABASE_URL` | `postgres://civilcraft:civilcraft@localhost:5432/civilcraft?sslmode=disable` | アプリ接続 URL |
-| `REDIS_PORT` | `6379` | ホスト側ポート |
-| `REDIS_URL` | `redis://localhost:6379/0` | アプリ接続 URL |
+| 変数                | 既定値                                                                       | 説明                  |
+| ------------------- | ---------------------------------------------------------------------------- | --------------------- |
+| `POSTGRES_USER`     | `civilcraft`                                                                 | PostgreSQL ユーザー   |
+| `POSTGRES_PASSWORD` | `civilcraft`                                                                 | PostgreSQL パスワード |
+| `POSTGRES_DB`       | `civilcraft`                                                                 | データベース名        |
+| `POSTGRES_PORT`     | `5432`                                                                       | ホスト側ポート        |
+| `DATABASE_URL`      | `postgres://civilcraft:civilcraft@localhost:5432/civilcraft?sslmode=disable` | アプリ接続 URL        |
+| `REDIS_PORT`        | `6379`                                                                       | ホスト側ポート        |
+| `REDIS_URL`         | `redis://localhost:6379/0`                                                   | アプリ接続 URL        |
 
 ポートを変更する場合は `.env` と `docker-compose.yml` の両方を整合させる。
 

@@ -3,24 +3,40 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "copy:cesium": "node ./scripts/copy-cesium-assets.mjs",
+    "fetch:plateau": "node ./scripts/fetch-plateau-buildings.mjs",
+    "fetch:plateau:full": "node ./scripts/fetch-plateau-buildings.mjs --full-city",
+    "dev": "node ./scripts/dev-stable.mjs",
+    "dev:watch": "vite",
+    "dev:ensure": "node ./scripts/ensure-dev.mjs",
+    "stop:dev": "node ./scripts/stop-dev.mjs",
+    "build": "node ./scripts/build-web.mjs",
     "lint": "eslint .",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "node ./scripts/preview-web.mjs",
+    "pages:deploy": "pnpm build && node ./scripts/pages-deploy.mjs"
   },
   "dependencies": {
+    "@civilcraft/game-data": "workspace:*",
+    "@civilcraft/game-schema": "workspace:*",
+    "cesium": "^1.143.0",
+    "mersenne-twister": "1.1.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "three": "^0.186.0"
   },
   "devDependencies": {
     "@civilcraft/config": "workspace:*",
+    "@types/node": "^26.1.1",
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
-    "@vitejs/plugin-react": "^4.5.0",
+    "@types/three": "^0.186.0",
+    "@vitejs/plugin-react-swc": "^4.3.1",
     "eslint": "^9.28.0",
+    "gensync": "1.0.0-beta.2",
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
-    "vitest": "^3.2.0"
+    "vitest": "^3.2.0",
+    "wrangler": "^4.28.0"
   }
 }

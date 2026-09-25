@@ -3,12 +3,17 @@
   "private": true,
   "packageManager": "pnpm@10.12.1",
   "scripts": {
-    "format": "prettier --write \"**/*.{ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yml,yaml}\" --ignore-path .gitignore",
+    "format": "prettier --write \"**/*.{ts,tsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,md,yml,yaml}\"",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "dev:web": "pnpm --filter @civilcraft/web dev"
+    "dev:web": "pnpm --filter @civilcraft/web dev:ensure",
+    "dev:web:fg": "pnpm --filter @civilcraft/web dev",
+    "dev:game-backend": "go -C apps/server run ./cmd/game",
+    "dev:npc-backend": "go -C apps/server run ./cmd/npc",
+    "stop:web": "pnpm --filter @civilcraft/web stop:dev",
+    "deploy:web": "pnpm --filter @civilcraft/web pages:deploy"
   },
   "devDependencies": {
     "prettier": "^3.5.3"

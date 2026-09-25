@@ -1,0 +1,6 @@
+{
+  "id": "river-flood",
+  "displayName": "河川氾濫",
+  "description": "大雨に伴う氾濫表現用（パラメータはシミュレーション実装時に拡充）。",
+  "mvp": true
+}

@@ -1,0 +1,116 @@
+.review-mode-legend {
+  position: absolute;
+  z-index: 40;
+  top: calc(18px + env(safe-area-inset-top));
+  left: 18px;
+  display: grid;
+  gap: 6px;
+  min-width: 168px;
+  padding: 10px 12px;
+  border: 1px solid #c4e4ee;
+  border-radius: 14px;
+  background: #f7fcff;
+  box-shadow: 0 5px 20px #123c6420;
+  color: #123c64;
+  font-size: 12px;
+}
+
+.review-mode-legend strong {
+  color: #123c64;
+  font-family: var(--font-display);
+  font-size: 12px;
+}
+
+.review-mode-legend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1.3;
+}
+
+.review-mode-legend__swatch {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
+  border-radius: 3px;
+}
+
+.review-mode-legend__swatch--flood {
+  background: #168db7;
+}
+
+.review-mode-legend__swatch--influence {
+  border: 1px solid #15735b;
+  background: #dff5e9;
+}
+
+.review-mode-legend__swatch--risk {
+  background: rgb(232 121 68 / 82%);
+}
+
+/* Same opaque paper and blue controls as the playing HUD. Keep map space and
+   the existing two actions; no extra panel, map blur or runtime effect. */
+.game-shell .review-mode-bar {
+  color: #123c64;
+  background: #f7fcff;
+  border: 1px solid #c4e4ee;
+  box-shadow: 0 5px 20px #123c6420;
+  backdrop-filter: none;
+}
+
+.game-shell .review-mode-bar__score {
+  color: #123c64;
+}
+
+.game-shell .review-mode-bar__badge.is-clear {
+  background: #dff5e9;
+  color: #14634f;
+}
+
+.game-shell .review-mode-bar__badge.is-failure {
+  background: #ffebe5;
+  color: #a63d28;
+}
+
+.game-shell .review-mode-bar__ghost,
+.game-shell .review-mode-bar__primary {
+  min-height: 44px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.game-shell .review-mode-bar__ghost {
+  border: 1px solid #9bbecf;
+  background: #fff;
+  color: #123c64;
+}
+
+.game-shell .review-mode-bar__primary {
+  background: #087ab4;
+  color: #fff;
+}
+
+.game-shell .review-mode-bar button:focus-visible {
+  outline: 3px solid #123c64;
+  outline-offset: 3px;
+}
+
+@media (max-width: 720px) {
+  .review-mode-legend {
+    top: calc(12px + env(safe-area-inset-top));
+    left: 12px;
+    min-width: 150px;
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .review-mode-bar {
+    right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    left: 12px;
+    width: auto;
+    transform: none;
+  }
+}

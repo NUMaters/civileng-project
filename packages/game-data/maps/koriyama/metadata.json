@@ -1,0 +1,23 @@
+{
+  "id": "koriyama-abukuma",
+  "displayName": "郡山・阿武隈川（日大工学部周辺）",
+  "bounds": {
+    "west": 140.365,
+    "south": 37.347,
+    "east": 140.398,
+    "north": 37.388
+  },
+  "initialCamera": {
+    "longitude": 140.3837,
+    "latitude": 37.3655,
+    "headingDegrees": 8,
+    "pitchDegrees": -40,
+    "rangeMeters": 1100
+  },
+  "sources": [
+    "GSI seamlessphoto",
+    "PLATEAU-Terrain",
+    "PLATEAU Koriyama bldg_texture",
+    "OSM Abukuma water (relation/18504988)"
+  ]
+}
