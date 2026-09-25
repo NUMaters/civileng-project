@@ -5,13 +5,8 @@
   "constructionCost": 1800,
   "constructionTimeSeconds": 10,
   "maintenanceCostPerSecond": 2,
-  "allowedTerrains": [
-    "riverBank",
-    "riverChannel"
-  ],
-  "supportedDisasters": [
-    "heavy-rain"
-  ],
+  "allowedTerrains": ["riverBank", "riverChannel"],
+  "supportedDisasters": ["heavy-rain"],
   "effects": {
     "waterLevelReduction": 0,
     "overflowPrevention": 0.04,
@@ -21,12 +16,8 @@
   },
   "role": {
     "primaryHazard": "erosion",
-    "strengths": [
-      "岸崩れを固める"
-    ],
-    "weaknesses": [
-      "溢れは止められない"
-    ]
+    "strengths": ["岸崩れを固める"],
+    "weaknesses": ["溢れは止められない"]
   },
   "hazardAffinity": {
     "overtopping": 0.18,

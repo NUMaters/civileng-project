@@ -59,9 +59,7 @@ function serveCesiumAssets(): Plugin {
           return;
         }
 
-        const relativePath = decodeURIComponent(
-          url.slice(prefix.length).split("?")[0] ?? "",
-        );
+        const relativePath = decodeURIComponent(url.slice(prefix.length).split("?")[0] ?? "");
         if (relativePath === "" || relativePath.includes("..")) {
           res.statusCode = 400;
           res.end("bad path");
@@ -118,13 +116,22 @@ function copySlimPublicAssets(): Plugin {
       if (existsSync(iconsFrom)) {
         cpSync(iconsFrom, path.join(viteOutDir, "icons"), { recursive: true });
       }
+      // The bounded Three.js scene is required at runtime even when the legacy
+      // multi-gigabyte Cesium PLATEAU tiles are excluded from the Pages build.
+      const geodataDir = path.join(viteOutDir, "geodata", "koriyama");
+      mkdirSync(geodataDir, { recursive: true });
+      for (const name of ["features.geojson", "plateau-buildings.geojson", "terrain.bin",
+        "metadata.json", "plateau-metadata.json", "terrain-metadata.json", "README.md", "terrain-README.md",
+        "landcover.geojson", "landcover-metadata.json", "landcover-README.md", "imagery-tree-observations.json", "imagery-canopy-observations.json"]) {
+        cpSync(path.join(webRoot, "public", "geodata", "koriyama", name), path.join(geodataDir, name));
+      }
     },
   };
 }
 
-function attachGsiTileProxy(
-  middlewares: { use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void },
-): void {
+function attachGsiTileProxy(middlewares: {
+  use: (fn: (req: IncomingMessage, res: ServerResponse, next: () => void) => void) => void;
+}): void {
   middlewares.use((req: IncomingMessage, res: ServerResponse, next) => {
     const url = req.url ?? "";
     if (!url.startsWith("/gsi-tiles/")) {
@@ -149,10 +156,7 @@ function attachGsiTileProxy(
         }
         const buffer = Buffer.from(await upstream.arrayBuffer());
         res.statusCode = 200;
-        res.setHeader(
-          "Content-Type",
-          upstream.headers.get("content-type") ?? "image/jpeg",
-        );
+        res.setHeader("Content-Type", upstream.headers.get("content-type") ?? "image/jpeg");
         res.setHeader("Cache-Control", "public, max-age=86400");
         res.end(buffer);
       })
@@ -225,6 +229,10 @@ export default defineConfig(({ command }) => ({
           },
         }),
     proxy: {
+      "/api/npc": {
+        target: process.env.NPC_API_TARGET ?? "http://127.0.0.1:8081",
+        changeOrigin: false,
+      },
       // ゲームサーバー WebSocket（cmd/game GET /ws）
       "/ws": {
         target: "ws://127.0.0.1:8081",

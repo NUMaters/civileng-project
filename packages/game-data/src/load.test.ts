@@ -14,9 +14,7 @@ describe("loadGameData", () => {
     ]);
     expect(structures.every((s) => s.constructionCost > 0)).toBe(true);
     expect(structures.every((s) => s.role.strengths.length > 0)).toBe(true);
-    expect(structures.every((s) => typeof s.hazardAffinity.overtopping === "number")).toBe(
-      true,
-    );
+    expect(structures.every((s) => typeof s.hazardAffinity.overtopping === "number")).toBe(true);
   });
 
   it("loads solo budget and phase timing", () => {

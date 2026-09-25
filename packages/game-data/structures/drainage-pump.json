@@ -5,13 +5,8 @@
   "constructionCost": 2400,
   "constructionTimeSeconds": 12,
   "maintenanceCostPerSecond": 5,
-  "allowedTerrains": [
-    "lowland",
-    "urbanLowland"
-  ],
-  "supportedDisasters": [
-    "heavy-rain"
-  ],
+  "allowedTerrains": ["lowland", "urbanLowland"],
+  "supportedDisasters": ["heavy-rain"],
   "effects": {
     "waterLevelReduction": 0.04,
     "overflowPrevention": 0,
@@ -21,12 +16,8 @@
   },
   "role": {
     "primaryHazard": "inlandPonding",
-    "strengths": [
-      "内水を吐き出す"
-    ],
-    "weaknesses": [
-      "決壊口に置くと逆効果"
-    ]
+    "strengths": ["内水を吐き出す"],
+    "weaknesses": ["決壊口に置くと逆効果"]
   },
   "hazardAffinity": {
     "overtopping": -0.2,

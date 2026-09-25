@@ -35,7 +35,10 @@ describe("influenceZones", () => {
   });
 
   it("makes drainage a forward fan that is weak behind the pump", () => {
-    const zone = resolveInfluenceZone({ ...BASE, structureId: "drainage-pump", headingDegrees: 0 }, 1);
+    const zone = resolveInfluenceZone(
+      { ...BASE, structureId: "drainage-pump", headingDegrees: 0 },
+      1,
+    );
     expect(zone.kind).toBe("fan");
     const ahead = influenceStrengthAt(zone, 140.378, 37.3615);
     const behind = influenceStrengthAt(zone, 140.378, 37.3585);

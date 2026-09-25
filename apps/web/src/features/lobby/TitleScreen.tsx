@@ -1,4 +1,5 @@
 import heroImageUrl from "../../assets/civilcraft-abukuma-hero.webp";
+import "./LobbyScreens.css";
 
 type TitleScreenProps = {
   onEnter: () => void;
@@ -7,22 +8,26 @@ type TitleScreenProps = {
 /** 起動直後のタイトル。治水体験を上品に伝える。 */
 export function TitleScreen({ onEnter }: TitleScreenProps) {
   return (
-    <section className="title-screen" aria-label="タイトル">
+    <section className="title-screen cc-lobby" aria-label="タイトル">
       <div className="title-screen__world" aria-hidden="true">
         <img className="title-screen__hero" src={heroImageUrl} alt="" />
         <div className="title-screen__gradient" />
       </div>
 
       <div className="title-screen__content">
-        <p className="title-screen__locale">福島・郡山 — 阿武隈川</p>
+        <p className="title-screen__locale">
+          <span aria-hidden="true">●</span> 福島・郡山 — 阿武隈川
+        </p>
 
         <div className="title-screen__brand">
           <p className="title-screen__eyebrow">河川治水シミュレーション</p>
           <h1 className="title-screen__logo" aria-label="CivilCraft">
             CivilCraft
           </h1>
+          <span className="title-screen__wave" aria-hidden="true" />
+          <p className="title-screen__headline">この街を、大雨から守ろう。</p>
           <p className="title-screen__tagline">
-            堤防・遊水地・排水機場を配置し、大雨からまちを守る約3分のチャレンジ。
+            堤防や遊水地を配置して、きみの工夫で大雨から街を守る。
           </p>
         </div>
 
@@ -42,7 +47,8 @@ export function TitleScreen({ onEnter }: TitleScreenProps) {
         </ol>
 
         <button className="title-screen__cta" type="button" onClick={onEnter}>
-          はじめる
+          <span>はじめる</span>
+          <span aria-hidden="true">→</span>
         </button>
       </div>
 

@@ -21,6 +21,10 @@ describe("howtoContent", () => {
   it("keeps purpose and steps short enough to scan", () => {
     expect(HOWTO_PURPOSE.body.length).toBeLessThan(120);
     expect(HOWTO_STEPS).toHaveLength(3);
+    expect(HOWTO_STEPS.map((step) => step.body).join(" ")).toContain("画面下の治水ツール");
+    expect(HOWTO_STEPS.map((step) => step.body).join(" ")).toContain("向きスライダー");
+    expect(HOWTO_STEPS.map((step) => step.body).join(" ")).toContain("配置を確定");
+    expect(HOWTO_STEPS.map((step) => step.body).join(" ")).not.toContain("36°");
     expect(hazardChipLabel("overtopping")).toBe("対 越水");
   });
 });

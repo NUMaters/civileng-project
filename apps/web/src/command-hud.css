@@ -70,6 +70,10 @@
   gap: 12px;
 }
 
+.cmd-mission__head > div:first-child {
+  min-width: 0;
+}
+
 .cmd-mission__phase {
   margin: 0;
   color: var(--cmd-cyan-soft);
@@ -88,6 +92,71 @@
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.25;
+}
+
+.cmd-mission__title-code {
+  color: var(--cmd-cyan-soft);
+}
+
+.cmd-exit-confirm {
+  position: absolute;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(2 10 16 / 48%);
+  backdrop-filter: blur(5px);
+}
+
+.cmd-exit-confirm__panel {
+  width: min(300px, calc(100vw - 36px));
+  padding: 16px;
+  border: 1px solid var(--cmd-border-strong);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgb(16 34 54 / 98%), rgb(6 12 22 / 98%));
+  box-shadow: 0 18px 44px rgb(0 0 0 / 42%);
+}
+
+.cmd-exit-confirm__panel strong {
+  color: #eef6ff;
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+
+.cmd-exit-confirm__panel p {
+  margin: 8px 0 0;
+  color: var(--cmd-cyan-soft);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cmd-exit-confirm__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.cmd-exit-confirm__actions button {
+  min-height: 36px;
+  border-radius: 9px;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cmd-exit-confirm__cancel {
+  border: 1px solid rgb(255 255 255 / 20%);
+  background: rgb(255 255 255 / 6%);
+  color: #d6e5ed;
+}
+
+.cmd-exit-confirm__leave {
+  border: 1px solid rgb(240 104 88 / 50%);
+  background: rgb(240 104 88 / 16%);
+  color: #ffc1b5;
 }
 
 .cmd-mission__timer {
@@ -489,7 +558,12 @@
   width: 116%;
   height: 18px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgb(40 120 180 / 20%), rgb(72 196 255 / 55%), rgb(40 120 180 / 20%));
+  background: linear-gradient(
+    90deg,
+    rgb(40 120 180 / 20%),
+    rgb(72 196 255 / 55%),
+    rgb(40 120 180 / 20%)
+  );
   transform: rotate(-18deg);
 }
 
@@ -632,27 +706,6 @@
   line-height: 1.4;
 }
 
-.cmd-dock__keyboard-place {
-  width: 100%;
-  margin-top: 9px;
-  min-height: 32px;
-  padding: 6px 9px;
-  border: 1px solid rgb(94 200 232 / 35%);
-  border-radius: 8px;
-  background: rgb(94 200 232 / 10%);
-  color: var(--cmd-cyan-soft);
-  font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.cmd-dock__keyboard-place:hover,
-.cmd-dock__keyboard-place:focus-visible {
-  border-color: var(--cmd-cyan);
-  background: rgb(94 200 232 / 18%);
-}
-
 .cmd-dock__bar {
   width: 100%;
   padding: 10px 12px 12px;
@@ -682,6 +735,12 @@
 .cmd-dock__label small {
   color: #8ea8c0;
   font-size: 10px;
+}
+
+.cmd-dock__scroll-hint {
+  display: none;
+  color: var(--cmd-cyan-soft) !important;
+  white-space: nowrap;
 }
 
 .cmd-dock__list {
@@ -794,6 +853,67 @@
 
 .game-shell.is-pending-placement .cmd-dock__tooltip {
   display: none;
+}
+
+.game-shell.is-pending-placement .cmd-mission__prep {
+  display: none;
+}
+
+.game-shell.is-pending-placement .cmd-mission {
+  padding-bottom: 8px;
+}
+
+.game-shell.is-pending-placement .cmd-status {
+  opacity: 0.78;
+  transform: scale(0.92);
+  transform-origin: top right;
+}
+
+/* 配置中はモデル確認を優先し、施設カードだけを薄く残す。 */
+.game-shell.is-pending-placement .cmd-dock {
+  bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.game-shell.is-pending-placement .cmd-dock__bar {
+  width: min(620px, calc(100% - 28px));
+  padding: 6px 8px 8px;
+  background: rgb(7 16 26 / 78%);
+}
+
+.game-shell.is-pending-placement .cmd-dock__label {
+  margin-bottom: 3px;
+}
+
+.game-shell.is-pending-placement .cmd-dock__list {
+  gap: 7px;
+  padding: 2px 0 3px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card {
+  min-width: 84px;
+  max-width: 92px;
+  gap: 3px;
+  padding: 5px 5px 4px;
+  border-radius: 11px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 9px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__image {
+  width: 34px;
+  height: 34px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__body strong {
+  font-size: 10px;
+}
+
+.game-shell.is-pending-placement .cmd-dock .structure-card__body small {
+  font-size: 9px;
 }
 
 /* —— Placement confirm bar —— */
@@ -969,16 +1089,41 @@
 }
 
 @media (max-width: 720px) {
+  .cesium-game-map__telemetry {
+    top: calc(112px + env(safe-area-inset-top));
+    font-size: 8px;
+  }
+
   .cmd-mission {
     top: calc(8px + env(safe-area-inset-top));
     left: 10px;
-    width: min(158px, 44vw);
+    width: min(170px, 44vw);
     padding: 8px 10px;
   }
 
   .cmd-mission__title {
     font-size: 12px;
     line-height: 1.2;
+  }
+
+  .cmd-mission__head {
+    position: relative;
+    min-height: 30px;
+  }
+
+  .cmd-mission__head-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    gap: 4px;
+  }
+
+  .cmd-mission__head > div:first-child {
+    max-width: calc(100% - 64px);
+  }
+
+  .cmd-mission__title-code {
+    display: none;
   }
 
   .cmd-mission__phase {
@@ -1027,7 +1172,7 @@
     flex-direction: row;
     align-items: stretch;
     gap: 6px;
-    width: min(196px, 52vw);
+    width: min(196px, 49vw);
   }
 
   .cmd-status__panel {
@@ -1101,12 +1246,12 @@
     left: 8px;
     right: 8px;
     bottom: calc(6px + env(safe-area-inset-bottom));
-    gap: 6px;
+    gap: 4px;
   }
 
   .cmd-dock__tooltip {
-    padding: 8px 10px;
-    border-radius: 12px;
+    padding: 6px 8px;
+    border-radius: 10px;
   }
 
   .cmd-dock__tooltip-head {
@@ -1114,11 +1259,11 @@
   }
 
   .cmd-dock__tooltip-head strong {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .cmd-dock__tooltip-head span {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .cmd-dock__tooltip-toggle {
@@ -1151,12 +1296,21 @@
   }
 
   .cmd-dock__bar {
-    padding: 6px 8px 8px;
-    border-radius: 14px;
+    padding: 4px 6px 6px;
+    border-radius: 12px;
+  }
+
+  .cmd-dock__label {
+    margin-bottom: 4px;
+    align-items: center;
   }
 
   .cmd-dock__hint {
-    display: none;
+    display: inline;
+    max-width: 18em;
+    color: #9bb4c2;
+    font-size: 9px;
+    line-height: 1.25;
   }
 
   .cmd-dock__label {
@@ -1165,6 +1319,15 @@
 
   .cmd-dock__label span {
     font-size: 11px;
+  }
+
+  .cmd-dock__hint {
+    max-width: 15em;
+  }
+
+  .cmd-dock__scroll-hint {
+    display: inline;
+    font-size: 9px;
   }
 
   .cmd-dock__list {

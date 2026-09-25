@@ -1,10 +1,12 @@
 import { useEffect, useRef } from "react";
 import { getCesiumRenderProfile } from "../../../components/GameCanvas/cesiumPerformance";
 import { resolveRainDrama } from "../services/rainDrama";
+import { createPausableAnimation } from "../services/pausableAnimation";
 import type { FloodSimulationState } from "../services/floodSimulation";
 
 type RainOverlayProps = {
   active: boolean;
+  paused?: boolean;
   getLatestState: () => FloodSimulationState;
 };
 
@@ -24,10 +26,17 @@ type Drop = {
  * Cesium 負荷を避けるため Canvas 2D の筋雨＋薄闇で表現する。
  * 危機度（溢れ・水深・被害）が高いほど密度と暗さが増す。
  */
-export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
+export function RainOverlay({ active, paused = false, getLatestState }: RainOverlayProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mistRef = useRef<HTMLDivElement>(null);
   const flashRef = useRef<HTMLDivElement>(null);
+  const pausedRef = useRef(paused);
+  const animationRef = useRef<ReturnType<typeof createPausableAnimation> | null>(null);
+
+  useEffect(() => {
+    pausedRef.current = paused;
+    animationRef.current?.setPaused(paused);
+  }, [paused]);
 
   useEffect(() => {
     if (!active) {
@@ -62,7 +71,6 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
     const rainFrameIntervalMs = profile.rainFrameIntervalMs;
     const rainMaxDrops = profile.rainMaxDrops;
 
-    let frameId = 0;
     let width = 0;
     let height = 0;
     let drops: Drop[] = [];
@@ -98,11 +106,9 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
 
     const tick = (now: number) => {
       if (document.hidden) {
-        frameId = window.requestAnimationFrame(tick);
         return;
       }
       if (now - lastDrawAt < rainFrameIntervalMs) {
-        frameId = window.requestAnimationFrame(tick);
         return;
       }
       lastDrawAt = now;
@@ -158,21 +164,23 @@ export function RainOverlay({ active, getLatestState }: RainOverlayProps) {
         flash.style.opacity = flashing ? String(0.18 + displayedDrama * 0.22) : "0";
       }
 
-      frameId = window.requestAnimationFrame(tick);
     };
 
-    frameId = window.requestAnimationFrame(tick);
+    const animation = createPausableAnimation(tick, {
+      now: () => performance.now(),
+      request: callback => window.requestAnimationFrame(callback),
+      cancel: id => window.cancelAnimationFrame(id),
+    }, pausedRef.current);
+    animationRef.current = animation;
     return () => {
-      window.cancelAnimationFrame(frameId);
+      animation.dispose();
+      if (animationRef.current === animation) animationRef.current = null;
       window.removeEventListener("resize", onResize);
     };
   }, [active, getLatestState]);
 
   return (
-    <div
-      className={`rain-overlay${active ? " is-active" : ""}`}
-      aria-hidden="true"
-    >
+    <div className={`rain-overlay${active ? " is-active" : ""}`} aria-hidden="true">
       <div ref={mistRef} className="rain-overlay__mist" />
       <canvas ref={canvasRef} className="rain-overlay__canvas" />
       <div ref={flashRef} className="rain-overlay__flash" />

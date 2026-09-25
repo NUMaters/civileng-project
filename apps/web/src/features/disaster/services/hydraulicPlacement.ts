@@ -6,6 +6,24 @@ import {
 } from "../../../components/GameCanvas/abukumaRiverGeometry";
 import { nearestPointOnPolyline } from "../../../components/GameCanvas/riverPlacement";
 
+/** 長軸が heading+90 度の施設は、川の接線に長軸を合わせて仮配置する。 */
+export function suggestedStructureHeading(
+  structureId: string,
+  position: { longitude: number; latitude: number },
+): number {
+  const { channelHeadingDegrees } = getRiverPlacementContext(
+    position.longitude,
+    position.latitude,
+    0,
+  );
+  const alongChannel =
+    structureId === "levee" ||
+    structureId === "revetment" ||
+    structureId === "channel-dredging" ||
+    structureId === "retention-basin";
+  return (channelHeadingDegrees + (alongChannel ? 270 : 0)) % 360;
+}
+
 export type RiverPlacementContext = {
   /** 中心線までの距離（m）。 */
   distanceToCenterlineMeters: number;
@@ -65,8 +83,7 @@ export function calculateHydraulicEffectiveness(placement: PlacedStructure): num
   );
   const structureId = placement.structureId;
   const rawHeight = placement.position.height;
-  const heightMeters =
-    typeof rawHeight === "number" && Number.isFinite(rawHeight) ? rawHeight : 18;
+  const heightMeters = typeof rawHeight === "number" && Number.isFinite(rawHeight) ? rawHeight : 18;
 
   let locationScore = 0.45;
   let headingScore = 0.7;
@@ -155,8 +172,7 @@ function channelHeadingAtNearest(longitude: number, latitude: number): number {
   }
   const start = ABUKUMA_RIVER_CENTERLINE[Math.max(0, bestIndex - 1)] ?? ABUKUMA_RIVER_CENTERLINE[0];
   const end =
-    ABUKUMA_RIVER_CENTERLINE[Math.min(ABUKUMA_RIVER_CENTERLINE.length - 1, bestIndex + 1)] ??
-    start;
+    ABUKUMA_RIVER_CENTERLINE[Math.min(ABUKUMA_RIVER_CENTERLINE.length - 1, bestIndex + 1)] ?? start;
   if (start === undefined || end === undefined) {
     return 0;
   }
@@ -180,12 +196,7 @@ function normalizeHeading(degrees: number): number {
   return ((degrees % 360) + 360) % 360;
 }
 
-function bearingDegrees(
-  lonA: number,
-  latA: number,
-  lonB: number,
-  latB: number,
-): number {
+function bearingDegrees(lonA: number, latA: number, lonB: number, latB: number): number {
   const φ1 = (latA * Math.PI) / 180;
   const φ2 = (latB * Math.PI) / 180;
   const Δλ = ((lonB - lonA) * Math.PI) / 180;

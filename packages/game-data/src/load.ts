@@ -24,11 +24,7 @@ const structures: StructureDefinition[] = [
   channelDredging,
 ] as StructureDefinition[];
 
-const disasters: DisasterDefinition[] = [
-  heavyRain,
-  riverFlood,
-  typhoon,
-] as DisasterDefinition[];
+const disasters: DisasterDefinition[] = [heavyRain, riverFlood, typhoon] as DisasterDefinition[];
 
 export function loadStructures(): StructureDefinition[] {
   return structures.map((structure) => ({ ...structure }));

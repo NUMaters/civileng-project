@@ -126,13 +126,12 @@ function createSiteGrid(seed: InundationSeed): SiteGrid {
       const { inland, lateral } = cellLocalMeters(col, row);
       // 谷地形: 流軸沿いは緩やか、横断方向は両岸が上がる。低岸ほど盆地が深い。
       const bankBias = (seed.bankElevationMeters - 19) * 0.35;
-      const valley = (lateral * lateral) / (2 * (CELL_SIZE_M * 9) ** 2) * 3.2;
+      const valley = ((lateral * lateral) / (2 * (CELL_SIZE_M * 9) ** 2)) * 3.2;
       const inlandSlope = inland * 0.0018 + Math.max(0, inland - 180) * 0.0024;
       const pocket =
-        inland > 40 && inland < 220
-          ? -0.55 * Math.exp(-((inland - 120) ** 2) / (2 * 55 ** 2))
-          : 0;
-      ground[row * COLS + col] = seed.bankElevationMeters + bankBias + valley + inlandSlope + pocket;
+        inland > 40 && inland < 220 ? -0.55 * Math.exp(-((inland - 120) ** 2) / (2 * 55 ** 2)) : 0;
+      ground[row * COLS + col] =
+        seed.bankElevationMeters + bankBias + valley + inlandSlope + pocket;
     }
   }
 
@@ -327,10 +326,12 @@ function extractBandRing(
   points.sort((a, b) => a.angle - b.angle);
   // 間引き（最大 28 点）
   const step = Math.max(1, Math.floor(points.length / 28));
-  const ring = points.filter((_, index) => index % step === 0).map(({ longitude, latitude }) => ({
-    longitude,
-    latitude,
-  }));
+  const ring = points
+    .filter((_, index) => index % step === 0)
+    .map(({ longitude, latitude }) => ({
+      longitude,
+      latitude,
+    }));
   if (ring[0] !== undefined) {
     ring.push({ ...ring[0] });
   }

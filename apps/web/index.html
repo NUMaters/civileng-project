@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
     />
-    <meta name="theme-color" content="#0a2f24" />
+    <meta name="theme-color" content="#087fb8" />
     <title>CivilCraft</title>
     <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -22,27 +22,26 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Sora:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap"
       rel="stylesheet"
     />
-    <!-- PostCSS 経由だと壊れる環境があるため、静的配信の Cesium CSS を直接読む -->
-    <link rel="stylesheet" href="/cesiumStatic/Widgets/widgets.css" />
     <style>
       #boot-fallback {
         display: grid;
         min-height: 100dvh;
         place-items: center;
         padding: 24px;
-        background: #071018;
-        color: #e8f1f6;
+        background: linear-gradient(160deg, #d9f6ff, #f7fcff);
+        color: #123c64;
         font-family: system-ui, sans-serif;
         text-align: center;
       }
       #boot-fallback div { max-width: 360px; }
-      #boot-fallback p { color: #9bb4c2; line-height: 1.6; }
+      #boot-fallback p { color: #487596; line-height: 1.6; }
       #boot-fallback button {
-        padding: 10px 14px;
-        border: 1px solid #80b5ca;
-        border-radius: 4px;
-        background: #163644;
-        color: #e8f1f6;
+        min-height: 48px;
+        padding: 12px 24px;
+        border: 0;
+        border-radius: 16px;
+        background: #087fb8;
+        color: #fff;
         cursor: pointer;
       }
     </style>

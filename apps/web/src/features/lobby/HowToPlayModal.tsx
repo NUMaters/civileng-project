@@ -1,10 +1,6 @@
 import { useEffect, useRef } from "react";
-import {
-  hazardChipLabel,
-  HOWTO_FACILITIES,
-  HOWTO_PURPOSE,
-  HOWTO_STEPS,
-} from "./howtoContent";
+import { hazardChipLabel, HOWTO_FACILITIES, HOWTO_PURPOSE, HOWTO_STEPS } from "./howtoContent";
+import "./LobbyScreens.css";
 
 type HowToPlayModalProps = {
   titleId: string;
@@ -60,8 +56,13 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
   }, [onClose]);
 
   return (
-    <div className="howto-modal" role="presentation">
-      <button className="howto-modal__backdrop" type="button" aria-label="閉じる" onClick={onClose} />
+    <div className="howto-modal cc-howto" role="presentation">
+      <button
+        className="howto-modal__backdrop"
+        type="button"
+        aria-label="閉じる"
+        onClick={onClose}
+      />
       <div
         ref={panelRef}
         className="howto-modal__panel"
@@ -71,7 +72,7 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
       >
         <header className="howto-modal__head">
           <div>
-            <p className="howto-modal__kicker">CivilCraft · 治水ガイド</p>
+            <p className="howto-modal__kicker">CivilCraft · スマホ操作ガイド</p>
             <h2 id={titleId}>遊び方</h2>
           </div>
           <button type="button" onClick={onClose} aria-label="閉じる">
@@ -86,7 +87,7 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
           </section>
 
           <section className="howto-modal__section" aria-labelledby={`${titleId}-steps`}>
-            <h3 id={`${titleId}-steps`}>操作の流れ</h3>
+            <h3 id={`${titleId}-steps`}>配置の流れ</h3>
             <ol className="howto-modal__steps">
               {HOWTO_STEPS.map((step) => (
                 <li key={step.title}>
@@ -143,7 +144,7 @@ export function HowToPlayModal({ titleId, onClose }: HowToPlayModalProps) {
         </div>
 
         <button className="howto-modal__ok" type="button" onClick={onClose}>
-          了解
+          ゲームに戻る
         </button>
       </div>
     </div>

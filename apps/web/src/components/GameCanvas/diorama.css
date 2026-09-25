@@ -1,0 +1,213 @@
+.diorama-game-map,
+.diorama-game-map__canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  background: #87d6f5;
+}
+.diorama-game-map canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.diorama-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.diorama-npc-markers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.diorama-npc-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-width: 58px;
+  padding: 0;
+  border: 0;
+  color: #173846;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-shadow: 0 1px 2px #fff, 0 0 5px #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  will-change: transform;
+}
+.diorama-npc-marker__avatar {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #e8b75e;
+  box-shadow: 0 4px 10px #17384655;
+  font-size: 25px;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+.diorama-npc-marker__name {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diorama-npc-marker:hover .diorama-npc-marker__avatar,
+.diorama-npc-marker:focus-visible .diorama-npc-marker__avatar,
+.diorama-npc-marker.is-highlighted .diorama-npc-marker__avatar {
+  transform: translateY(-4px) scale(1.08);
+  box-shadow: 0 0 0 4px #f6d16e99, 0 6px 14px #17384677;
+}
+.diorama-npc-marker:focus-visible { outline: none; }
+.diorama-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 8px 12px;
+  background: #fffffff2;
+  color: #11476a;
+  border-radius: 13px;
+  box-shadow: 0 4px 12px #13465b20;
+  font-size: 12px;
+  will-change: transform;
+  min-width: 80px;
+  border: 1px solid #ffffff;
+}
+.diorama-label small {
+  display: block;
+  color: #19896f;
+  font-size: 10px;
+  margin-top: 3px;
+}
+.diorama-label[data-tone="warn"] small {
+  color: #885412;
+}
+.diorama-label[data-tone="bad"] small {
+  color: #b43b2f;
+}
+.diorama-guidance {
+  --label-pointer-border-left: 3px;
+  box-sizing: border-box;
+  border-left: 3px solid #16b2c2;
+  width: min(210px, calc(100% - 16px));
+  min-width: 0;
+  max-width: calc(100% - 16px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  visibility: hidden;
+  background: #fffffff0;
+}
+.diorama-guidance strong {
+  display: block;
+  min-height: 1.35em;
+  line-height: 1.35;
+}
+.diorama-guidance small {
+  /* Reserve two advice lines even before selection; text changes do not invalidate
+     the observed size and cause a hidden/measure/choose feedback loop. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: 3em;
+  color: #426779;
+  line-height: 1.5;
+}
+.diorama-label:after {
+  content: "";
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  border-width: 7px 6px 0;
+  border-style: solid;
+  border-color: #fffffff2 transparent transparent;
+}
+/* Facility label sizing; guidance has its own compact measured size above. */
+.diorama-label[data-heading] {
+  box-sizing: border-box;
+  width: max-content;
+  min-width: min(80px, calc(100% - 16px));
+  max-width: min(240px, calc(100% - 16px));
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+  visibility: hidden; /* Revealed once its border-box size has been observed. */
+  pointer-events: none;
+}
+.diorama-label[data-heading] strong,
+.diorama-label[data-heading] small {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.diorama-label[data-heading]:after,
+.diorama-guidance:after {
+  /* Offset the 1px border so the tip uses the measured border-box coordinates. */
+  left: calc(var(--facility-pointer-left) - var(--label-pointer-border-left, 1px));
+  top: calc(100% + 1px);
+  bottom: auto;
+  width: var(--facility-pointer-width);
+  height: var(--facility-pointer-height, 7px);
+  border: 0;
+  background: #fffffff2;
+  clip-path: polygon(calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) - 6px) 0,
+    calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) + 6px) 0,
+    calc(var(--facility-pointer-tip-x) - var(--facility-pointer-left)) 100%);
+}
+.diorama-label[data-heading][data-pointer-side="top"]:after,
+.diorama-guidance[data-pointer-side="top"]:after {
+  top: auto;
+  bottom: calc(100% + 1px);
+  clip-path: polygon(calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) - 6px) 100%,
+    calc(var(--facility-pointer-base-x) - var(--facility-pointer-left) + 6px) 100%,
+    calc(var(--facility-pointer-tip-x) - var(--facility-pointer-left)) 0);
+}
+.diorama-placement-actions {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 5;
+}
+.diorama-placement-actions .diorama-confirm {
+  display: flex;
+  gap: 10px;
+}
+.diorama-placement-actions button {
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 24px;
+  border: 2px solid white;
+  box-shadow: 0 3px 10px #17495733;
+  touch-action: manipulation;
+}
+.diorama-placement-actions .diorama-confirm__confirm {
+  background: #0b9b83;
+  color: white;
+}
+.diorama-placement-actions .diorama-confirm__cancel {
+  background: white;
+  color: #315669;
+}
+.diorama-error {
+  position: absolute;
+  inset: 40% 8% auto;
+  background: white;
+  padding: 20px;
+  border-radius: 20px;
+  color: #853924;
+}

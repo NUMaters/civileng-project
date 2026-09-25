@@ -87,9 +87,7 @@ export function applyDisasterStartGrant(currentBudget: number): number {
   return clampBudget(currentBudget + DISASTER_START_GRANT);
 }
 
-export function calculateMaintenancePerSecond(
-  placedStructureIds: readonly string[],
-): number {
+export function calculateMaintenancePerSecond(placedStructureIds: readonly string[]): number {
   let total = 0;
   for (const structureId of placedStructureIds) {
     const structure = structureCatalog.find(({ id }) => id === structureId);

@@ -10,6 +10,7 @@ import {
   getStructureZoneMeaning,
 } from "../../construction/structureVisuals";
 import { calculateFloodplainExtent } from "./floodplainExtent";
+import { advanceRetentionStorage } from "./retentionStorage";
 import {
   calculateHydraulicEffectiveness,
   getRiverPlacementContext,
@@ -73,6 +74,10 @@ export type StructureInfluence = {
   coveredSiteIds: string[];
   /** 影響圏内で相性が悪く、流入増などの干渉につながる弱点 ID。 */
   adverseSiteIds: string[];
+  /** Attribution from this placement's actual local evaluator, not combined protection.
+   * Optional for older snapshots; absence must not be replaced with another facility's effect.
+   */
+  positiveSiteContributions?: ReadonlyArray<{ siteId: string; strength: number }>;
   /** 位置・向き・標高から見た配置有効率 0〜1。 */
   effectiveness: number;
   /** 仮配置のプレビュー影響圏。 */
@@ -95,6 +100,10 @@ export type FloodSimulationState = {
   overflowMeters: number;
   /** 施設込みの越水開始水位（m）。 */
   overflowLevelMeters: number;
+  /** シミュレーション上の流入率（深さ換算 m/s）。実測流量ではない。 */
+  inflowPerSecond: number;
+  /** シミュレーション上の排水容量（深さ換算 m/s）。実際の需要ではない。 */
+  drainageCapacityPerSecond: number;
   floodDepthMeters: number;
   floodedAreaPercent: number;
   /** 氾濫寸前〜越水時の氾濫原の塗りつぶし率（0〜1）。通常水位では 0。 */
@@ -111,6 +120,10 @@ export type FloodSimulationState = {
   protectedBankSites: ProtectedBankSite[];
   /** 確定配置の影響圏。 */
   structureInfluences: StructureInfluence[];
+  /** Accumulated educational basin fill (0–1), not m³. Optional for older snapshots.
+   * Static hydrology mitigation remains independent of available storage capacity.
+   */
+  retentionStorageByPlacement?: Record<string, number>;
 };
 
 export type BeginDisasterOptions = {
@@ -152,6 +165,8 @@ export function createInitialFloodState(): FloodSimulationState {
     riverLevelMeters: INITIAL_RIVER_LEVEL_METERS,
     overflowMeters: 0,
     overflowLevelMeters: BASE_OVERFLOW_LEVEL_METERS,
+    inflowPerSecond: 0,
+    drainageCapacityPerSecond: 0,
     floodDepthMeters: 0,
     floodedAreaPercent: 0,
     floodplainFillRatio: 0,
@@ -163,6 +178,7 @@ export function createInitialFloodState(): FloodSimulationState {
     mitigation: emptyMitigation(),
     protectedBankSites: [],
     structureInfluences: [],
+    retentionStorageByPlacement: {},
   };
 }
 
@@ -204,6 +220,7 @@ export function beginDisaster(
     rainfallTarget: first.rainfallTarget,
     weatherHoldRemaining: first.holdSeconds,
     weatherRng,
+    retentionStorageByPlacement: {},
   };
 }
 
@@ -240,6 +257,8 @@ export function advanceFloodSimulation(
     return current;
   }
 
+  if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) return current;
+
   if (current.phase === "preparation") {
     const remaining = Math.max(0, current.phaseRemainingSeconds - deltaSeconds);
     if (remaining === 0) {
@@ -248,6 +267,11 @@ export function advanceFloodSimulation(
     return { ...current, phaseRemainingSeconds: remaining };
   }
 
+  // A final oversized tick may integrate only the remaining disaster time.
+  deltaSeconds = Math.min(
+    deltaSeconds,
+    Math.max(0, rules.timing.phases.disasterSeconds - current.disasterElapsedSeconds),
+  );
   const elapsed = Math.min(
     rules.timing.phases.disasterSeconds,
     current.disasterElapsedSeconds + deltaSeconds,
@@ -321,6 +345,12 @@ export function advanceFloodSimulation(
   );
   const remaining = Math.max(0, rules.timing.phases.disasterSeconds - elapsed);
   const structureInfluences = calculateStructureInfluences(placements);
+  const retentionStorageByPlacement = advanceRetentionStorage(
+    current.retentionStorageByPlacement,
+    structureInfluences,
+    riverLevelMeters,
+    deltaSeconds,
+  );
 
   if (remaining === 0) {
     return {
@@ -334,6 +364,8 @@ export function advanceFloodSimulation(
       riverLevelMeters,
       overflowMeters,
       overflowLevelMeters,
+      inflowPerSecond,
+      drainageCapacityPerSecond: drainagePerSecond,
       floodDepthMeters,
       floodedAreaPercent,
       floodplainFillRatio: floodplain.fillRatio,
@@ -345,6 +377,7 @@ export function advanceFloodSimulation(
       mitigation,
       protectedBankSites: bankEffects.protectedBankSites,
       structureInfluences,
+      retentionStorageByPlacement,
     };
   }
 
@@ -359,6 +392,8 @@ export function advanceFloodSimulation(
     riverLevelMeters,
     overflowMeters,
     overflowLevelMeters,
+    inflowPerSecond,
+    drainageCapacityPerSecond: drainagePerSecond,
     floodDepthMeters,
     floodedAreaPercent,
     floodplainFillRatio: floodplain.fillRatio,
@@ -370,6 +405,7 @@ export function advanceFloodSimulation(
     mitigation,
     protectedBankSites: bankEffects.protectedBankSites,
     structureInfluences,
+    retentionStorageByPlacement,
   };
 }
 
@@ -379,6 +415,7 @@ export function refreshPlacementEffects(
   placements: PlacedStructure[],
 ): FloodSimulationState {
   const mitigation = calculateMitigation(placements);
+  const structureInfluences = calculateStructureInfluences(placements);
   const bankEffects = calculateBankEffects(
     placements,
     current.overflowMeters,
@@ -389,7 +426,13 @@ export function refreshPlacementEffects(
     mitigation,
     overflowSites: bankEffects.overflowSites,
     protectedBankSites: bankEffects.protectedBankSites,
-    structureInfluences: calculateStructureInfluences(placements),
+    structureInfluences,
+    retentionStorageByPlacement: advanceRetentionStorage(
+      current.retentionStorageByPlacement,
+      structureInfluences,
+      current.riverLevelMeters,
+      0,
+    ),
   };
 }
 
@@ -577,6 +620,17 @@ export function getStructureInfluenceRadiusMeters(structureId: string): number {
 
 export { getStructureEffectLabel, getStructureZoneMeaning, getRiverPlacementContext };
 
+/** Pure local attribution projection. Preserve the original placement height/heading; an influence
+ * zone's heading is not necessarily the stored facility heading. No simulation state is changed.
+ */
+export function calculatePositiveSiteContributions(placement: PlacedStructure) {
+  if (placement.preview) return [];
+  return listOverflowCandidates().flatMap((candidate) => {
+    const strength = evaluateLocalContribution(placement, candidate);
+    return Number.isFinite(strength) && strength > 0 ? [{ siteId: candidate.id, strength }] : [];
+  });
+}
+
 export function calculateStructureInfluences(placements: PlacedStructure[]): StructureInfluence[] {
   // 仮配置も含める（向き調整中に影響圏が追従して見えるようにする）。
   // 治水効果の数値計算側は preview を除外する。
@@ -598,6 +652,7 @@ export function calculateStructureInfluences(placements: PlacedStructure[]): Str
       coverageHint: coverage.hint,
       coveredSiteIds: coverage.coveredSiteIds,
       adverseSiteIds: coverage.adverseSiteIds,
+      positiveSiteContributions: calculatePositiveSiteContributions(placement),
       effectiveness,
       preview: placement.preview === true,
     };
