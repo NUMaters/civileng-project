@@ -4,6 +4,8 @@
 
 **エントリーポイント:** [docs/agent/guide.md](./docs/agent/guide.md)
 
+**ハーネス（自動開発）:** [docs/agent/harness.md](./docs/agent/harness.md) — Planner / Generator / Evaluator
+
 ## ドキュメント構成
 
 ```

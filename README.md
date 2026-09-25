@@ -30,7 +30,7 @@
 
 ```
 civilcraft/
-├── AGENT.md              # AI Agent 向け索引（docs/agent/guide.md へ）
+├── AGENT.md              # AI Agent 向け索引（docs/agent/guide.md / harness.md へ）
 ├── apps/
 │   ├── web/              # ブラウザゲーム（フロントエンド）
 │   │   ├── public/
@@ -117,6 +117,7 @@ make test     # go test + Vitest
 make build    # server バイナリ + web ビルド
 make up       # docker compose up -d
 make down     # docker compose down
+make migrate  # DB マイグレーション実行
 ```
 
 #### 本番公開（Cloudflare Pages・ソロ静的）
@@ -194,6 +195,7 @@ pnpm --filter @civilcraft/web fetch:plateau:full
 | 操作・UI                | [docs/game-design/ui-controls.md](./docs/game-design/ui-controls.md)                       |
 | 土木技術・災害          | [docs/civil-engineering/](./docs/civil-engineering/)                                       |
 | AI Agent 向け索引       | [docs/agent/guide.md](./docs/agent/guide.md)                                               |
+| ハーネス（自動開発）    | [docs/agent/harness.md](./docs/agent/harness.md)（Planner / Generator / Evaluator）         |
 | 開発原則・命名規則      | [docs/development/](./docs/development/)                                                   |
 | アーキテクチャ          | [docs/architecture/](./docs/architecture/)                                                 |
 | API 命名                | [docs/api/](./docs/api/)                                                                   |
