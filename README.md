@@ -198,6 +198,7 @@ pnpm --filter @civilcraft/web fetch:plateau:full
 | アーキテクチャ          | [docs/architecture/](./docs/architecture/)                                                 |
 | API 命名                | [docs/api/](./docs/api/)                                                                   |
 | Git 運用                | [docs/git/](./docs/git/)                                                                   |
+| Copilot レビュー        | [.github/instructions/code-review.instructions.md](./.github/instructions/code-review.instructions.md) |
 | マスターデータ設計      | [docs/architecture/game-data-master-data.md](./docs/architecture/game-data-master-data.md) |
 | マップデータ形式        | [docs/architecture/map-data-format.md](./docs/architecture/map-data-format.md)             |
 | DB スキーマ（ルーム等） | [docs/architecture/db-schema.md](./docs/architecture/db-schema.md)                         |
