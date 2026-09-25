@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+bin/
+*.tsbuildinfo
+
+# Generated Cesium static assets (copied by apps/web/scripts/copy-cesium-assets.mjs)
+apps/web/public/cesiumStatic/
+apps/web/public/plateau/
+apps/web/.cache/
+apps/web/.preview-dist/
+
+# Go
+apps/server/bin/
+
+# Environment
+.env
+.env.local
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+
+# Test / coverage
+coverage/
+
+# Local scratch / temporary files
+tmp/
+
+# Docker volumes (local)
+.docker/

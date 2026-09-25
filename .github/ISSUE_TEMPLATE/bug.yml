@@ -1,0 +1,49 @@
+name: Bug
+description: 不具合・意図しない挙動の報告
+title: "fix: "
+labels: ["bug", "mvp"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        再現手順と期待結果を書いてください。マイルストーンは [Alpha-M1] / [Alpha-M2] / [Alpha-QA] から選んでください。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 概要
+      description: 何が起きるか
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現手順
+      description: 番号付きで
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待する結果
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の結果
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 環境
+      placeholder: macOS / Chrome / pnpm 10 など
+  - type: textarea
+    id: related
+    attributes:
+      label: 関連
+      description: Issue / PR 番号があれば

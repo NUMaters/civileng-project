@@ -1,0 +1,26 @@
+{
+  "name": "@civilcraft/game-data",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./npc/*": "./npc/*",
+    "./structures/*": "./structures/*",
+    "./rules/*": "./rules/*",
+    "./disasters/*": "./disasters/*",
+    "./maps/*": "./maps/*",
+    "./scenarios/*": "./scenarios/*",
+    "./load": "./src/load.ts",
+    "./types": "./src/types.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "vitest run",
+    "build": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@civilcraft/config": "workspace:*",
+    "eslint": "^9.28.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}

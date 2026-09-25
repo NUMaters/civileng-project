@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="cd-sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9ec9e6"/>
+      <stop offset="1" stop-color="#d9ebf6"/>
+    </linearGradient>
+    <linearGradient id="cd-water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5ec0ea"/>
+      <stop offset="1" stop-color="#1f7eb4"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="20" fill="url(#cd-sky)"/>
+  <!-- 河岸 -->
+  <path d="M0 40 H36 L48 118 H0 Z" fill="#8b6235"/>
+  <path d="M0 40 H32 L42 118 H0 Z" fill="#6f9a45"/>
+  <path d="M128 46 H92 L80 118 H128 Z" fill="#8b6235"/>
+  <path d="M128 46 H96 L86 118 H128 Z" fill="#6f9a45"/>
+  <!-- 川（深い掘削断面） -->
+  <path d="M36 40 L48 118 H80 L92 46 Z" fill="url(#cd-water)"/>
+  <path d="M50 70c10-4 18-4 28 0" stroke="#d7f4ff" stroke-width="2.5" opacity=".75"/>
+  <path d="M52 88c8-3 16-3 24 0" stroke="#d7f4ff" stroke-width="2" opacity=".55"/>
+  <!-- 浚渫船 -->
+  <rect x="54" y="48" width="28" height="12" rx="2" fill="#e8c24a"/>
+  <rect x="58" y="42" width="12" height="8" rx="1" fill="#6f777c"/>
+  <rect x="78" y="40" width="3" height="20" fill="#5a6268"/>
+  <path d="M81 40 L96 28" stroke="#5a6268" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M96 28 L96 52" stroke="#5a6268" stroke-width="2" stroke-linecap="round"/>
+  <path d="M92 52 L100 52 L98 58 L94 58 Z" fill="#c8ced1"/>
+  <!-- 掘削した土砂 -->
+  <ellipse cx="24" cy="100" rx="12" ry="6" fill="#a8763a"/>
+  <ellipse cx="108" cy="102" rx="11" ry="5" fill="#a8763a"/>
+  <rect x="0" y="0" width="128" height="24" rx="20" fill="#000" opacity=".2"/>
+  <rect x="0" y="12" width="128" height="12" fill="#000" opacity=".12"/>
+  <text x="12" y="16" fill="#ffffff" font-family="Hiragino Sans, Noto Sans JP, sans-serif" font-size="12" font-weight="700">河道掘削</text>
+</svg>

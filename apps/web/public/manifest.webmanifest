@@ -1,0 +1,10 @@
+{
+  "name": "CivilCraft",
+  "short_name": "CivilCraft",
+  "description": "土木工学を学ぶブラウザ向けゲーム",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7fcff",
+  "theme_color": "#087fb8",
+  "lang": "ja"
+}

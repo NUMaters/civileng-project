@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><title>Pump operation visual check</title>
+<!-- Development-only visual fixture. The rate/depth combinations below are
+     display test inputs, not a playthrough, surveyed discharge or local wetness. -->
+<style>body{font:16px system-ui;background:#edf7fa;color:#15364b;margin:16px}section{display:inline-block;vertical-align:top;width:300px;margin:6px}canvas{display:block;width:300px;height:280px}p{min-height:42px}pre{white-space:pre-wrap}</style>
+<h1>排水機場：待機・予防運転・水表現</h1><main></main><pre id="result"></pre>
+<script type="module">
+import * as THREE from 'three';
+import { createDioramaFacility } from '../../src/components/GameCanvas/dioramaFacilities.ts';
+import { createFacilityOperationVisuals } from '../../src/components/GameCanvas/facilityOperationVisuals.ts';
+import { resolveFacilityActivity } from '../../src/components/GameCanvas/facilityActivity.ts';
+import { createInitialFloodState, refreshPlacementEffects } from '../../src/features/disaster/services/floodSimulation.ts';
+import { disposeDioramaObject } from '../../src/components/GameCanvas/disposeDioramaObject.ts';
+const results=[],placement={id:'fixture-pump',structureId:'drainage-pump',headingDegrees:50,position:{longitude:140.3791,latitude:37.36035,height:20}};
+for(const [name,phase,inflow,depth,back] of [['待機','preparation',0,0,false],['予防運転・正面','disaster',.01737,0,false],['予防運転・背面','disaster',.01737,0,true],['浸水時の運転','disaster',.01737,.7,false]]){
+ const state=refreshPlacementEffects({...createInitialFloodState(),phase,riverLevelMeters:4.7,inflowPerSecond:inflow,floodDepthMeters:depth},[placement]);
+ const operation=resolveFacilityActivity(state.structureInfluences[0],state);
+ const section=document.createElement('section');section.append(name);document.querySelector('main').append(section);
+ const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});renderer.setSize(300,280);renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;section.append(renderer.domElement);
+ let error=null;renderer.debug.onShaderError=()=>{error='Shader compilation failed';};
+ const scene=new THREE.Scene();scene.background=new THREE.Color('#d2eff7');const camera=new THREE.PerspectiveCamera(40,300/280,.1,200);camera.position.set(38,36,back?62:-62);camera.lookAt(0,10,0);
+ const sun=new THREE.DirectionalLight(0xfff9ef,2.5);sun.position.set(-36,65,-30);scene.add(sun,new THREE.HemisphereLight(0xd8efff,0x6c8291,.6));
+ const body=createDioramaFacility('drainage-pump'),visual=createFacilityOperationVisuals('drainage-pump');body.add(visual.group);scene.add(body);visual.update(operation.waterActivity,2,true,operation.operationActivity);renderer.render(scene,camera);
+ const p=document.createElement('p');p.textContent=operation.label;section.append(p);
+ results.push({name,operation:operation.operationActivity,water:operation.waterActivity,lamps:visual.group.visible&&visual.group.getObjectByName('pump-running-lamps').visible,jets:visual.group.visible&&visual.group.getObjectByName('three-outlet-jets').visible,error,glError:renderer.getContext().getError()});
+ disposeDioramaObject(body);renderer.dispose();
+}
+document.querySelector('#result').textContent=JSON.stringify({results,pass:results.every(r=>!r.error&&!r.glError)&&!results[0].lamps&&results[1].lamps&&!results[1].jets&&results[2].lamps&&!results[2].jets&&results[3].jets},null,2);
+</script>

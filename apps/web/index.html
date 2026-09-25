@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
+    />
+    <meta name="theme-color" content="#087fb8" />
+    <title>CivilCraft</title>
+    <link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Sora:wght@600;700;800&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      #boot-fallback {
+        display: grid;
+        min-height: 100dvh;
+        place-items: center;
+        padding: 24px;
+        background: linear-gradient(160deg, #d9f6ff, #f7fcff);
+        color: #123c64;
+        font-family: system-ui, sans-serif;
+        text-align: center;
+      }
+      #boot-fallback div { max-width: 360px; }
+      #boot-fallback p { color: #487596; line-height: 1.6; }
+      #boot-fallback button {
+        min-height: 48px;
+        padding: 12px 24px;
+        border: 0;
+        border-radius: 16px;
+        background: #087fb8;
+        color: #fff;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <main id="boot-fallback" role="alert">
+      <div>
+        <h1>CivilCraft を起動しています</h1>
+        <p>表示されない場合は、ページを再読み込みしてください。</p>
+        <button type="button" onclick="window.location.reload()">再読み込み</button>
+      </div>
+    </main>
+    <script>
+      window.setTimeout(function () {
+        var el = document.getElementById("boot-fallback");
+        if (!el) return;
+        var p = el.querySelector("p");
+        if (p) {
+          p.textContent = "読み込みが長引いています。再読み込みするか、開発サーバーを再起動してください。";
+        }
+      }, 8000);
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

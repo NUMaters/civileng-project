@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "bounds": [
+    140.356,
+    37.346,
+    140.407,
+    37.387
+  ],
+  "origin": {
+    "longitude": 140.3837,
+    "latitude": 37.3655
+  },
+  "source": "OpenStreetMap",
+  "endpoint": "https://overpass-api.de/api/interpreter",
+  "query": "[out:json][timeout:55];(way[building](37.346,140.356,37.387,140.407);way[highway](37.346,140.356,37.387,140.407);way[railway](37.346,140.356,37.387,140.407);way[waterway](37.346,140.356,37.387,140.407);way[natural=water](37.346,140.356,37.387,140.407);relation[type=multipolygon][natural=water](37.346,140.356,37.387,140.407);relation[type=multipolygon][building](37.346,140.356,37.387,140.407);way[amenity=university](37.346,140.356,37.387,140.407););out meta geom;",
+  "fetchedAt": "2026-09-20T13:23:29.902Z",
+  "osmTimestamp": "2026-09-20T13:19:21Z",
+  "license": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors",
+  "licenseUrl": "https://www.openstreetmap.org/copyright",
+  "counts": {
+    "building": 22769,
+    "road": 2222,
+    "rail": 158,
+    "waterway": 38,
+    "water": 5,
+    "campus": 1
+  },
+  "roofShapeCounts": {
+    "gabled": 22,
+    "hipped": 19
+  },
+  "roofHints": "OSM roof tags are source-attributed but unverified. Shape alone does not establish roof rise, ridge position/direction or pitch; never add guessed roof height to source building height.",
+  "bridgeSegments": 62,
+  "elevation": "none; all coordinates are 2D; no DEM or measured terrain",
+  "skipped": [],
+  "dataSha256": "31dd20b5a60872096e18c71dd6034f8741f2689351349f941d8799aa542e905b",
+  "sourceSha256": "d484ffea468dd090485d939cbef9d8f3c58a22cb4665f57658ce0a8be8637aa0"
+}

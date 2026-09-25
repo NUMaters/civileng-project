@@ -1,0 +1,5 @@
+{
+  "note": "形式は docs/architecture/map-data-format.md。現プロトタイプの配置判定はクライアント側の河道・河岸コリドー。",
+  "placeableRegion": "abukuma-river-corridor",
+  "coordinateSystem": "EPSG:4326"
+}

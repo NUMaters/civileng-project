@@ -5,7 +5,7 @@
 - 型を省略しない。
 
 ```typescript
-const player: Player
+const player: Player;
 ```
 
 - 型アサーションの多用禁止。`as any` 禁止。
